@@ -7,8 +7,8 @@ import { VisualEngineCanvas } from "./VisualEngineCanvas";
 import { useFlowModeController } from "../hooks/useFlowModeController";
 import { FLOW_ORDER, FLOW_THEME } from "../theme";
 
-export function FlowModePage() {
-  const controller = useFlowModeController();
+export function FlowModePage({ initialState = "focus" }) {
+  const controller = useFlowModeController(initialState);
   const theme = FLOW_THEME[controller.currentState];
 
   useEffect(() => {

@@ -17,6 +17,10 @@ npm install
 npm run dev
 ```
 
+Main view: [http://localhost:4173/](http://localhost:4173/)
+
+Preview gallery: [http://localhost:4173/preview.html](http://localhost:4173/preview.html)
+
 ## Build
 
 ```bash

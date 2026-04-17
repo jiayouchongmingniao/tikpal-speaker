@@ -26,9 +26,9 @@ function createSeedMetrics() {
   };
 }
 
-export function useFlowModeController() {
+export function useFlowModeController(initialState = "focus") {
   const bridge = useMemo(() => createMockPlayerBridge(), []);
-  const [currentState, setCurrentState] = useState("focus");
+  const [currentState, setCurrentState] = useState(initialState);
   const [appPhase, setAppPhase] = useState("booting");
   const [uiVisible, setUiVisible] = useState(true);
   const [playerState, setPlayerState] = useState({

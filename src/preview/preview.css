@@ -1,0 +1,132 @@
+:root {
+  font-family: "Inter", "SF Pro Display", "Segoe UI", sans-serif;
+  color: rgba(255, 255, 255, 0.94);
+  background: #05070d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(107, 123, 255, 0.16), transparent 32%),
+    linear-gradient(180deg, #090c14, #030409);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.preview-page {
+  min-height: 100vh;
+  padding: 40px;
+}
+
+.preview-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.preview-page__eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: 0.56;
+  font-size: 13px;
+}
+
+.preview-page__header h1 {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 600;
+}
+
+.preview-page__link {
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.preview-card {
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+}
+
+.preview-card__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.preview-card__state {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+.preview-card__subtitle {
+  margin: 4px 0 0;
+  opacity: 0.68;
+}
+
+.preview-card__open {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.preview-card__swatch {
+  position: relative;
+  height: 320px;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.preview-card__glow {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: screen;
+  opacity: 0.65;
+}
+
+.preview-card__frame {
+  position: absolute;
+  inset: 0;
+  width: 2560px;
+  height: 720px;
+  border: 0;
+  transform: scale(0.25);
+  transform-origin: top left;
+  opacity: 0.92;
+}
+
+@media (max-width: 1200px) {
+  .preview-grid {
+    grid-template-columns: 1fr;
+  }
+}
