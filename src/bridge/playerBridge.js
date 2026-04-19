@@ -1,3 +1,5 @@
+import { createFlowServiceClient } from "./flowServiceClient";
+
 /**
  * Replace this with the moOde-backed implementation once the API contract is fixed.
  * The page already consumes only this bridge shape.
@@ -47,6 +49,40 @@ export function createMockPlayerBridge() {
     },
     async nextStateMode() {
       return Promise.resolve();
+    },
+  };
+}
+
+export function createPlayerBridge() {
+  const mockBridge = createMockPlayerBridge();
+  const flowApi = createFlowServiceClient();
+
+  return {
+    subscribe(listener) {
+      return mockBridge.subscribe(listener);
+    },
+    async setVolume(volume) {
+      await mockBridge.setVolume(volume);
+      try {
+        await flowApi.sendAction("set_volume", { volume }, "speaker-ui");
+      } catch {
+        // Ignore API availability failures and keep local control responsive.
+      }
+    },
+    async togglePlay() {
+      await mockBridge.togglePlay();
+      try {
+        await flowApi.sendAction("toggle_play", {}, "speaker-ui");
+      } catch {
+        // Ignore API availability failures and keep local control responsive.
+      }
+    },
+    async nextStateMode(state) {
+      try {
+        await flowApi.sendAction("set_state", { state }, "speaker-ui");
+      } catch {
+        // The local UI still transitions without a backing API.
+      }
     },
   };
 }

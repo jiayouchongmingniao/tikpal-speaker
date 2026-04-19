@@ -27,6 +27,36 @@ Preview gallery: [http://localhost:4173/preview.html](http://localhost:4173/prev
 npm run build
 ```
 
+## Flow Control API
+
+The repo now includes a lightweight REST service for touchscreens and external controllers such as `https://tikpal.ai`.
+
+Run it locally:
+
+```bash
+npm run dev:api
+```
+
+Default endpoint:
+
+- `http://localhost:8787/api/v1/flow/health`
+- `http://localhost:8787/api/v1/flow/state`
+- `http://localhost:8787/api/v1/flow/openapi.json`
+
+Recommended reverse proxy shape on the speaker device:
+
+- UI: `/flow/`
+- API: `/api/v1/flow/*`
+
+Suggested control flow for `tikpal.ai`:
+
+1. `POST /api/v1/flow/controller-sessions`
+2. `GET /api/v1/flow/state`
+3. `POST /api/v1/flow/actions`
+4. `PATCH /api/v1/flow/state` for speaker-originated snapshot sync
+
+Mutation endpoints support `X-Tikpal-Key` or `Authorization: Bearer <key>` when `TIKPAL_API_KEY` is configured.
+
 ## Architecture
 
 ```text

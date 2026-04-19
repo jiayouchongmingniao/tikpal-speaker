@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createMockPlayerBridge } from "../bridge/playerBridge";
+import { createPlayerBridge } from "../bridge/playerBridge";
+import { createFlowServiceClient } from "../bridge/flowServiceClient";
 import { FLOW_ORDER } from "../theme";
 
 const CONTROL_TIMEOUT_MS = 3000;
@@ -27,7 +28,8 @@ function createSeedMetrics() {
 }
 
 export function useFlowModeController(initialState = "focus") {
-  const bridge = useMemo(() => createMockPlayerBridge(), []);
+  const bridge = useMemo(() => createPlayerBridge(), []);
+  const flowApi = useMemo(() => createFlowServiceClient(), []);
   const [currentState, setCurrentState] = useState(
     FLOW_ORDER.includes(initialState) ? initialState : "focus",
   );
@@ -46,6 +48,17 @@ export function useFlowModeController(initialState = "focus") {
   const hideTimerRef = useRef(null);
   const transitionTimerRef = useRef(null);
   const previewTimerRef = useRef(null);
+  const sourceIdRef = useRef(`speaker-ui-${Math.random().toString(36).slice(2, 10)}`);
+  const currentStateRef = useRef(currentState);
+  const appPhaseRef = useRef(appPhase);
+  const uiVisibleRef = useRef(uiVisible);
+  const applyStateTransitionRef = useRef(null);
+
+  useEffect(() => {
+    currentStateRef.current = currentState;
+    appPhaseRef.current = appPhase;
+    uiVisibleRef.current = uiVisible;
+  }, [appPhase, currentState, uiVisible]);
 
   useEffect(() => bridge.subscribe(setPlayerState), [bridge]);
 
@@ -138,8 +151,10 @@ export function useFlowModeController(initialState = "focus") {
     }
   }
 
-  function setState(nextState) {
-    if (nextState === currentState || appPhase === "transitioning") {
+  function applyStateTransition(nextState, options = {}) {
+    const { broadcast = true } = options;
+
+    if (nextState === currentStateRef.current || appPhaseRef.current === "transitioning") {
       return;
     }
 
@@ -147,10 +162,12 @@ export function useFlowModeController(initialState = "focus") {
       window.clearTimeout(transitionTimerRef.current);
     }
 
-    setTransitionState({ from: currentState, to: nextState, startedAt: Date.now() });
+    setTransitionState({ from: currentStateRef.current, to: nextState, startedAt: Date.now() });
     setAppPhase("transitioning");
     setUiVisible(false);
-    bridge.nextStateMode(nextState);
+    if (broadcast) {
+      bridge.nextStateMode(nextState);
+    }
 
     transitionTimerRef.current = window.setTimeout(() => {
       setCurrentState(nextState);
@@ -159,9 +176,74 @@ export function useFlowModeController(initialState = "focus") {
     }, TRANSITION_MS);
   }
 
+  applyStateTransitionRef.current = applyStateTransition;
+
+  function setState(nextState) {
+    applyStateTransition(nextState, { broadcast: true });
+  }
+
   function nextState(dir) {
     setState(nextStateInDirection(currentState, dir));
   }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function pullRemoteState() {
+      try {
+        const snapshot = await flowApi.getState();
+        if (cancelled || snapshot.lastSource === sourceIdRef.current) {
+          return;
+        }
+
+        if (
+          snapshot.currentState &&
+          snapshot.currentState !== currentStateRef.current &&
+          appPhaseRef.current !== "transitioning"
+        ) {
+          applyStateTransitionRef.current?.(snapshot.currentState, { broadcast: false });
+          return;
+        }
+
+        if (snapshot.playerState) {
+          setPlayerState((current) => ({ ...current, ...snapshot.playerState }));
+        }
+
+        if (typeof snapshot.uiVisible === "boolean" && snapshot.uiVisible !== uiVisibleRef.current) {
+          if (snapshot.uiVisible) {
+            showControls();
+          } else {
+            hideControls();
+          }
+        }
+      } catch {
+        // The UI continues to run against the local mock bridge when the API is unavailable.
+      }
+    }
+
+    pullRemoteState();
+    const interval = window.setInterval(pullRemoteState, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [flowApi]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      flowApi.patchState({
+        currentState,
+        uiVisible,
+        appPhase,
+        playerState,
+        source: sourceIdRef.current,
+      }).catch(() => {
+        // Ignore API availability failures in local-only mode.
+      });
+    }, 120);
+
+    return () => window.clearTimeout(timeout);
+  }, [appPhase, currentState, flowApi, playerState, uiVisible]);
 
   return {
     currentState,
