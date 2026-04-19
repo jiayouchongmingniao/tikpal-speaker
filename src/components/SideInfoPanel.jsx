@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 function formatClock() {
   return new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
@@ -7,11 +9,21 @@ function formatClock() {
 }
 
 export function SideInfoPanel({ playerState, volume, visible }) {
+  const [clock, setClock] = useState(() => formatClock());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setClock(formatClock());
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
   return (
     <aside className={`side-info ${visible ? "is-visible" : ""}`}>
       <div className="side-info__item">
         <span className="side-info__label">Time</span>
-        <strong>{formatClock()}</strong>
+        <strong>{clock}</strong>
       </div>
       <div className="side-info__item">
         <span className="side-info__label">Volume</span>

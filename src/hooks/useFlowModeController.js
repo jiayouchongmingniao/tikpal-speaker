@@ -28,7 +28,9 @@ function createSeedMetrics() {
 
 export function useFlowModeController(initialState = "focus") {
   const bridge = useMemo(() => createMockPlayerBridge(), []);
-  const [currentState, setCurrentState] = useState(initialState);
+  const [currentState, setCurrentState] = useState(
+    FLOW_ORDER.includes(initialState) ? initialState : "focus",
+  );
   const [appPhase, setAppPhase] = useState("booting");
   const [uiVisible, setUiVisible] = useState(true);
   const [playerState, setPlayerState] = useState({
@@ -42,19 +44,21 @@ export function useFlowModeController(initialState = "focus") {
   const [audioMetrics, setAudioMetrics] = useState(createSeedMetrics);
   const [transitionState, setTransitionState] = useState(null);
   const hideTimerRef = useRef(null);
+  const transitionTimerRef = useRef(null);
+  const previewTimerRef = useRef(null);
 
   useEffect(() => bridge.subscribe(setPlayerState), [bridge]);
 
   useEffect(() => {
     const bootTimer = window.setTimeout(() => setAppPhase("idle_preview"), BOOT_MS);
-    const immersiveTimer = window.setTimeout(() => {
+    previewTimerRef.current = window.setTimeout(() => {
       setAppPhase("immersive");
       setUiVisible(false);
     }, BOOT_MS + IDLE_PREVIEW_MS);
 
     return () => {
       window.clearTimeout(bootTimer);
-      window.clearTimeout(immersiveTimer);
+      window.clearTimeout(previewTimerRef.current);
     };
   }, []);
 
@@ -97,6 +101,15 @@ export function useFlowModeController(initialState = "focus") {
     return () => window.clearTimeout(timer);
   }, [appPhase, currentState, uiVisible]);
 
+  useEffect(
+    () => () => {
+      window.clearTimeout(hideTimerRef.current);
+      window.clearTimeout(transitionTimerRef.current);
+      window.clearTimeout(previewTimerRef.current);
+    },
+    [],
+  );
+
   function resetHideTimer() {
     if (hideTimerRef.current) {
       window.clearTimeout(hideTimerRef.current);
@@ -109,6 +122,9 @@ export function useFlowModeController(initialState = "focus") {
   }
 
   function showControls() {
+    if (previewTimerRef.current) {
+      window.clearTimeout(previewTimerRef.current);
+    }
     setUiVisible(true);
     setAppPhase((phase) => (phase === "booting" ? phase : "controls_visible"));
     resetHideTimer();
@@ -127,12 +143,16 @@ export function useFlowModeController(initialState = "focus") {
       return;
     }
 
+    if (transitionTimerRef.current) {
+      window.clearTimeout(transitionTimerRef.current);
+    }
+
     setTransitionState({ from: currentState, to: nextState, startedAt: Date.now() });
     setAppPhase("transitioning");
     setUiVisible(false);
     bridge.nextStateMode(nextState);
 
-    window.setTimeout(() => {
+    transitionTimerRef.current = window.setTimeout(() => {
       setCurrentState(nextState);
       setTransitionState(null);
       setAppPhase(nextState === "sleep" ? "idle_preview" : "immersive");

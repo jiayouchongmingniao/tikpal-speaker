@@ -18,13 +18,14 @@ html,
 body,
 #root {
   width: 100%;
-  min-width: 1280px;
+  min-width: 0;
   min-height: 100%;
   margin: 0;
 }
 
 body {
   overflow: hidden;
+  background: #020305;
 }
 
 button,
@@ -33,9 +34,12 @@ input {
 }
 
 .flow-page {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
+  position: fixed;
+  inset: 0;
+  width: 100dvw;
+  height: 100dvh;
+  min-width: 0;
+  min-height: 0;
   background: #020305;
   isolation: isolate;
   overflow: hidden;
@@ -88,6 +92,7 @@ input {
   max-width: 760px;
   margin-left: 120px;
   animation: titleBreath 5.2s ease-in-out infinite;
+  text-shadow: 0 10px 32px rgba(0, 0, 0, 0.26);
 }
 
 .state-title h1 {
@@ -106,6 +111,7 @@ input {
 }
 
 .side-info {
+  position: relative;
   justify-self: end;
   width: 320px;
   padding-top: 0;
@@ -116,11 +122,27 @@ input {
     transform 220ms ease;
 }
 
+.side-info::before {
+  content: "";
+  position: absolute;
+  inset: -14px -16px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
 .side-info.is-visible,
 .phase-idle_preview .side-info,
 .phase-controls_visible .side-info {
   opacity: 0.72;
   transform: translateY(0);
+}
+
+.side-info.is-visible::before,
+.phase-idle_preview .side-info::before,
+.phase-controls_visible .side-info::before {
+  opacity: 1;
 }
 
 .side-info__item + .side-info__item {
@@ -158,6 +180,7 @@ input {
   border-radius: 999px;
   background: rgba(8, 10, 18, 0.36);
   backdrop-filter: blur(18px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
   opacity: 0;
   transform: translate(-50%, 8px);
   transition:
@@ -179,6 +202,10 @@ input {
   color: inherit;
   background: rgba(255, 255, 255, 0.12);
   cursor: pointer;
+  transition:
+    background 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
 }
 
 .control-pill {
@@ -207,6 +234,7 @@ input {
 
 .control-state-list {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -219,6 +247,16 @@ input {
 .control-chip.is-active {
   background: rgba(255, 255, 255, 0.22);
   opacity: 1;
+}
+
+.control-pill:hover,
+.control-chip:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.control-pill:active,
+.control-chip:active {
+  transform: scale(0.98);
 }
 
 .phase-sleep_dimmed .state-title,
@@ -256,5 +294,113 @@ input {
 
   .state-title {
     margin-left: 48px;
+  }
+}
+
+@media (max-aspect-ratio: 2/1), (max-width: 1280px) {
+  :root {
+    --safe-x: 40px;
+    --safe-y: 28px;
+  }
+
+  .flow-page__content {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    align-items: end;
+    padding: var(--safe-y) var(--safe-x) 140px;
+  }
+
+  .state-title {
+    align-self: end;
+    max-width: min(78vw, 620px);
+    margin-left: 0;
+    margin-bottom: 88px;
+  }
+
+  .state-title h1 {
+    font-size: clamp(42px, 8vw, 64px);
+  }
+
+  .state-title p {
+    font-size: clamp(18px, 3vw, 24px);
+  }
+
+  .side-info {
+    justify-self: start;
+    width: auto;
+    max-width: min(72vw, 420px);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    gap: 16px 24px;
+    opacity: 0.56;
+  }
+
+  .side-info::before {
+    inset: -12px;
+  }
+
+  .side-info__item + .side-info__item {
+    margin-top: 0;
+  }
+
+  .control-overlay {
+    left: var(--safe-x);
+    right: var(--safe-x);
+    bottom: 24px;
+    transform: translateY(8px);
+    width: auto;
+    justify-content: center;
+    flex-wrap: wrap;
+    border-radius: 28px;
+    min-height: 0;
+  }
+
+  .control-overlay.is-visible {
+    transform: translateY(0);
+  }
+}
+
+@media (max-aspect-ratio: 4/3), (max-width: 900px) {
+  .flow-page__content {
+    padding-bottom: 180px;
+  }
+
+  .state-title {
+    max-width: 100%;
+    margin-bottom: 56px;
+  }
+
+  .state-title h1 {
+    font-size: clamp(38px, 9vw, 56px);
+  }
+
+  .side-info {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    max-width: 240px;
+  }
+
+  .side-info strong {
+    font-size: 18px;
+  }
+
+  .control-overlay {
+    gap: 12px;
+    padding: 16px;
+    justify-content: flex-start;
+  }
+
+  .control-volume {
+    min-width: 0;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .control-volume input {
+    width: min(48vw, 220px);
+  }
+
+  .control-state-list {
+    width: 100%;
   }
 }

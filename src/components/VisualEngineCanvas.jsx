@@ -6,6 +6,17 @@ function clamp(value, min, max) {
 
 export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase }) {
   const canvasRef = useRef(null);
+  const currentStateRef = useRef(currentState);
+  const themeRef = useRef(theme);
+  const audioMetricsRef = useRef(audioMetrics);
+  const appPhaseRef = useRef(appPhase);
+
+  useEffect(() => {
+    currentStateRef.current = currentState;
+    themeRef.current = theme;
+    audioMetricsRef.current = audioMetrics;
+    appPhaseRef.current = appPhase;
+  }, [appPhase, audioMetrics, currentState, theme]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -27,10 +38,13 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
     function drawWaveLayer(time, layerIndex) {
       const width = window.innerWidth;
       const height = window.innerHeight;
+      const liveTheme = themeRef.current;
+      const liveMetrics = audioMetricsRef.current;
       const midY = height * 0.5 + layerIndex * 24;
-      const amplitude = height * (theme.motionAmplitude * 0.22 + audioMetrics.lowEnergy * 0.08 + layerIndex * 0.014);
-      const speed = theme.motionSpeed * (0.7 + audioMetrics.beatConfidence * 0.6 + layerIndex * 0.12);
-      const alpha = clamp(0.12 + layerIndex * 0.08 + audioMetrics.highEnergy * 0.1, 0.12, 0.42);
+      const amplitude =
+        height * (liveTheme.motionAmplitude * 0.22 + liveMetrics.lowEnergy * 0.08 + layerIndex * 0.014);
+      const speed = liveTheme.motionSpeed * (0.7 + liveMetrics.beatConfidence * 0.6 + layerIndex * 0.12);
+      const alpha = clamp(0.12 + layerIndex * 0.08 + liveMetrics.highEnergy * 0.1, 0.12, 0.42);
 
       context.beginPath();
       context.moveTo(0, height);
@@ -47,29 +61,33 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
 
       context.lineTo(width, height);
       context.closePath();
-      context.fillStyle = `${theme.accent}${Math.round(alpha * 255)
+      context.fillStyle = `${liveTheme.accent}${Math.round(alpha * 255)
         .toString(16)
         .padStart(2, "0")}`;
       context.fill();
     }
 
     function drawParticles(time) {
-      if (!["flow", "relax"].includes(currentState)) {
+      const liveState = currentStateRef.current;
+      const liveTheme = themeRef.current;
+      const liveMetrics = audioMetricsRef.current;
+
+      if (!["flow", "relax"].includes(liveState)) {
         return;
       }
 
       const width = window.innerWidth;
       const height = window.innerHeight;
-      const count = Math.floor(theme.particleDensity * 120);
+      const count = Math.floor(liveTheme.particleDensity * 120);
 
       for (let index = 0; index < count; index += 1) {
         const seed = index / count;
-        const x = ((seed * width * 1.7 + time * 14 * (1 + audioMetrics.highEnergy)) % width);
+        const x = (seed * width * 1.7 + time * 14 * (1 + liveMetrics.highEnergy)) % width;
         const y = height * (0.18 + ((seed * 1.31 + time * 0.01) % 0.64));
-        const radius = 1 + ((index % 5) + audioMetrics.highEnergy * 6) * 0.28;
+        const radius = 1 + ((index % 5) + liveMetrics.highEnergy * 6) * 0.28;
         context.beginPath();
         context.arc(x, y, radius, 0, Math.PI * 2);
-        context.fillStyle = `${theme.glow}30`;
+        context.fillStyle = `${liveTheme.glow}30`;
         context.fill();
       }
     }
@@ -82,15 +100,18 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       const width = window.innerWidth;
       const height = window.innerHeight;
       const time = performance.now() / 1000;
-      const brightness = 0.84 + audioMetrics.volumeNormalized * 0.15;
-      const dimAlpha = appPhase === "sleep_dimmed" ? 0.34 : 0.12;
+      const liveState = currentStateRef.current;
+      const liveMetrics = audioMetricsRef.current;
+      const livePhase = appPhaseRef.current;
+      const brightness = 0.84 + liveMetrics.volumeNormalized * 0.15;
+      const dimAlpha = livePhase === "sleep_dimmed" ? 0.34 : 0.12;
 
       context.clearRect(0, 0, width, height);
 
       context.fillStyle = `rgba(0, 0, 0, ${1 - brightness})`;
       context.fillRect(0, 0, width, height);
 
-      const layerCount = currentState === "flow" ? 3 : 2;
+      const layerCount = liveState === "flow" ? 3 : 2;
       for (let layerIndex = 0; layerIndex < layerCount; layerIndex += 1) {
         drawWaveLayer(time, layerIndex);
       }
@@ -112,7 +133,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       window.cancelAnimationFrame(frameId);
       window.removeEventListener("resize", resize);
     };
-  }, [appPhase, audioMetrics, currentState, theme]);
+  }, []);
 
   return <canvas ref={canvasRef} className="visual-canvas" aria-hidden="true" />;
 }
