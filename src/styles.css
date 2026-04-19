@@ -259,6 +259,247 @@ input {
   transform: scale(0.98);
 }
 
+.system-shell {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at top left, rgba(91, 124, 255, 0.14), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(255, 125, 184, 0.12), transparent 28%),
+    #05070d;
+  overflow: hidden;
+}
+
+.shell-chrome {
+  position: fixed;
+  top: 24px;
+  left: 24px;
+  right: 24px;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.shell-button,
+.shell-mode-chip,
+.overview-action,
+.overview-chip {
+  border: 0;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+}
+
+.shell-button,
+.shell-mode-chip {
+  pointer-events: auto;
+}
+
+.shell-button {
+  padding: 12px 18px;
+}
+
+.shell-button--ghost {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.shell-mode-switcher {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(8, 10, 18, 0.34);
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
+}
+
+.shell-mode-chip {
+  padding: 10px 16px;
+  text-transform: capitalize;
+  opacity: 0.72;
+}
+
+.shell-mode-chip.is-active {
+  background: rgba(255, 255, 255, 0.22);
+  opacity: 1;
+}
+
+.overview-page,
+.mode-page {
+  position: fixed;
+  inset: 0;
+  padding: 108px 32px 32px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  width: 100%;
+  height: 100%;
+}
+
+.overview-card,
+.mode-panel {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 32px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.26);
+}
+
+.overview-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 32px;
+  overflow: hidden;
+}
+
+.overview-card__header span,
+.mode-kicker {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.overview-card__body h2,
+.mode-page h1 {
+  margin: 0;
+  font-size: clamp(34px, 3vw, 58px);
+  line-height: 1;
+}
+
+.overview-card__body p,
+.mode-page p {
+  margin: 14px 0 0;
+  font-size: 22px;
+  opacity: 0.76;
+}
+
+.overview-card__body strong,
+.mode-panel strong {
+  display: block;
+  margin-top: 18px;
+  font-size: 18px;
+  font-weight: 500;
+  opacity: 0.82;
+}
+
+.overview-card__controls,
+.overview-chip-list,
+.listen-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.overview-action,
+.overview-chip {
+  padding: 10px 14px;
+}
+
+.overview-chip.is-active {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.mode-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 520px);
+  gap: 20px;
+}
+
+.mode-panel {
+  padding: 40px;
+}
+
+.mode-panel--hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.mode-panel--side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mode-metric span {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.54;
+}
+
+.mode-metric strong {
+  margin-top: 0;
+  font-size: 22px;
+}
+
+.listen-cover {
+  width: 320px;
+  aspect-ratio: 1;
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(91, 124, 255, 0.7), rgba(255, 125, 184, 0.42)),
+    rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 80px rgba(255, 255, 255, 0.08);
+}
+
+.listen-copy {
+  margin-top: 28px;
+}
+
+.listen-volume {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.listen-volume input {
+  width: 100%;
+}
+
+.mode-page--screen .mode-panel--hero {
+  background:
+    radial-gradient(circle at top left, rgba(255, 179, 138, 0.16), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+}
+
+@media (max-aspect-ratio: 16/9) {
+  .overview-grid,
+  .mode-page {
+    grid-template-columns: 1fr;
+  }
+
+  .shell-chrome {
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    flex-wrap: wrap;
+  }
+
+  .overview-page,
+  .mode-page {
+    padding: 120px 16px 16px;
+  }
+}
+
 .phase-sleep_dimmed .state-title,
 .phase-sleep_dimmed .side-info {
   opacity: 0.45;

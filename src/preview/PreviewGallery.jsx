@@ -8,7 +8,7 @@ export function PreviewGallery() {
           <p className="preview-page__eyebrow">Flow Mode Preview</p>
           <h1>tikpal-speaker</h1>
         </div>
-        <a className="preview-page__link" href="/">
+        <a className="preview-page__link" href="/?mode=overview">
           Open Main View
         </a>
       </header>
@@ -24,7 +24,7 @@ export function PreviewGallery() {
                   <p className="preview-card__state">{theme.label}</p>
                   <p className="preview-card__subtitle">{theme.subtitle}</p>
                 </div>
-                <a className="preview-card__open" href={`/?state=${state}`}>
+                <a className="preview-card__open" href={`/?mode=flow&state=${state}`}>
                   Open
                 </a>
               </div>
@@ -43,7 +43,7 @@ export function PreviewGallery() {
                 />
                 <iframe
                   title={`${state} preview`}
-                  src={`/?state=${state}`}
+                  src={`/?mode=flow&state=${state}`}
                   className="preview-card__frame"
                 />
               </div>

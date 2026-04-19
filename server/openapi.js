@@ -1,13 +1,33 @@
-export const openApiDocument = {
+const commonSchemas = {
+  FlowState: {
+    type: "string",
+    enum: ["focus", "flow", "relax", "sleep"],
+  },
+  PlaybackState: {
+    type: "string",
+    enum: ["play", "pause", "stop"],
+  },
+  PlayerState: {
+    type: "object",
+    properties: {
+      playbackState: { $ref: "#/components/schemas/PlaybackState" },
+      volume: { type: "number", minimum: 0, maximum: 100 },
+      trackTitle: { type: "string" },
+      artist: { type: "string" },
+      source: { type: "string" },
+      progress: { type: "number", minimum: 0, maximum: 1 },
+    },
+  },
+};
+
+export const flowOpenApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "tikpal-speaker Flow Control API",
     version: "1.0.0",
-    description: "REST API for controlling the Flow Mode screen from touch input, local automation, or tikpal.ai portable controllers.",
+    description: "Legacy Flow REST API mapped onto the system state store.",
   },
-  servers: [
-    { url: "/api/v1/flow" },
-  ],
+  servers: [{ url: "/api/v1/flow" }],
   components: {
     securitySchemes: {
       tikpalApiKey: {
@@ -17,67 +37,17 @@ export const openApiDocument = {
       },
     },
     schemas: {
-      FlowState: {
-        type: "string",
-        enum: ["focus", "flow", "relax", "sleep"],
-      },
-      PlaybackState: {
-        type: "string",
-        enum: ["play", "pause", "stop"],
-      },
-      PlayerState: {
-        type: "object",
-        properties: {
-          playbackState: { $ref: "#/components/schemas/PlaybackState" },
-          volume: { type: "number", minimum: 0, maximum: 100 },
-          trackTitle: { type: "string" },
-          artist: { type: "string" },
-          source: { type: "string" },
-          progress: { type: "number", minimum: 0, maximum: 1 },
-        },
-      },
+      ...commonSchemas,
       FlowSnapshot: {
         type: "object",
         properties: {
           currentState: { $ref: "#/components/schemas/FlowState" },
           uiVisible: { type: "boolean" },
-          appPhase: {
-            type: "string",
-            enum: ["booting", "idle_preview", "immersive", "controls_visible", "transitioning", "sleep_dimmed"],
-          },
+          appPhase: { type: "string" },
           playerState: { $ref: "#/components/schemas/PlayerState" },
-          audioMetrics: {
-            type: "object",
-            properties: {
-              volumeNormalized: { type: "number" },
-              lowEnergy: { type: "number" },
-              midEnergy: { type: "number" },
-              highEnergy: { type: "number" },
-              beatConfidence: { type: "number" },
-              isPlaying: { type: "boolean" },
-            },
-          },
+          audioMetrics: { type: "object" },
           updatedAt: { type: "string", format: "date-time" },
           lastSource: { type: "string" },
-        },
-      },
-      FlowAction: {
-        type: "object",
-        required: ["type"],
-        properties: {
-          type: {
-            type: "string",
-            enum: [
-              "toggle_play",
-              "set_volume",
-              "show_controls",
-              "hide_controls",
-              "next_state",
-              "set_state",
-              "set_track",
-            ],
-          },
-          payload: { type: "object" },
         },
       },
     },
@@ -86,16 +56,12 @@ export const openApiDocument = {
     "/health": {
       get: {
         summary: "Health check",
-        responses: {
-          200: {
-            description: "Service is up",
-          },
-        },
+        responses: { 200: { description: "Service is up" } },
       },
     },
     "/state": {
       get: {
-        summary: "Read the latest Flow Mode snapshot",
+        summary: "Read the latest Flow snapshot",
         responses: {
           200: {
             description: "Current snapshot",
@@ -107,79 +73,110 @@ export const openApiDocument = {
           },
         },
       },
-      patch: {
-        summary: "Patch the Flow Mode snapshot",
+    },
+    "/actions": {
+      post: {
+        summary: "Trigger a Flow control action",
         security: [{ tikpalApiKey: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  currentState: { $ref: "#/components/schemas/FlowState" },
-                  uiVisible: { type: "boolean" },
-                  appPhase: { type: "string" },
-                  playerState: { $ref: "#/components/schemas/PlayerState" },
-                  audioMetrics: { type: "object" },
-                  source: { type: "string" },
-                },
+        responses: {
+          200: { description: "Updated snapshot after action" },
+        },
+      },
+    },
+  },
+};
+
+export const systemOpenApiDocument = {
+  openapi: "3.1.0",
+  info: {
+    title: "tikpal-speaker System API",
+    version: "1.0.0",
+    description: "System-level REST API for Overview, Listen, Flow, Screen, portable controllers, and OTA-aware device control.",
+  },
+  servers: [{ url: "/api/v1/system" }],
+  components: {
+    securitySchemes: {
+      tikpalApiKey: {
+        type: "apiKey",
+        in: "header",
+        name: "X-Tikpal-Key",
+      },
+    },
+    schemas: {
+      ...commonSchemas,
+      SystemState: {
+        type: "object",
+        properties: {
+          activeMode: {
+            type: "string",
+            enum: ["overview", "listen", "flow", "screen"],
+          },
+          focusedPanel: {
+            type: ["string", "null"],
+            enum: ["listen", "flow", "screen", null],
+          },
+          overlay: { type: "object" },
+          playback: { type: "object" },
+          flow: { type: "object" },
+          screen: { type: "object" },
+          system: { type: "object" },
+          lastSource: { type: "string" },
+          lastUpdatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      ActionRequest: {
+        type: "object",
+        required: ["type"],
+        properties: {
+          type: { type: "string" },
+          payload: { type: "object" },
+          source: { type: "string" },
+        },
+      },
+    },
+  },
+  paths: {
+    "/health": {
+      get: {
+        summary: "Health check",
+        responses: { 200: { description: "Service is up" } },
+      },
+    },
+    "/state": {
+      get: {
+        summary: "Read the current system snapshot",
+        responses: {
+          200: {
+            description: "Current system state",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SystemState" },
               },
             },
           },
         },
-        responses: {
-          200: {
-            description: "Updated snapshot",
-          },
-        },
+      },
+    },
+    "/capabilities": {
+      get: {
+        summary: "Read the current device capabilities",
+        responses: { 200: { description: "Capabilities snapshot" } },
       },
     },
     "/actions": {
       post: {
-        summary: "Trigger a high-level control action",
+        summary: "Trigger a system-level action",
         security: [{ tikpalApiKey: [] }],
         requestBody: {
           required: true,
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/FlowAction" },
+              schema: { $ref: "#/components/schemas/ActionRequest" },
             },
           },
         },
         responses: {
-          200: {
-            description: "Updated snapshot after action",
-          },
-        },
-      },
-    },
-    "/controller-sessions": {
-      post: {
-        summary: "Register a portable controller session",
-        security: [{ tikpalApiKey: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  deviceId: { type: "string" },
-                  name: { type: "string" },
-                  capabilities: {
-                    type: "array",
-                    items: { type: "string" },
-                  },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: {
-            description: "Created controller session",
-          },
+          200: { description: "Updated system state" },
         },
       },
     },
