@@ -1,4 +1,5 @@
 function OverviewCard({
+  mode,
   label,
   title,
   subtitle,
@@ -9,6 +10,7 @@ function OverviewCard({
   detail,
   transitionStatus = "idle",
   isFocusTarget = false,
+  isKeyboardFocused = false,
 }) {
   const stateClass = isFocusTarget
     ? transitionStatus === "animating"
@@ -16,7 +18,9 @@ function OverviewCard({
       : "is-focused"
     : transitionStatus === "animating"
       ? "is-dimmed"
-      : "";
+      : isKeyboardFocused
+        ? "is-focused"
+        : "";
 
   return (
     <article
@@ -24,6 +28,13 @@ function OverviewCard({
       onClick={onOpen}
       role="button"
       tabIndex={0}
+      aria-label={`Open ${mode}`}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
     >
       <div className="overview-card__header">
         <span>{label}</span>
@@ -68,6 +79,7 @@ export function OverviewPage({
   onResetPomodoro,
   onCompleteTask,
   focusTarget = null,
+  activeCard = "listen",
   className = "",
 }) {
   const isRunning = state.screen.pomodoroState === "running";
@@ -78,6 +90,7 @@ export function OverviewPage({
     <main className={`overview-page ${className}`.trim()} role="application" aria-label="Overview">
       <section className="overview-grid">
         <OverviewCard
+          mode="listen"
           label="Listen"
           title={state.playback.trackTitle ?? "Nothing playing"}
           subtitle={state.playback.artist}
@@ -86,6 +99,7 @@ export function OverviewPage({
           tone="listen"
           transitionStatus={transitionStatus}
           isFocusTarget={focusTarget === "listen"}
+          isKeyboardFocused={activeCard === "listen"}
           onOpen={() => onOpenMode("listen")}
           controls={(
             <>
@@ -102,6 +116,7 @@ export function OverviewPage({
           )}
         />
         <OverviewCard
+          mode="flow"
           label="Flow"
           title={String(state.flow.state ?? "focus").toUpperCase()}
           subtitle={state.flow.subtitle}
@@ -110,6 +125,7 @@ export function OverviewPage({
           tone="flow"
           transitionStatus={transitionStatus}
           isFocusTarget={focusTarget === "flow"}
+          isKeyboardFocused={activeCard === "flow"}
           onOpen={() => onOpenMode("flow")}
           controls={(
             <div className="overview-chip-list">
@@ -127,6 +143,7 @@ export function OverviewPage({
           )}
         />
         <OverviewCard
+          mode="screen"
           label="Screen"
           title={state.screen.currentTask ?? "No focus item"}
           subtitle={`${formatPomodoro(state.screen.pomodoroRemainingSec)} left`}
@@ -135,6 +152,7 @@ export function OverviewPage({
           tone="screen"
           transitionStatus={transitionStatus}
           isFocusTarget={focusTarget === "screen"}
+          isKeyboardFocused={activeCard === "screen"}
           onOpen={() => onOpenMode("screen")}
           controls={(
             <>

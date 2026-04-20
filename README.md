@@ -27,6 +27,37 @@ Preview gallery: [http://localhost:4173/preview.html](http://localhost:4173/prev
 npm run build
 ```
 
+## Run As Services
+
+The repo includes `systemd` templates for the API (`8787`) and web preview (`4173`).
+
+Default deployment layout:
+
+- app dir: `/home/moode/code/tikpal-speaker`
+- service user: `moode`
+
+Install on the target machine:
+
+```bash
+cd /home/moode/code/tikpal-speaker
+npm install
+npm run build
+sudo APP_DIR=/home/moode/code/tikpal-speaker SERVICE_USER=moode bash deploy/systemd/install-systemd-services.sh
+```
+
+Service names:
+
+- `tikpal-api.service`
+- `tikpal-web.service`
+
+Useful commands:
+
+```bash
+sudo systemctl restart tikpal-api tikpal-web
+sudo systemctl status tikpal-api tikpal-web
+journalctl -u tikpal-api -u tikpal-web -f
+```
+
 ## Flow Control API
 
 The repo now includes a lightweight REST service for touchscreens and external controllers such as `https://tikpal.ai`.

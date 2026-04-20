@@ -42,6 +42,14 @@ function getQueueTrack(index) {
   return MOCK_QUEUE[(index + MOCK_QUEUE.length) % MOCK_QUEUE.length];
 }
 
+function getAdjacentMode(currentMode, direction = 1) {
+  const normalizedMode = currentMode === "overview" ? "listen" : currentMode;
+  const currentIndex = MODE_ORDER.indexOf(normalizedMode);
+  const baseIndex = currentIndex === -1 ? 0 : currentIndex;
+  const nextIndex = (baseIndex + direction + MODE_ORDER.length) % MODE_ORDER.length;
+  return MODE_ORDER[nextIndex];
+}
+
 function createInitialState() {
   return {
     activeMode: "overview",
@@ -390,6 +398,14 @@ export function createSystemStateStore() {
 
     if (type === "return_overview") {
       return setMode("overview", source);
+    }
+
+    if (type === "next_mode") {
+      return setMode(getAdjacentMode(liveState.activeMode, 1), source);
+    }
+
+    if (type === "prev_mode") {
+      return setMode(getAdjacentMode(liveState.activeMode, -1), source);
     }
 
     if (type === "show_controls") {

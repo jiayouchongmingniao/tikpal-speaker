@@ -1,17 +1,8 @@
-import { useEffect } from "react";
 import { AmbientBackground } from "./AmbientBackground";
-import { ControlOverlay } from "./ControlOverlay";
 import { SideInfoPanel } from "./SideInfoPanel";
 import { StateTitle } from "./StateTitle";
 import { VisualEngineCanvas } from "./VisualEngineCanvas";
-import { FLOW_ORDER, FLOW_THEME } from "../theme";
-
-function nextStateInDirection(currentState, dir) {
-  const currentIndex = FLOW_ORDER.indexOf(currentState);
-  const step = dir === "right" ? 1 : -1;
-  const nextIndex = (currentIndex + step + FLOW_ORDER.length) % FLOW_ORDER.length;
-  return FLOW_ORDER[nextIndex];
-}
+import { FLOW_THEME } from "../theme";
 
 function deriveAppPhase({ activeMode, overlayVisible, flowState, transitionStatus }) {
   if (transitionStatus !== "idle") {
@@ -62,12 +53,6 @@ function toFlowTransitionState(transition, currentState) {
 
 export function FlowModePage({
   systemState,
-  onShowControls,
-  onHideControls,
-  onSetFlowState,
-  onSetVolume,
-  onTogglePlay,
-  onReturnOverview,
   className = "",
 }) {
   const transition = systemState.transition ?? {
@@ -95,66 +80,8 @@ export function FlowModePage({
   };
   const transitionState = toFlowTransitionState(transition, currentState);
 
-  useEffect(() => {
-    function onKeyDown(event) {
-      if (event.key === "ArrowLeft") {
-        onSetFlowState(nextStateInDirection(currentState, "left"));
-        return;
-      }
-
-      if (event.key === "ArrowRight") {
-        onSetFlowState(nextStateInDirection(currentState, "right"));
-        return;
-      }
-
-      if (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "Enter") {
-        onShowControls();
-        return;
-      }
-
-      if (event.key === "Backspace" || event.key === "Escape") {
-        onReturnOverview();
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentState, onReturnOverview, onSetFlowState, onShowControls]);
-
-  function onPointerDown() {
-    onShowControls();
-  }
-
-  function onTouchStart(startEvent) {
-    if (startEvent.touches.length > 1) {
-      return;
-    }
-
-    const startX = startEvent.touches[0]?.clientX ?? 0;
-
-    function onTouchEnd(endEvent) {
-      const endX = endEvent.changedTouches[0]?.clientX ?? startX;
-      const deltaX = endX - startX;
-      if (Math.abs(deltaX) > 64) {
-        onSetFlowState(nextStateInDirection(currentState, deltaX > 0 ? "right" : "left"));
-      } else {
-        onShowControls();
-      }
-
-      window.removeEventListener("touchend", onTouchEnd);
-    }
-
-    window.addEventListener("touchend", onTouchEnd, { once: true });
-  }
-
   return (
-    <main
-      className={`flow-page phase-${appPhase} tone-${theme.uiTone} ${className}`.trim()}
-      onPointerDown={onPointerDown}
-      onTouchStart={onTouchStart}
-      role="application"
-      aria-label="Flow mode"
-    >
+    <main className={`flow-page phase-${appPhase} tone-${theme.uiTone} ${className}`.trim()} role="application" aria-label="Flow mode">
       <AmbientBackground currentState={currentState} transitionState={transitionState} />
       <VisualEngineCanvas
         currentState={currentState}
@@ -170,17 +97,6 @@ export function FlowModePage({
           visible={systemState.overlay.visible || appPhase === "idle_preview"}
         />
       </section>
-      <ControlOverlay
-        visible={systemState.overlay.visible}
-        currentState={currentState}
-        stateOrder={FLOW_ORDER}
-        playbackState={playerState.playbackState}
-        volume={playerState.volume}
-        onTogglePlay={onTogglePlay}
-        onVolumeChange={onSetVolume}
-        onStateSelect={onSetFlowState}
-        onBack={onReturnOverview}
-      />
     </main>
   );
 }

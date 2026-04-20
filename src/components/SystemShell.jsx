@@ -1,34 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { FlowModePage } from "./FlowModePage";
+import { GlobalOverlay } from "./GlobalOverlay";
 import { ListenPage } from "./ListenPage";
 import { OverviewPage } from "./OverviewPage";
 import { ScreenPage } from "./ScreenPage";
 import { useSystemController } from "../hooks/useSystemController";
 
-function ShellChrome({ activeMode, transitionStatus, visible, onModeChange, onReturnOverview }) {
-  const isLocked = transitionStatus !== "idle";
-
-  return (
-    <div className={`shell-chrome ${visible ? "is-visible" : "is-hidden"}`}>
-      <button className="shell-button shell-button--ghost" onClick={onReturnOverview} type="button" disabled={isLocked}>
-        Overview
-      </button>
-      <div className="shell-mode-switcher" role="tablist" aria-label="System modes">
-        {["listen", "flow", "screen"].map((mode) => (
-          <button
-            key={mode}
-            className={`shell-mode-chip ${activeMode === mode ? "is-active" : ""}`}
-            onClick={() => onModeChange(mode)}
-            type="button"
-            disabled={isLocked}
-          >
-            {mode}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+const OVERVIEW_MODES = ["listen", "flow", "screen"];
 
 function getModeSlotClass(mode) {
   if (mode === "listen") {
@@ -85,11 +63,38 @@ function getPageLayerClass(pageMode, activeMode, transition) {
   return "page-layer is-hidden";
 }
 
+function isInteractiveTarget(target) {
+  return target instanceof Element && Boolean(target.closest("button, input, a, [role='button'], [data-overlay-action]"));
+}
+
+function getOverlayActions(container) {
+  if (!container) {
+    return [];
+  }
+
+  return Array.from(container.querySelectorAll("[data-overlay-action]")).filter(
+    (element) => !element.disabled && element.getAttribute("aria-hidden") !== "true",
+  );
+}
+
+function getGestureDirection(delta) {
+  return delta > 0 ? "right" : "left";
+}
+
 export function SystemShell({ initialMode = "overview", initialFlowState = "focus", debug = false }) {
   const controller = useSystemController({ initialMode, initialFlowState });
   const { state } = controller;
-  const [chromeVisible, setChromeVisible] = useState(true);
-  const chromeTimerRef = useRef(null);
+  const overlayRef = useRef(null);
+  const overlayTimerRef = useRef(null);
+  const trackpadGestureRef = useRef({
+    pinch: 0,
+    horizontal: 0,
+    vertical: 0,
+    cleanupTimer: null,
+  });
+  const [overviewFocusIndex, setOverviewFocusIndex] = useState(0);
+  const [overlayFocusIndex, setOverlayFocusIndex] = useState(0);
+  const [inputDebug, setInputDebug] = useState("idle");
   const transitionStatus = state.transition?.status ?? "idle";
   const transition = state.transition ?? { status: "idle", from: state.activeMode, to: state.activeMode };
   const isFocusMode = state.activeMode !== "overview";
@@ -110,54 +115,105 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
           : null
       : null;
 
-  useEffect(() => {
-    const shouldStickVisible = state.activeMode === "overview";
-    if (shouldStickVisible) {
-      setChromeVisible(true);
-      if (chromeTimerRef.current) {
-        window.clearTimeout(chromeTimerRef.current);
-      }
+  function clearOverlayTimer() {
+    if (overlayTimerRef.current) {
+      window.clearTimeout(overlayTimerRef.current);
+      overlayTimerRef.current = null;
+    }
+  }
+
+  function reportInputDebug(message) {
+    if (!debug) {
       return;
     }
 
-    setChromeVisible(true);
-    if (chromeTimerRef.current) {
-      window.clearTimeout(chromeTimerRef.current);
+    setInputDebug(message);
+  }
+
+  function resetTrackpadGesture() {
+    const gesture = trackpadGestureRef.current;
+    if (gesture.cleanupTimer) {
+      window.clearTimeout(gesture.cleanupTimer);
     }
-    chromeTimerRef.current = window.setTimeout(() => {
-      setChromeVisible(false);
-    }, 2200);
-  }, [state.activeMode]);
+    gesture.pinch = 0;
+    gesture.horizontal = 0;
+    gesture.vertical = 0;
+    gesture.cleanupTimer = null;
+  }
+
+  function scheduleTrackpadGestureReset() {
+    const gesture = trackpadGestureRef.current;
+    if (gesture.cleanupTimer) {
+      window.clearTimeout(gesture.cleanupTimer);
+    }
+    gesture.cleanupTimer = window.setTimeout(() => {
+      resetTrackpadGesture();
+    }, 180);
+  }
+
+  function scheduleOverlayHide() {
+    clearOverlayTimer();
+    overlayTimerRef.current = window.setTimeout(() => {
+      controller.hideControls();
+    }, 3200);
+  }
+
+  function revealOverlay(reason = "user") {
+    if (!isFocusMode || transitionStatus !== "idle") {
+      return;
+    }
+
+    controller.showControls(reason);
+    scheduleOverlayHide();
+  }
 
   useEffect(
     () => () => {
-      if (chromeTimerRef.current) {
-        window.clearTimeout(chromeTimerRef.current);
-      }
+      clearOverlayTimer();
+      resetTrackpadGesture();
     },
     [],
   );
 
   useEffect(() => {
-    function revealChrome() {
-      if (state.activeMode === "overview") {
-        return;
+    if (state.activeMode === "overview") {
+      clearOverlayTimer();
+      if (state.overlay.visible) {
+        controller.hideControls();
       }
-
-      setChromeVisible(true);
-      if (chromeTimerRef.current) {
-        window.clearTimeout(chromeTimerRef.current);
-      }
-      chromeTimerRef.current = window.setTimeout(() => {
-        setChromeVisible(false);
-      }, 2600);
+      return;
     }
 
-    function onKeyDown(event) {
-      revealChrome();
+    if (transitionStatus === "idle") {
+      revealOverlay("mode-entry");
+    }
+  }, [state.activeMode, state.overlay.visible, transitionStatus]);
 
-      if (event.key === "Escape" || event.key === "Backspace") {
-        controller.returnOverview();
+  useEffect(() => {
+    const nextIndex = OVERVIEW_MODES.indexOf(state.activeMode);
+    if (nextIndex >= 0) {
+      setOverviewFocusIndex(nextIndex);
+    }
+  }, [state.activeMode]);
+
+  useEffect(() => {
+    if (!state.overlay.visible) {
+      setOverlayFocusIndex(0);
+      return;
+    }
+
+    const actions = getOverlayActions(overlayRef.current);
+    const nextIndex = Math.min(overlayFocusIndex, Math.max(actions.length - 1, 0));
+    const nextAction = actions[nextIndex];
+    if (nextAction) {
+      nextAction.focus();
+    }
+    scheduleOverlayHide();
+  }, [overlayFocusIndex, state.overlay.visible, state.activeMode, state.playback.state, state.playback.volume, state.flow.state, state.screen.pomodoroState]);
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (transitionStatus !== "idle") {
         return;
       }
 
@@ -173,30 +229,265 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
 
       if (event.key === "3") {
         controller.setMode("screen");
+        return;
+      }
+
+      if (state.activeMode === "overview") {
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          setOverviewFocusIndex((current) => (current - 1 + OVERVIEW_MODES.length) % OVERVIEW_MODES.length);
+          return;
+        }
+
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          setOverviewFocusIndex((current) => (current + 1) % OVERVIEW_MODES.length);
+          return;
+        }
+
+        if (event.key === "Enter") {
+          event.preventDefault();
+          controller.setMode(OVERVIEW_MODES[overviewFocusIndex]);
+        }
+
+        return;
+      }
+
+      if (event.key === "Escape" || event.key === "Backspace") {
+        event.preventDefault();
+        controller.returnOverview();
+        return;
+      }
+
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        revealOverlay("remote");
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        if (!state.overlay.visible) {
+          revealOverlay("remote");
+          return;
+        }
+
+        const actions = getOverlayActions(overlayRef.current);
+        actions[overlayFocusIndex]?.click();
+        scheduleOverlayHide();
+        return;
+      }
+
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+
+        if (!state.overlay.visible) {
+          if (event.key === "ArrowLeft") {
+            controller.prevMode();
+          } else {
+            controller.nextMode();
+          }
+          return;
+        }
+
+        const actions = getOverlayActions(overlayRef.current);
+        if (!actions.length) {
+          return;
+        }
+
+        setOverlayFocusIndex((current) => {
+          const step = event.key === "ArrowRight" ? 1 : -1;
+          return (current + step + actions.length) % actions.length;
+        });
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [controller, state.activeMode]);
+  }, [controller, overviewFocusIndex, overlayFocusIndex, state.activeMode, state.overlay.visible, transitionStatus]);
 
-  function revealChrome() {
+  useEffect(() => {
+    function moveOverviewFocus(direction) {
+      setOverviewFocusIndex((current) => {
+        const step = direction === "right" ? 1 : -1;
+        return (current + step + OVERVIEW_MODES.length) % OVERVIEW_MODES.length;
+      });
+    }
+
+    function moveOverlayFocus(direction) {
+      const actions = getOverlayActions(overlayRef.current);
+      if (!actions.length) {
+        return false;
+      }
+
+      setOverlayFocusIndex((current) => {
+        const step = direction === "right" ? 1 : -1;
+        return (current + step + actions.length) % actions.length;
+      });
+      scheduleOverlayHide();
+      return true;
+    }
+
+    function handleTrackpadHorizontal(delta) {
+      const direction = getGestureDirection(delta);
+      reportInputDebug(`trackpad horizontal ${direction} (${Math.round(delta)})`);
+
+      if (state.activeMode === "overview") {
+        moveOverviewFocus(direction);
+        return;
+      }
+
+      if (state.overlay.visible && moveOverlayFocus(direction)) {
+        return;
+      }
+
+      if (direction === "right") {
+        controller.nextMode();
+      } else {
+        controller.prevMode();
+      }
+    }
+
+    function handleTrackpadVertical() {
+      if (state.activeMode !== "overview") {
+        reportInputDebug("trackpad vertical overlay");
+        revealOverlay("trackpad-scroll");
+      }
+    }
+
+    function handleTrackpadPinch() {
+      if (state.activeMode !== "overview") {
+        reportInputDebug("trackpad pinch overview");
+        controller.returnOverview();
+      }
+    }
+
+    function onWheel(event) {
+      if (transitionStatus !== "idle") {
+        return;
+      }
+
+      if (isInteractiveTarget(event.target)) {
+        return;
+      }
+
+      const looksLikeTrackpad =
+        event.deltaMode === 0 ||
+        event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ||
+        (Math.abs(event.deltaX) > 0 && Math.abs(event.deltaX) < 120) ||
+        (Math.abs(event.deltaY) > 0 && Math.abs(event.deltaY) < 120);
+      if (!looksLikeTrackpad) {
+        return;
+      }
+
+      const gesture = trackpadGestureRef.current;
+      reportInputDebug(
+        `wheel dx:${Math.round(event.deltaX)} dy:${Math.round(event.deltaY)} ctrl:${event.ctrlKey ? "1" : "0"}`,
+      );
+
+      if (event.ctrlKey) {
+        event.preventDefault();
+        gesture.pinch += event.deltaY;
+        scheduleTrackpadGestureReset();
+
+        if (gesture.pinch <= -80 && state.activeMode !== "overview") {
+          resetTrackpadGesture();
+          handleTrackpadPinch();
+        }
+        return;
+      }
+
+      gesture.horizontal += event.deltaX;
+      gesture.vertical += event.deltaY;
+      scheduleTrackpadGestureReset();
+
+      if (Math.abs(gesture.horizontal) > 44 && Math.abs(gesture.horizontal) > Math.abs(gesture.vertical) * 1.1) {
+        event.preventDefault();
+        const horizontalDelta = gesture.horizontal;
+        resetTrackpadGesture();
+        handleTrackpadHorizontal(horizontalDelta);
+        return;
+      }
+
+      if (Math.abs(gesture.vertical) > 32 && Math.abs(gesture.vertical) > Math.abs(gesture.horizontal) * 0.9) {
+        if (state.activeMode !== "overview") {
+          event.preventDefault();
+          resetTrackpadGesture();
+          handleTrackpadVertical();
+        }
+      }
+    }
+
+    function onGestureStart(event) {
+      if (transitionStatus !== "idle" || isInteractiveTarget(event.target)) {
+        return;
+      }
+
+      reportInputDebug(`gesturestart scale:${Number(event.scale ?? 1).toFixed(2)}`);
+      event.preventDefault();
+    }
+
+    function onGestureChange(event) {
+      if (transitionStatus !== "idle" || isInteractiveTarget(event.target)) {
+        return;
+      }
+
+      event.preventDefault();
+      reportInputDebug(`gesturechange scale:${Number(event.scale ?? 1).toFixed(2)}`);
+
+      const scaleDelta = Number(event.scale ?? 1) - 1;
+      if (scaleDelta < -0.03) {
+        handleTrackpadPinch();
+      }
+    }
+
+    function onGestureEnd() {
+      reportInputDebug("gestureend");
+      resetTrackpadGesture();
+    }
+
+    window.addEventListener("wheel", onWheel, { passive: false });
+    document.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("mousewheel", onWheel, { passive: false });
+    document.addEventListener("mousewheel", onWheel, { passive: false });
+    window.addEventListener("gesturestart", onGestureStart, { passive: false });
+    document.addEventListener("gesturestart", onGestureStart, { passive: false });
+    window.addEventListener("gesturechange", onGestureChange, { passive: false });
+    document.addEventListener("gesturechange", onGestureChange, { passive: false });
+    window.addEventListener("gestureend", onGestureEnd);
+    document.addEventListener("gestureend", onGestureEnd);
+
+    return () => {
+      window.removeEventListener("wheel", onWheel);
+      document.removeEventListener("wheel", onWheel);
+      window.removeEventListener("mousewheel", onWheel);
+      document.removeEventListener("mousewheel", onWheel);
+      window.removeEventListener("gesturestart", onGestureStart);
+      document.removeEventListener("gesturestart", onGestureStart);
+      window.removeEventListener("gesturechange", onGestureChange);
+      document.removeEventListener("gesturechange", onGestureChange);
+      window.removeEventListener("gestureend", onGestureEnd);
+      document.removeEventListener("gestureend", onGestureEnd);
+    };
+  }, [controller, debug, overlayFocusIndex, state.activeMode, state.overlay.visible, transitionStatus]);
+
+  function onShellPointerDown(event) {
+    if (!isFocusMode || isInteractiveTarget(event.target)) {
+      return;
+    }
+
+    revealOverlay("blank-tap");
+  }
+
+  function onShellTouchStart(event) {
     if (state.activeMode === "overview") {
       return;
     }
 
-    setChromeVisible(true);
-    if (chromeTimerRef.current) {
-      window.clearTimeout(chromeTimerRef.current);
-    }
-    chromeTimerRef.current = window.setTimeout(() => {
-      setChromeVisible(false);
-    }, 2600);
-  }
-
-  function onShellTouchStart(event) {
-    if (state.activeMode === "overview" || event.touches.length < 2) {
-      revealChrome();
+    if (event.touches.length < 2) {
+      if (!isInteractiveTarget(event.target)) {
+        revealOverlay("blank-tap");
+      }
       return;
     }
 
@@ -243,7 +534,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   return (
     <div
       className={`system-shell mode-${state.activeMode} transition-${transitionStatus}`}
-      onPointerDown={revealChrome}
+      onPointerDown={onShellPointerDown}
       onTouchStart={onShellTouchStart}
     >
       {shouldRenderOverview ? (
@@ -251,6 +542,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
           className={getPageLayerClass("overview", state.activeMode, transition)}
           state={state}
           focusTarget={overviewFocusTarget}
+          activeCard={OVERVIEW_MODES[overviewFocusIndex]}
           onOpenMode={controller.setMode}
           onPrevTrack={controller.prevTrack}
           onTogglePlay={controller.togglePlay}
@@ -276,22 +568,15 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       ) : null}
 
       {shouldRenderFlow ? (
-        <FlowModePage
-          className={getPageLayerClass("flow", state.activeMode, transition)}
-          systemState={state}
-          onShowControls={controller.showControls}
-          onHideControls={controller.hideControls}
-          onSetFlowState={controller.setFlowState}
-          onSetVolume={controller.setVolume}
-          onTogglePlay={controller.togglePlay}
-          onReturnOverview={controller.returnOverview}
-        />
+        <FlowModePage className={getPageLayerClass("flow", state.activeMode, transition)} systemState={state} />
       ) : null}
 
       {shouldRenderScreen ? (
         <ScreenPage
           className={getPageLayerClass("screen", state.activeMode, transition)}
           state={state}
+          onOpenMode={controller.setMode}
+          onReturnOverview={controller.returnOverview}
           onStartPomodoro={controller.startPomodoro}
           onResumePomodoro={controller.resumePomodoro}
           onPausePomodoro={controller.pausePomodoro}
@@ -301,17 +586,29 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       ) : null}
 
       {isFocusMode ? (
-        <ShellChrome
-          activeMode={state.activeMode}
-          transitionStatus={transitionStatus}
-          visible={chromeVisible}
-          onModeChange={controller.setMode}
+        <GlobalOverlay
+          overlayRef={overlayRef}
+          visible={state.overlay.visible}
+          state={state}
           onReturnOverview={controller.returnOverview}
+          onModeChange={controller.setMode}
+          onTogglePlay={controller.togglePlay}
+          onPrevTrack={controller.prevTrack}
+          onNextTrack={controller.nextTrack}
+          onSetVolume={controller.setVolume}
+          onSetFlowState={controller.setFlowState}
+          onStartPomodoro={controller.startPomodoro}
+          onResumePomodoro={controller.resumePomodoro}
+          onPausePomodoro={controller.pausePomodoro}
+          onResetPomodoro={controller.resetPomodoro}
+          onCompleteTask={controller.completeCurrentTask}
+          onInteract={scheduleOverlayHide}
         />
       ) : null}
+
       {debug ? (
         <div className="shell-debug-badge">
-          {state.activeMode} · {transitionStatus}
+          {state.activeMode} · {transitionStatus} · {inputDebug}
         </div>
       ) : null}
     </div>

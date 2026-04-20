@@ -1,6 +1,143 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createSystemServiceClient } from "../bridge/systemServiceClient";
 
+const MODE_ORDER = ["listen", "flow", "screen"];
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getAdjacentMode(currentMode, direction = 1) {
+  const normalizedMode = currentMode === "overview" ? "listen" : currentMode;
+  const currentIndex = MODE_ORDER.indexOf(normalizedMode);
+  const baseIndex = currentIndex === -1 ? 0 : currentIndex;
+  const nextIndex = (baseIndex + direction + MODE_ORDER.length) % MODE_ORDER.length;
+  return MODE_ORDER[nextIndex];
+}
+
+function deriveFlowSubtitle(flowState) {
+  if (flowState === "focus") {
+    return "Deep Work";
+  }
+
+  if (flowState === "relax") {
+    return "Wind Down";
+  }
+
+  if (flowState === "sleep") {
+    return "Night Drift";
+  }
+
+  return "Motion Loop";
+}
+
+function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui") {
+  const liveState = currentState ?? createFallbackState();
+
+  if (type === "set_mode" || type === "return_overview" || type === "next_mode" || type === "prev_mode") {
+    const targetMode =
+      type === "set_mode"
+        ? payload.mode ?? "overview"
+        : type === "return_overview"
+          ? "overview"
+          : getAdjacentMode(liveState.activeMode, type === "next_mode" ? 1 : -1);
+
+    return {
+      ...liveState,
+      activeMode: targetMode,
+      focusedPanel: targetMode === "overview" ? null : targetMode,
+      transition: {
+        status: "animating",
+        from: liveState.activeMode,
+        to: targetMode,
+        startedAt: nowIso(),
+        lockedUntil: Date.now() + 520,
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "show_controls") {
+    return {
+      ...liveState,
+      overlay: {
+        state: "controls",
+        reason: payload.reason ?? "user",
+        visible: true,
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "hide_controls") {
+    return {
+      ...liveState,
+      overlay: {
+        state: "hidden",
+        reason: null,
+        visible: false,
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "set_volume") {
+    const volume = clamp(Number(payload.volume ?? liveState.playback?.volume ?? 58), 0, 100);
+    return {
+      ...liveState,
+      playback: {
+        ...liveState.playback,
+        volume,
+      },
+      flow: {
+        ...liveState.flow,
+        audioMetrics: {
+          ...(liveState.flow?.audioMetrics ?? {}),
+          volumeNormalized: volume / 100,
+        },
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "set_flow_state") {
+    const nextFlowState = payload.state ?? liveState.flow?.state ?? "focus";
+    return {
+      ...liveState,
+      activeMode: "flow",
+      focusedPanel: "flow",
+      transition: {
+        status: "animating",
+        from: liveState.activeMode,
+        to: "flow",
+        startedAt: nowIso(),
+        lockedUntil: Date.now() + 420,
+      },
+      flow: {
+        ...liveState.flow,
+        state: nextFlowState,
+        subtitle: deriveFlowSubtitle(nextFlowState),
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  return {
+    ...liveState,
+    lastSource: source,
+    lastUpdatedAt: nowIso(),
+  };
+}
+
 function createFallbackState(initialMode = "overview", initialFlowState = "focus") {
   return {
     activeMode: initialMode,
@@ -116,14 +253,21 @@ export function useSystemController({ initialMode = "overview", initialFlowState
 
   async function dispatch(type, payload = {}, source = "speaker-ui") {
     preferOverviewUntilActionRef.current = false;
-    const response = await systemApi.sendAction(type, payload, source);
-    if (response?.state) {
-      setState(response.state);
-      return response.state;
-    }
+    const optimisticState = applyLocalAction(state, type, payload, source);
+    setState(optimisticState);
 
-    setState(response);
-    return response;
+    try {
+      const response = await systemApi.sendAction(type, payload, source);
+      if (response?.state) {
+        setState(response.state);
+        return response.state;
+      }
+
+      setState(response);
+      return response;
+    } catch {
+      return optimisticState;
+    }
   }
 
   return {
@@ -135,6 +279,12 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     },
     async returnOverview() {
       return dispatch("return_overview");
+    },
+    async nextMode() {
+      return dispatch("next_mode");
+    },
+    async prevMode() {
+      return dispatch("prev_mode");
     },
     async showControls(reason = "user") {
       return dispatch("show_controls", { reason });
