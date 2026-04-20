@@ -5,10 +5,11 @@ export function App() {
   const params = new URLSearchParams(window.location.search);
   const initialState = params.get("state") ?? "focus";
   const initialMode = params.get("mode") ?? "overview";
+  const debug = import.meta.env.DEV;
 
   return (
-    <AppErrorBoundary>
-      <SystemShell initialFlowState={initialState} initialMode={initialMode} />
+    <AppErrorBoundary debug={debug}>
+      <SystemShell initialFlowState={initialState} initialMode={initialMode} debug={debug} />
     </AppErrorBoundary>
   );
 }

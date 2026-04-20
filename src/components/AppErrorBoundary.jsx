@@ -18,11 +18,12 @@ export class AppErrorBoundary extends React.Component {
 
   render() {
     if (this.state.error) {
+      const debug = this.props.debug;
       return (
         <main className="app-error-boundary" role="alert">
-          <span className="app-error-boundary__label">Runtime Error</span>
-          <h1>{this.state.error.name || "Render failed"}</h1>
-          <pre>{this.state.error.message || String(this.state.error)}</pre>
+          <span className="app-error-boundary__label">{debug ? "Runtime Error" : "Temporarily Unavailable"}</span>
+          <h1>{debug ? this.state.error.name || "Render failed" : "The interface needs a refresh."}</h1>
+          <pre>{debug ? this.state.error.message || String(this.state.error) : "Please reload the page."}</pre>
         </main>
       );
     }

@@ -1,5 +1,34 @@
 const MODE_ORDER = ["listen", "flow", "screen"];
 const FLOW_ORDER = ["focus", "flow", "relax", "sleep"];
+const MOCK_QUEUE = [
+  {
+    trackTitle: "Low Light Corridor",
+    artist: "tikpal",
+    album: "Mock Session",
+    source: "Mock Stream",
+    progress: 0.63,
+    format: "FLAC 24/96",
+    nextTrackTitle: "Night Window",
+  },
+  {
+    trackTitle: "Night Window",
+    artist: "tikpal",
+    album: "Mock Session",
+    source: "Mock Stream",
+    progress: 0.14,
+    format: "FLAC 24/96",
+    nextTrackTitle: "Signal Bloom",
+  },
+  {
+    trackTitle: "Signal Bloom",
+    artist: "tikpal",
+    album: "Mock Session",
+    source: "Mock Stream",
+    progress: 0.41,
+    format: "FLAC 24/96",
+    nextTrackTitle: "Low Light Corridor",
+  },
+];
 
 function nowIso() {
   return new Date().toISOString();
@@ -7,6 +36,10 @@ function nowIso() {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function getQueueTrack(index) {
+  return MOCK_QUEUE[(index + MOCK_QUEUE.length) % MOCK_QUEUE.length];
 }
 
 function createInitialState() {
@@ -28,13 +61,9 @@ function createInitialState() {
     playback: {
       state: "play",
       volume: 58,
-      trackTitle: "Low Light Corridor",
-      artist: "tikpal",
-      album: "Mock Session",
-      source: "Mock Stream",
-      progress: 0.63,
-      format: "FLAC 24/96",
-      nextTrackTitle: "Night Window",
+      currentTrackIndex: 0,
+      queueLength: MOCK_QUEUE.length,
+      ...getQueueTrack(0),
     },
     flow: {
       state: "focus",
@@ -55,6 +84,7 @@ function createInitialState() {
       pomodoroState: "running",
       pomodoroDurationSec: 1500,
       pomodoroRemainingSec: 1124,
+      timerUpdatedAt: nowIso(),
       todaySummary: {
         remainingTasks: 3,
         remainingEvents: 2,
@@ -101,6 +131,26 @@ function normalizeTransition(transition) {
   }
 
   return transition;
+}
+
+function normalizeScreenTimer(screen) {
+  if (!screen || screen.pomodoroState !== "running") {
+    return screen;
+  }
+
+  const timerUpdatedAt = screen.timerUpdatedAt ? new Date(screen.timerUpdatedAt).getTime() : Date.now();
+  const elapsedSec = Math.floor((Date.now() - timerUpdatedAt) / 1000);
+  if (elapsedSec <= 0) {
+    return screen;
+  }
+
+  const remaining = Math.max(0, screen.pomodoroRemainingSec - elapsedSec);
+  return {
+    ...screen,
+    pomodoroRemainingSec: remaining,
+    pomodoroState: remaining === 0 ? "idle" : "running",
+    timerUpdatedAt: nowIso(),
+  };
 }
 
 function deriveFlowSubtitle(flowState) {
@@ -163,10 +213,12 @@ export function createSystemStateStore() {
 
   function getNormalizedState() {
     const normalizedTransition = normalizeTransition(state.transition);
-    if (normalizedTransition !== state.transition) {
+    const normalizedScreen = normalizeScreenTimer(state.screen);
+    if (normalizedTransition !== state.transition || normalizedScreen !== state.screen) {
       state = {
         ...state,
         transition: normalizedTransition,
+        screen: normalizedScreen,
       };
     }
 
@@ -389,6 +441,23 @@ export function createSystemStateStore() {
       );
     }
 
+    if (type === "prev_track" || type === "next_track") {
+      const step = type === "next_track" ? 1 : -1;
+      const nextIndex = (Number(liveState.playback.currentTrackIndex ?? 0) + step + MOCK_QUEUE.length) % MOCK_QUEUE.length;
+      return updateState(
+        {
+          ...liveState,
+          playback: {
+            ...liveState.playback,
+            currentTrackIndex: nextIndex,
+            queueLength: MOCK_QUEUE.length,
+            ...getQueueTrack(nextIndex),
+          },
+        },
+        source,
+      );
+    }
+
     if (type === "set_volume") {
       const volume = clamp(Number(payload.volume ?? liveState.playback.volume), 0, 100);
       return updateState(
@@ -435,7 +504,7 @@ export function createSystemStateStore() {
     }
 
     if (type === "screen_start_pomodoro") {
-      const durationSec = clamp(Number(payload.durationSec ?? 1500), 60, 7200);
+      const durationSec = clamp(Number(payload.durationSec ?? liveState.screen.pomodoroDurationSec ?? 1500), 60, 7200);
       return updateState(
         {
           ...liveState,
@@ -446,6 +515,21 @@ export function createSystemStateStore() {
             pomodoroState: "running",
             pomodoroDurationSec: durationSec,
             pomodoroRemainingSec: durationSec,
+            timerUpdatedAt: nowIso(),
+          },
+        },
+        source,
+      );
+    }
+
+    if (type === "screen_resume_pomodoro") {
+      return updateState(
+        {
+          ...liveState,
+          screen: {
+            ...liveState.screen,
+            pomodoroState: "running",
+            timerUpdatedAt: nowIso(),
           },
         },
         source,
@@ -459,6 +543,7 @@ export function createSystemStateStore() {
           screen: {
             ...liveState.screen,
             pomodoroState: "paused",
+            timerUpdatedAt: nowIso(),
           },
         },
         source,
@@ -473,6 +558,7 @@ export function createSystemStateStore() {
             ...liveState.screen,
             pomodoroState: "idle",
             pomodoroRemainingSec: liveState.screen.pomodoroDurationSec,
+            timerUpdatedAt: nowIso(),
           },
         },
         source,

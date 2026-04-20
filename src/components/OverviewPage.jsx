@@ -31,16 +31,25 @@ function formatPomodoro(remainingSec) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function OverviewPage({ state, onOpenMode, onTogglePlay, onSetFlowState, onPausePomodoro, className = "" }) {
+export function OverviewPage({
+  state,
+  onOpenMode,
+  onPrevTrack,
+  onTogglePlay,
+  onNextTrack,
+  onSetFlowState,
+  onStartPomodoro,
+  onResumePomodoro,
+  onPausePomodoro,
+  onResetPomodoro,
+  onCompleteTask,
+  className = "",
+}) {
+  const isRunning = state.screen.pomodoroState === "running";
+  const isPaused = state.screen.pomodoroState === "paused";
+
   return (
     <main className={`overview-page ${className}`.trim()} role="application" aria-label="Overview">
-      <header className="overview-header">
-        <div>
-          <span className="mode-kicker">Overview</span>
-          <h1>Ambient OS</h1>
-          <p>Listen, Flow, and Screen share the same surface.</p>
-        </div>
-      </header>
       <section className="overview-grid">
         <OverviewCard
           label="Listen"
@@ -51,9 +60,17 @@ export function OverviewPage({ state, onOpenMode, onTogglePlay, onSetFlowState, 
           tone="listen"
           onOpen={() => onOpenMode("listen")}
           controls={(
-            <button className="overview-action" onClick={onTogglePlay} type="button">
-              {state.playback.state === "play" ? "Pause" : "Play"}
-            </button>
+            <>
+              <button className="overview-action overview-action--ghost" onClick={onPrevTrack} type="button">
+                Prev
+              </button>
+              <button className="overview-action" onClick={onTogglePlay} type="button">
+                {state.playback.state === "play" ? "Pause" : "Play"}
+              </button>
+              <button className="overview-action overview-action--ghost" onClick={onNextTrack} type="button">
+                Next
+              </button>
+            </>
           )}
         />
         <OverviewCard
@@ -88,9 +105,29 @@ export function OverviewPage({ state, onOpenMode, onTogglePlay, onSetFlowState, 
           tone="screen"
           onOpen={() => onOpenMode("screen")}
           controls={(
-            <button className="overview-action" onClick={onPausePomodoro} type="button">
-              {state.screen.pomodoroState === "running" ? "Pause timer" : "Resume timer"}
-            </button>
+            <>
+              <button
+                className="overview-action"
+                onClick={isPaused ? onResumePomodoro : onStartPomodoro}
+                type="button"
+              >
+                {isRunning ? "Restart" : isPaused ? "Resume" : "Start"}
+              </button>
+              <button
+                className="overview-action overview-action--ghost"
+                onClick={onPausePomodoro}
+                type="button"
+                disabled={!isRunning}
+              >
+                Pause
+              </button>
+              <button className="overview-action overview-action--ghost" onClick={onResetPomodoro} type="button">
+                Reset
+              </button>
+              <button className="overview-action overview-action--ghost" onClick={onCompleteTask} type="button">
+                Done
+              </button>
+            </>
           )}
         />
       </section>

@@ -145,6 +145,12 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     async togglePlay() {
       return dispatch("toggle_play");
     },
+    async prevTrack() {
+      return dispatch("prev_track");
+    },
+    async nextTrack() {
+      return dispatch("next_track");
+    },
     async setVolume(volume) {
       return dispatch("set_volume", { volume });
     },
@@ -154,8 +160,14 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     async startPomodoro(durationSec = 1500) {
       return dispatch("screen_start_pomodoro", { durationSec });
     },
+    async resumePomodoro() {
+      return dispatch("screen_resume_pomodoro");
+    },
     async pausePomodoro() {
       return dispatch("screen_pause_pomodoro");
+    },
+    async resetPomodoro() {
+      return dispatch("screen_reset_pomodoro");
     },
     async completeCurrentTask() {
       return dispatch("screen_complete_current_task");

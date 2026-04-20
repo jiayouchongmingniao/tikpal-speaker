@@ -5,12 +5,21 @@ function formatPomodoro(remainingSec) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function ScreenPage({ state, onStartPomodoro, onPausePomodoro, onCompleteTask, className = "" }) {
+export function ScreenPage({
+  state,
+  onStartPomodoro,
+  onResumePomodoro,
+  onPausePomodoro,
+  onResetPomodoro,
+  onCompleteTask,
+  className = "",
+}) {
   const duration = Math.max(1, Number(state.screen.pomodoroDurationSec ?? 1500));
   const remaining = Math.max(0, Number(state.screen.pomodoroRemainingSec ?? duration));
   const progressPercent = Math.max(0, Math.min(100, Math.round(((duration - remaining) / duration) * 100)));
   const isRunning = state.screen.pomodoroState === "running";
-  const primaryLabel = isRunning ? "Restart timer" : state.screen.pomodoroState === "paused" ? "Resume timer" : "Start timer";
+  const isPaused = state.screen.pomodoroState === "paused";
+  const primaryLabel = isRunning ? "Restart timer" : isPaused ? "Resume timer" : "Start timer";
 
   return (
     <main className={`mode-page mode-page--screen ${className}`.trim()} role="application" aria-label="Screen mode">
@@ -45,11 +54,14 @@ export function ScreenPage({ state, onStartPomodoro, onPausePomodoro, onComplete
           <strong>{state.screen.todaySummary?.remainingEvents ?? 0} events left</strong>
         </div>
         <div className="listen-controls">
-          <button className="shell-button" onClick={onStartPomodoro} type="button">
+          <button className="shell-button" onClick={isPaused ? onResumePomodoro : onStartPomodoro} type="button">
             {primaryLabel}
           </button>
-          <button className="shell-button shell-button--ghost" onClick={onPausePomodoro} type="button">
+          <button className="shell-button shell-button--ghost" onClick={onPausePomodoro} type="button" disabled={!isRunning}>
             Pause
+          </button>
+          <button className="shell-button shell-button--ghost" onClick={onResetPomodoro} type="button">
+            Reset
           </button>
           <button className="shell-button shell-button--ghost" onClick={onCompleteTask} type="button">
             Complete

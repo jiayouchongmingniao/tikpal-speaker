@@ -1,15 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FlowModePage } from "./FlowModePage";
 import { ListenPage } from "./ListenPage";
 import { OverviewPage } from "./OverviewPage";
 import { ScreenPage } from "./ScreenPage";
 import { useSystemController } from "../hooks/useSystemController";
 
-function ShellChrome({ activeMode, transitionStatus, onModeChange, onReturnOverview, onTogglePlay }) {
+function ShellChrome({ activeMode, transitionStatus, visible, onModeChange, onReturnOverview, onTogglePlay }) {
   const isLocked = transitionStatus !== "idle";
 
   return (
-    <div className="shell-chrome">
+    <div className={`shell-chrome ${visible ? "is-visible" : "is-hidden"}`}>
       <button className="shell-button shell-button--ghost" onClick={onReturnOverview} type="button" disabled={isLocked}>
         Overview
       </button>
@@ -60,9 +60,11 @@ function getPageLayerClass(pageMode, activeMode, transition) {
   return "page-layer is-hidden";
 }
 
-export function SystemShell({ initialMode = "overview", initialFlowState = "focus" }) {
+export function SystemShell({ initialMode = "overview", initialFlowState = "focus", debug = false }) {
   const controller = useSystemController({ initialMode, initialFlowState });
   const { state } = controller;
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const chromeTimerRef = useRef(null);
   const transitionStatus = state.transition?.status ?? "idle";
   const transition = state.transition ?? { status: "idle", from: state.activeMode, to: state.activeMode };
   const shouldRenderOverview =
@@ -75,7 +77,45 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
     state.activeMode === "screen" || transition.from === "screen" || transition.to === "screen";
 
   useEffect(() => {
+    const shouldStickVisible = state.activeMode === "overview";
+    if (shouldStickVisible) {
+      setChromeVisible(true);
+      if (chromeTimerRef.current) {
+        window.clearTimeout(chromeTimerRef.current);
+      }
+      return;
+    }
+
+    setChromeVisible(false);
+  }, [state.activeMode]);
+
+  useEffect(
+    () => () => {
+      if (chromeTimerRef.current) {
+        window.clearTimeout(chromeTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    function revealChrome() {
+      if (state.activeMode === "overview") {
+        return;
+      }
+
+      setChromeVisible(true);
+      if (chromeTimerRef.current) {
+        window.clearTimeout(chromeTimerRef.current);
+      }
+      chromeTimerRef.current = window.setTimeout(() => {
+        setChromeVisible(false);
+      }, 2600);
+    }
+
     function onKeyDown(event) {
+      revealChrome();
+
       if (event.key === "Escape" || event.key === "Backspace") {
         controller.returnOverview();
         return;
@@ -98,18 +138,42 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [controller]);
+  }, [controller, state.activeMode]);
+
+  function revealChrome() {
+    if (state.activeMode === "overview") {
+      return;
+    }
+
+    setChromeVisible(true);
+    if (chromeTimerRef.current) {
+      window.clearTimeout(chromeTimerRef.current);
+    }
+    chromeTimerRef.current = window.setTimeout(() => {
+      setChromeVisible(false);
+    }, 2600);
+  }
 
   return (
-    <div className={`system-shell mode-${state.activeMode} transition-${transitionStatus}`}>
+    <div
+      className={`system-shell mode-${state.activeMode} transition-${transitionStatus}`}
+      onPointerDown={revealChrome}
+      onTouchStart={revealChrome}
+    >
       {shouldRenderOverview ? (
         <OverviewPage
           className={getPageLayerClass("overview", state.activeMode, transition)}
           state={state}
           onOpenMode={controller.setMode}
+          onPrevTrack={controller.prevTrack}
           onTogglePlay={controller.togglePlay}
+          onNextTrack={controller.nextTrack}
           onSetFlowState={controller.setFlowState}
+          onStartPomodoro={controller.startPomodoro}
+          onResumePomodoro={controller.resumePomodoro}
           onPausePomodoro={controller.pausePomodoro}
+          onResetPomodoro={controller.resetPomodoro}
+          onCompleteTask={controller.completeCurrentTask}
         />
       ) : null}
 
@@ -118,6 +182,8 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
           className={getPageLayerClass("listen", state.activeMode, transition)}
           state={state}
           onTogglePlay={controller.togglePlay}
+          onPrevTrack={controller.prevTrack}
+          onNextTrack={controller.nextTrack}
           onSetVolume={controller.setVolume}
         />
       ) : null}
@@ -140,7 +206,9 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
           className={getPageLayerClass("screen", state.activeMode, transition)}
           state={state}
           onStartPomodoro={controller.startPomodoro}
+          onResumePomodoro={controller.resumePomodoro}
           onPausePomodoro={controller.pausePomodoro}
+          onResetPomodoro={controller.resetPomodoro}
           onCompleteTask={controller.completeCurrentTask}
         />
       ) : null}
@@ -148,13 +216,16 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       <ShellChrome
         activeMode={state.activeMode}
         transitionStatus={transitionStatus}
+        visible={state.activeMode === "overview" ? true : chromeVisible}
         onModeChange={controller.setMode}
         onReturnOverview={controller.returnOverview}
         onTogglePlay={controller.togglePlay}
       />
-      <div className="shell-debug-badge">
-        {state.activeMode} · {transitionStatus}
-      </div>
+      {debug ? (
+        <div className="shell-debug-badge">
+          {state.activeMode} · {transitionStatus}
+        </div>
+      ) : null}
     </div>
   );
 }

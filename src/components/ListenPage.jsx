@@ -6,7 +6,7 @@ function formatProgress(progress) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function ListenPage({ state, onTogglePlay, onSetVolume, className = "" }) {
+export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSetVolume, className = "" }) {
   const progressPercent = Math.round(Math.max(0, Math.min(1, Number(state.playback.progress ?? 0))) * 100);
 
   return (
@@ -49,16 +49,16 @@ export function ListenPage({ state, onTogglePlay, onSetVolume, className = "" })
         </div>
         <div className="mode-metric">
           <span>Queue</span>
-          <strong>1 playing · 1 up next</strong>
+          <strong>{state.playback.currentTrackIndex + 1} of {state.playback.queueLength ?? 1}</strong>
         </div>
         <div className="listen-controls">
-          <button className="shell-button shell-button--ghost" type="button">
+          <button className="shell-button shell-button--ghost" type="button" onClick={onPrevTrack}>
             Prev
           </button>
           <button className="shell-button" onClick={onTogglePlay} type="button">
             {state.playback.state === "play" ? "Pause" : "Play"}
           </button>
-          <button className="shell-button shell-button--ghost" type="button">
+          <button className="shell-button shell-button--ghost" type="button" onClick={onNextTrack}>
             Next
           </button>
           <label className="listen-volume">

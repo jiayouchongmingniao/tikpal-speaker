@@ -280,6 +280,19 @@ input {
   justify-content: space-between;
   gap: 16px;
   pointer-events: none;
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.shell-chrome.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.shell-chrome.is-hidden {
+  opacity: 0;
+  transform: translateY(-18px);
 }
 
 .shell-button,
@@ -388,22 +401,6 @@ input {
 .page-layer.is-hidden {
   opacity: 0;
   transform: translate3d(0, 20px, 0) scale(0.984);
-}
-
-.overview-header {
-  margin-bottom: 22px;
-}
-
-.overview-header h1 {
-  margin: 16px 0 0;
-  font-size: clamp(42px, 4vw, 72px);
-  line-height: 0.96;
-}
-
-.overview-header p {
-  margin: 14px 0 0;
-  font-size: 22px;
-  opacity: 0.68;
 }
 
 .overview-page.page-layer {
@@ -580,6 +577,15 @@ input {
   padding: 10px 14px;
 }
 
+.overview-action--ghost {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.overview-action:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
 .overview-chip.is-active {
   background: rgba(255, 255, 255, 0.24);
 }
@@ -711,10 +717,6 @@ input {
   .overview-page,
   .mode-page {
     padding: 120px 16px 16px;
-  }
-
-  .overview-header {
-    margin-bottom: 16px;
   }
 }
 
