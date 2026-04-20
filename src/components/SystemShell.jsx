@@ -30,6 +30,18 @@ function ShellChrome({ activeMode, transitionStatus, visible, onModeChange, onRe
   );
 }
 
+function getModeSlotClass(mode) {
+  if (mode === "listen") {
+    return "page-layer--slot-left";
+  }
+
+  if (mode === "screen") {
+    return "page-layer--slot-right";
+  }
+
+  return "page-layer--slot-center";
+}
+
 function getPageLayerClass(pageMode, activeMode, transition) {
   const from = transition?.from ?? activeMode;
   const to = transition?.to ?? activeMode;
@@ -43,10 +55,26 @@ function getPageLayerClass(pageMode, activeMode, transition) {
   }
 
   if (from === pageKey) {
+    if (to === "overview" && !isOverviewPage) {
+      return `page-layer is-exiting page-layer--focus-exit ${getModeSlotClass(pageKey)}`;
+    }
+
+    if (to !== "overview" && from !== "overview" && !isOverviewPage) {
+      return "page-layer is-exiting page-layer--handoff-out";
+    }
+
     return "page-layer is-exiting";
   }
 
   if (to === pageKey) {
+    if (from === "overview" && !isOverviewPage) {
+      return `page-layer is-entering page-layer--focus-enter ${getModeSlotClass(pageKey)}`;
+    }
+
+    if (from !== "overview" && to !== "overview" && !isOverviewPage) {
+      return "page-layer is-entering page-layer--handoff-in";
+    }
+
     return "page-layer is-entering";
   }
 
@@ -73,6 +101,14 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
     state.activeMode === "flow" || transition.from === "flow" || transition.to === "flow";
   const shouldRenderScreen =
     state.activeMode === "screen" || transition.from === "screen" || transition.to === "screen";
+  const overviewFocusTarget =
+    transitionStatus !== "idle"
+      ? transition.to === "overview"
+        ? transition.from
+        : transition.from === "overview"
+          ? transition.to
+          : null
+      : null;
 
   useEffect(() => {
     const shouldStickVisible = state.activeMode === "overview";
@@ -158,16 +194,63 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
     }, 2600);
   }
 
+  function onShellTouchStart(event) {
+    if (state.activeMode === "overview" || event.touches.length < 2) {
+      revealChrome();
+      return;
+    }
+
+    const [firstTouch, secondTouch] = event.touches;
+    const startDistance = Math.hypot(
+      (secondTouch?.clientX ?? 0) - (firstTouch?.clientX ?? 0),
+      (secondTouch?.clientY ?? 0) - (firstTouch?.clientY ?? 0),
+    );
+
+    if (!startDistance) {
+      return;
+    }
+
+    let didReturnOverview = false;
+
+    function onTouchMove(moveEvent) {
+      if (moveEvent.touches.length < 2 || didReturnOverview) {
+        return;
+      }
+
+      const [nextFirstTouch, nextSecondTouch] = moveEvent.touches;
+      const nextDistance = Math.hypot(
+        (nextSecondTouch?.clientX ?? 0) - (nextFirstTouch?.clientX ?? 0),
+        (nextSecondTouch?.clientY ?? 0) - (nextFirstTouch?.clientY ?? 0),
+      );
+
+      if (nextDistance / startDistance < 0.82) {
+        didReturnOverview = true;
+        controller.returnOverview();
+      }
+    }
+
+    function cleanupPinchTracking() {
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", cleanupPinchTracking);
+      window.removeEventListener("touchcancel", cleanupPinchTracking);
+    }
+
+    window.addEventListener("touchmove", onTouchMove);
+    window.addEventListener("touchend", cleanupPinchTracking, { once: true });
+    window.addEventListener("touchcancel", cleanupPinchTracking, { once: true });
+  }
+
   return (
     <div
       className={`system-shell mode-${state.activeMode} transition-${transitionStatus}`}
       onPointerDown={revealChrome}
-      onTouchStart={revealChrome}
+      onTouchStart={onShellTouchStart}
     >
       {shouldRenderOverview ? (
         <OverviewPage
           className={getPageLayerClass("overview", state.activeMode, transition)}
           state={state}
+          focusTarget={overviewFocusTarget}
           onOpenMode={controller.setMode}
           onPrevTrack={controller.prevTrack}
           onTogglePlay={controller.togglePlay}

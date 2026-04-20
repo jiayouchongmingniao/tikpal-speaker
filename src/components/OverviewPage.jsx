@@ -1,6 +1,30 @@
-function OverviewCard({ label, title, subtitle, meta, onOpen, controls, tone = "cool", detail }) {
+function OverviewCard({
+  label,
+  title,
+  subtitle,
+  meta,
+  onOpen,
+  controls,
+  tone = "cool",
+  detail,
+  transitionStatus = "idle",
+  isFocusTarget = false,
+}) {
+  const stateClass = isFocusTarget
+    ? transitionStatus === "animating"
+      ? "is-activating"
+      : "is-focused"
+    : transitionStatus === "animating"
+      ? "is-dimmed"
+      : "";
+
   return (
-    <article className={`overview-card overview-card--${tone}`} onClick={onOpen} role="button" tabIndex={0}>
+    <article
+      className={`overview-card overview-card--${tone} ${stateClass}`.trim()}
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+    >
       <div className="overview-card__header">
         <span>{label}</span>
       </div>
@@ -43,10 +67,12 @@ export function OverviewPage({
   onPausePomodoro,
   onResetPomodoro,
   onCompleteTask,
+  focusTarget = null,
   className = "",
 }) {
   const isRunning = state.screen.pomodoroState === "running";
   const isPaused = state.screen.pomodoroState === "paused";
+  const transitionStatus = state.transition?.status ?? "idle";
 
   return (
     <main className={`overview-page ${className}`.trim()} role="application" aria-label="Overview">
@@ -58,6 +84,8 @@ export function OverviewPage({
           meta={`${state.playback.source ?? "Unknown source"} · Volume ${state.playback.volume}%`}
           detail={`Next ${state.playback.nextTrackTitle ?? "Unknown"}`}
           tone="listen"
+          transitionStatus={transitionStatus}
+          isFocusTarget={focusTarget === "listen"}
           onOpen={() => onOpenMode("listen")}
           controls={(
             <>
@@ -80,6 +108,8 @@ export function OverviewPage({
           meta="Enter the current ambient state"
           detail={`Beat ${Math.round((state.flow.audioMetrics?.beatConfidence ?? 0.12) * 100)}%`}
           tone="flow"
+          transitionStatus={transitionStatus}
+          isFocusTarget={focusTarget === "flow"}
           onOpen={() => onOpenMode("flow")}
           controls={(
             <div className="overview-chip-list">
@@ -103,6 +133,8 @@ export function OverviewPage({
           meta={`${state.screen.todaySummary?.remainingTasks ?? 0} tasks left today`}
           detail={`Next ${state.screen.nextTask ?? "None"}`}
           tone="screen"
+          transitionStatus={transitionStatus}
+          isFocusTarget={focusTarget === "screen"}
           onOpen={() => onOpenMode("screen")}
           controls={(
             <>

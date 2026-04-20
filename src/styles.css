@@ -440,6 +440,50 @@ input {
   transform: translate3d(0, 24px, 0) scale(0.985);
 }
 
+.page-layer--slot-left {
+  transform-origin: 16% 52%;
+}
+
+.page-layer--slot-center {
+  transform-origin: 50% 52%;
+}
+
+.page-layer--slot-right {
+  transform-origin: 84% 52%;
+}
+
+.page-layer--focus-enter.page-layer--slot-left {
+  transform: translate3d(-22%, 0, 0) scale(0.76);
+}
+
+.page-layer--focus-enter.page-layer--slot-center {
+  transform: translate3d(0, 0, 0) scale(0.72);
+}
+
+.page-layer--focus-enter.page-layer--slot-right {
+  transform: translate3d(22%, 0, 0) scale(0.76);
+}
+
+.page-layer--focus-exit.page-layer--slot-left {
+  transform: translate3d(-22%, 0, 0) scale(0.76);
+}
+
+.page-layer--focus-exit.page-layer--slot-center {
+  transform: translate3d(0, 0, 0) scale(0.72);
+}
+
+.page-layer--focus-exit.page-layer--slot-right {
+  transform: translate3d(22%, 0, 0) scale(0.76);
+}
+
+.page-layer--handoff-in {
+  transform: translate3d(8%, 0, 0) scale(0.985);
+}
+
+.page-layer--handoff-out {
+  transform: translate3d(-8%, 0, 0) scale(1.015);
+}
+
 .app-error-boundary {
   position: fixed;
   inset: 0;
@@ -502,9 +546,11 @@ input {
   padding: 26px;
   overflow: hidden;
   transition:
-    transform 220ms ease,
-    border-color 220ms ease,
-    box-shadow 220ms ease;
+    transform 320ms ease,
+    border-color 320ms ease,
+    box-shadow 320ms ease,
+    opacity 320ms ease,
+    filter 320ms ease;
 }
 
 .overview-card:hover {
@@ -534,6 +580,18 @@ input {
 
 .overview-card--screen::after {
   background: rgba(255, 179, 138, 0.42);
+}
+
+.overview-card.is-activating {
+  transform: scale(1.04);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 42px 82px rgba(0, 0, 0, 0.34);
+}
+
+.overview-card.is-dimmed {
+  opacity: 0.2;
+  transform: scale(0.94) translateY(14px);
+  filter: blur(3px);
 }
 
 .overview-card__header span,
