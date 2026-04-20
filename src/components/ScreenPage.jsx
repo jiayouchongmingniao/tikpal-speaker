@@ -23,37 +23,21 @@ export function ScreenPage({
 
   return (
     <main className={`mode-page mode-page--screen ${className}`.trim()} role="application" aria-label="Screen mode">
-      <section className="mode-panel mode-panel--hero">
-        <span className="mode-kicker">Screen</span>
-        <h1>{state.screen.currentTask ?? "No focus item"}</h1>
-        <p>{state.screen.currentBlockTitle ?? "No active block"}</p>
-        <div className="screen-timer">
-          <strong>{formatPomodoro(remaining)} left</strong>
-          <div className="screen-timer__rail">
-            <div className="screen-timer__fill" style={{ width: `${progressPercent}%` }} />
+      <section className="mode-panel mode-panel--surface mode-panel--screen-surface">
+        <div className="screen-hero">
+          <span className="mode-kicker">Screen</span>
+          <h1>{state.screen.currentTask ?? "No focus item"}</h1>
+          <p>{state.screen.currentBlockTitle ?? "No active block"}</p>
+          <div className="screen-timer">
+            <strong>{formatPomodoro(remaining)} left</strong>
+            <div className="screen-timer__rail">
+              <div className="screen-timer__fill" style={{ width: `${progressPercent}%` }} />
+            </div>
+            <span>{state.screen.pomodoroState}</span>
           </div>
-          <span>{state.screen.pomodoroState}</span>
         </div>
-      </section>
 
-      <section className="mode-panel mode-panel--side">
-        <div className="mode-metric">
-          <span>Next</span>
-          <strong>{state.screen.nextTask ?? "None"}</strong>
-        </div>
-        <div className="mode-metric">
-          <span>Block</span>
-          <strong>{state.screen.currentBlockTitle ?? "No block"}</strong>
-        </div>
-        <div className="mode-metric">
-          <span>Today</span>
-          <strong>{state.screen.todaySummary?.remainingTasks ?? 0} tasks left</strong>
-        </div>
-        <div className="mode-metric">
-          <span>Calendar</span>
-          <strong>{state.screen.todaySummary?.remainingEvents ?? 0} events left</strong>
-        </div>
-        <div className="listen-controls">
+        <div className="listen-controls listen-controls--inline">
           <button className="shell-button" onClick={isPaused ? onResumePomodoro : onStartPomodoro} type="button">
             {primaryLabel}
           </button>
@@ -66,6 +50,25 @@ export function ScreenPage({
           <button className="shell-button shell-button--ghost" onClick={onCompleteTask} type="button">
             Complete
           </button>
+        </div>
+
+        <div className="mode-meta-strip" role="list" aria-label="Screen details">
+          <div className="mode-metric" role="listitem">
+            <span>Next</span>
+            <strong>{state.screen.nextTask ?? "None"}</strong>
+          </div>
+          <div className="mode-metric" role="listitem">
+            <span>Block</span>
+            <strong>{state.screen.currentBlockTitle ?? "No block"}</strong>
+          </div>
+          <div className="mode-metric" role="listitem">
+            <span>Today</span>
+            <strong>{state.screen.todaySummary?.remainingTasks ?? 0} tasks left</strong>
+          </div>
+          <div className="mode-metric" role="listitem">
+            <span>Calendar</span>
+            <strong>{state.screen.todaySummary?.remainingEvents ?? 0} events left</strong>
+          </div>
         </div>
       </section>
     </main>

@@ -5,7 +5,7 @@ import { OverviewPage } from "./OverviewPage";
 import { ScreenPage } from "./ScreenPage";
 import { useSystemController } from "../hooks/useSystemController";
 
-function ShellChrome({ activeMode, transitionStatus, visible, onModeChange, onReturnOverview, onTogglePlay }) {
+function ShellChrome({ activeMode, transitionStatus, visible, onModeChange, onReturnOverview }) {
   const isLocked = transitionStatus !== "idle";
 
   return (
@@ -26,9 +26,6 @@ function ShellChrome({ activeMode, transitionStatus, visible, onModeChange, onRe
           </button>
         ))}
       </div>
-      <button className="shell-button" onClick={onTogglePlay} type="button">
-        Play
-      </button>
     </div>
   );
 }
@@ -67,6 +64,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   const chromeTimerRef = useRef(null);
   const transitionStatus = state.transition?.status ?? "idle";
   const transition = state.transition ?? { status: "idle", from: state.activeMode, to: state.activeMode };
+  const isFocusMode = state.activeMode !== "overview";
   const shouldRenderOverview =
     state.activeMode === "overview" || transition.from === "overview" || transition.to === "overview";
   const shouldRenderListen =
@@ -86,7 +84,13 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       return;
     }
 
-    setChromeVisible(false);
+    setChromeVisible(true);
+    if (chromeTimerRef.current) {
+      window.clearTimeout(chromeTimerRef.current);
+    }
+    chromeTimerRef.current = window.setTimeout(() => {
+      setChromeVisible(false);
+    }, 2200);
   }, [state.activeMode]);
 
   useEffect(
@@ -213,14 +217,15 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
         />
       ) : null}
 
-      <ShellChrome
-        activeMode={state.activeMode}
-        transitionStatus={transitionStatus}
-        visible={state.activeMode === "overview" ? true : chromeVisible}
-        onModeChange={controller.setMode}
-        onReturnOverview={controller.returnOverview}
-        onTogglePlay={controller.togglePlay}
-      />
+      {isFocusMode ? (
+        <ShellChrome
+          activeMode={state.activeMode}
+          transitionStatus={transitionStatus}
+          visible={chromeVisible}
+          onModeChange={controller.setMode}
+          onReturnOverview={controller.returnOverview}
+        />
+      ) : null}
       {debug ? (
         <div className="shell-debug-badge">
           {state.activeMode} · {transitionStatus}

@@ -11,47 +11,27 @@ export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSe
 
   return (
     <main className={`mode-page mode-page--listen ${className}`.trim()} role="application" aria-label="Listen mode">
-      <section className="mode-panel mode-panel--hero">
-        <div className="listen-cover" aria-hidden="true" />
-        <div className="listen-copy">
-          <span className="mode-kicker">Listen</span>
-          <h1>{state.playback.trackTitle ?? "Nothing playing"}</h1>
-          <p>{state.playback.artist ?? "Unknown artist"}</p>
-          <strong>{state.playback.album ?? state.playback.source ?? "Unknown source"}</strong>
-          <div className="listen-progress">
-            <div className="listen-progress__rail">
-              <div className="listen-progress__fill" style={{ width: `${progressPercent}%` }} />
-            </div>
-            <div className="listen-progress__meta">
-              <span>{formatProgress(state.playback.progress)}</span>
-              <span>{progressPercent}%</span>
+      <section className="mode-panel mode-panel--surface">
+        <div className="listen-layout">
+          <div className="listen-cover" aria-hidden="true" />
+          <div className="listen-copy">
+            <span className="mode-kicker">Listen</span>
+            <h1>{state.playback.trackTitle ?? "Nothing playing"}</h1>
+            <p>{state.playback.artist ?? "Unknown artist"}</p>
+            <strong>{state.playback.album ?? state.playback.source ?? "Unknown source"}</strong>
+            <div className="listen-progress">
+              <div className="listen-progress__rail">
+                <div className="listen-progress__fill" style={{ width: `${progressPercent}%` }} />
+              </div>
+              <div className="listen-progress__meta">
+                <span>{formatProgress(state.playback.progress)}</span>
+                <span>{progressPercent}%</span>
+              </div>
             </div>
           </div>
         </div>
-      </section>
 
-      <section className="mode-panel mode-panel--side">
-        <div className="mode-metric">
-          <span>Status</span>
-          <strong>{state.playback.state}</strong>
-        </div>
-        <div className="mode-metric">
-          <span>Source</span>
-          <strong>{state.playback.source}</strong>
-        </div>
-        <div className="mode-metric">
-          <span>Format</span>
-          <strong>{state.playback.format}</strong>
-        </div>
-        <div className="mode-metric">
-          <span>Next</span>
-          <strong>{state.playback.nextTrackTitle}</strong>
-        </div>
-        <div className="mode-metric">
-          <span>Queue</span>
-          <strong>{state.playback.currentTrackIndex + 1} of {state.playback.queueLength ?? 1}</strong>
-        </div>
-        <div className="listen-controls">
+        <div className="listen-controls listen-controls--inline">
           <button className="shell-button shell-button--ghost" type="button" onClick={onPrevTrack}>
             Prev
           </button>
@@ -71,6 +51,29 @@ export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSe
               onChange={(event) => onSetVolume(Number(event.target.value))}
             />
           </label>
+        </div>
+
+        <div className="mode-meta-strip" role="list" aria-label="Listen details">
+          <div className="mode-metric" role="listitem">
+            <span>Status</span>
+            <strong>{state.playback.state}</strong>
+          </div>
+          <div className="mode-metric" role="listitem">
+            <span>Source</span>
+            <strong>{state.playback.source}</strong>
+          </div>
+          <div className="mode-metric" role="listitem">
+            <span>Format</span>
+            <strong>{state.playback.format}</strong>
+          </div>
+          <div className="mode-metric" role="listitem">
+            <span>Next</span>
+            <strong>{state.playback.nextTrackTitle}</strong>
+          </div>
+          <div className="mode-metric" role="listitem">
+            <span>Queue</span>
+            <strong>{state.playback.currentTrackIndex + 1} of {state.playback.queueLength ?? 1}</strong>
+          </div>
         </div>
       </section>
     </main>
