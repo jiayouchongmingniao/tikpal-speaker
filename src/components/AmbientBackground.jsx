@@ -1,8 +1,11 @@
 import { FLOW_THEME } from "../theme";
 
 export function AmbientBackground({ currentState, transitionState }) {
-  const baseTheme = FLOW_THEME[currentState];
-  const nextTheme = transitionState ? FLOW_THEME[transitionState.to] : baseTheme;
+  const baseTheme = FLOW_THEME[currentState] ?? FLOW_THEME.focus;
+  const nextTheme =
+    transitionState && FLOW_THEME[transitionState.to]
+      ? FLOW_THEME[transitionState.to]
+      : baseTheme;
 
   return (
     <div className="ambient-bg" aria-hidden="true">

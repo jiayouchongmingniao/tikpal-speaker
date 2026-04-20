@@ -344,12 +344,13 @@ input {
   right: 20px;
   bottom: 20px;
   z-index: 30;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  font-size: 13px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
   letter-spacing: 0.04em;
-  opacity: 0.82;
+  opacity: 0.56;
   pointer-events: none;
 }
 
@@ -363,10 +364,68 @@ input {
     transform 260ms ease;
 }
 
-.transition-animating .overview-page,
-.transition-animating .mode-page {
-  opacity: 0.92;
-  transform: scale(0.995);
+.page-layer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.page-layer.is-active,
+.page-layer.is-entering {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.page-layer.is-active,
+.page-layer.is-entering {
+  pointer-events: auto;
+}
+
+.page-layer.is-exiting {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0) scale(0.988);
+}
+
+.page-layer.is-hidden {
+  opacity: 0;
+  transform: translate3d(0, 20px, 0) scale(0.984);
+}
+
+.overview-header {
+  margin-bottom: 22px;
+}
+
+.overview-header h1 {
+  margin: 16px 0 0;
+  font-size: clamp(42px, 4vw, 72px);
+  line-height: 0.96;
+}
+
+.overview-header p {
+  margin: 14px 0 0;
+  font-size: 22px;
+  opacity: 0.68;
+}
+
+.overview-page.page-layer {
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+
+.mode-page.page-layer,
+.flow-page.page-layer {
+  transition:
+    opacity 360ms ease,
+    transform 360ms ease;
+}
+
+.overview-page.page-layer.is-exiting {
+  transform: translate3d(0, 10px, 0) scale(1.01);
+}
+
+.flow-page.page-layer.is-hidden,
+.mode-page.page-layer.is-hidden {
+  transform: translate3d(0, 24px, 0) scale(0.985);
 }
 
 .app-error-boundary {
@@ -430,6 +489,39 @@ input {
   justify-content: space-between;
   padding: 32px;
   overflow: hidden;
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.overview-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 36px 70px rgba(0, 0, 0, 0.32);
+}
+
+.overview-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -10% -18% auto;
+  width: 50%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(50px);
+  opacity: 0.3;
+}
+
+.overview-card--listen::after {
+  background: rgba(91, 124, 255, 0.4);
+}
+
+.overview-card--flow::after {
+  background: rgba(255, 125, 184, 0.42);
+}
+
+.overview-card--screen::after {
+  background: rgba(255, 179, 138, 0.42);
 }
 
 .overview-card__header span,
@@ -465,6 +557,13 @@ input {
   font-size: 18px;
   font-weight: 500;
   opacity: 0.82;
+}
+
+.overview-card__body small {
+  display: block;
+  margin-top: 12px;
+  font-size: 15px;
+  opacity: 0.6;
 }
 
 .overview-card__controls,
@@ -535,6 +634,36 @@ input {
   margin-top: 28px;
 }
 
+.listen-progress {
+  margin-top: 28px;
+}
+
+.listen-progress__rail,
+.screen-timer__rail {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.listen-progress__fill,
+.screen-timer__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(91, 124, 255, 0.9), rgba(255, 125, 184, 0.9));
+}
+
+.listen-progress__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  opacity: 0.64;
+}
+
 .listen-volume {
   display: flex;
   flex-direction: column;
@@ -550,6 +679,20 @@ input {
   background:
     radial-gradient(circle at top left, rgba(255, 179, 138, 0.16), transparent 40%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+}
+
+.screen-timer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.screen-timer span {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.56;
 }
 
 @media (max-aspect-ratio: 16/9) {
@@ -568,6 +711,10 @@ input {
   .overview-page,
   .mode-page {
     padding: 120px 16px 16px;
+  }
+
+  .overview-header {
+    margin-bottom: 16px;
   }
 }
 

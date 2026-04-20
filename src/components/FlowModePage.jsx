@@ -45,6 +45,21 @@ function createDerivedMetrics(playback, flow) {
   };
 }
 
+function toFlowTransitionState(transition, currentState) {
+  if (!transition || transition.status === "idle") {
+    return null;
+  }
+
+  const fromState = FLOW_THEME[transition.from] ? transition.from : currentState;
+  const toState = FLOW_THEME[transition.to] ? transition.to : currentState;
+
+  return {
+    from: fromState,
+    to: toState,
+    startedAt: transition.startedAt,
+  };
+}
+
 export function FlowModePage({
   systemState,
   onShowControls,
@@ -53,6 +68,7 @@ export function FlowModePage({
   onSetVolume,
   onTogglePlay,
   onReturnOverview,
+  className = "",
 }) {
   const transition = systemState.transition ?? {
     status: "idle",
@@ -77,14 +93,7 @@ export function FlowModePage({
     source: systemState.playback.source,
     progress: systemState.playback.progress,
   };
-  const transitionState =
-    transition.status !== "idle"
-      ? {
-          from: transition.from,
-          to: transition.to,
-          startedAt: transition.startedAt,
-        }
-      : null;
+  const transitionState = toFlowTransitionState(transition, currentState);
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -140,7 +149,7 @@ export function FlowModePage({
 
   return (
     <main
-      className={`flow-page phase-${appPhase} tone-${theme.uiTone}`}
+      className={`flow-page phase-${appPhase} tone-${theme.uiTone} ${className}`.trim()}
       onPointerDown={onPointerDown}
       onTouchStart={onTouchStart}
       role="application"

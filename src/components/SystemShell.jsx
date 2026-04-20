@@ -33,10 +33,46 @@ function ShellChrome({ activeMode, transitionStatus, onModeChange, onReturnOverv
   );
 }
 
+function getPageLayerClass(pageMode, activeMode, transition) {
+  const from = transition?.from ?? activeMode;
+  const to = transition?.to ?? activeMode;
+  const status = transition?.status ?? "idle";
+  const isOverviewPage = pageMode === "overview";
+  const pageKey = isOverviewPage ? "overview" : pageMode;
+  const activeKey = activeMode === "overview" ? "overview" : activeMode;
+
+  if (status === "idle") {
+    return activeKey === pageKey ? "page-layer is-active" : "page-layer is-hidden";
+  }
+
+  if (from === pageKey) {
+    return "page-layer is-exiting";
+  }
+
+  if (to === pageKey) {
+    return "page-layer is-entering";
+  }
+
+  if (activeKey === pageKey) {
+    return "page-layer is-active";
+  }
+
+  return "page-layer is-hidden";
+}
+
 export function SystemShell({ initialMode = "overview", initialFlowState = "focus" }) {
   const controller = useSystemController({ initialMode, initialFlowState });
   const { state } = controller;
   const transitionStatus = state.transition?.status ?? "idle";
+  const transition = state.transition ?? { status: "idle", from: state.activeMode, to: state.activeMode };
+  const shouldRenderOverview =
+    state.activeMode === "overview" || transition.from === "overview" || transition.to === "overview";
+  const shouldRenderListen =
+    state.activeMode === "listen" || transition.from === "listen" || transition.to === "listen";
+  const shouldRenderFlow =
+    state.activeMode === "flow" || transition.from === "flow" || transition.to === "flow";
+  const shouldRenderScreen =
+    state.activeMode === "screen" || transition.from === "screen" || transition.to === "screen";
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -66,8 +102,9 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
 
   return (
     <div className={`system-shell mode-${state.activeMode} transition-${transitionStatus}`}>
-      {state.activeMode === "overview" ? (
+      {shouldRenderOverview ? (
         <OverviewPage
+          className={getPageLayerClass("overview", state.activeMode, transition)}
           state={state}
           onOpenMode={controller.setMode}
           onTogglePlay={controller.togglePlay}
@@ -76,16 +113,18 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
         />
       ) : null}
 
-      {state.activeMode === "listen" ? (
+      {shouldRenderListen ? (
         <ListenPage
+          className={getPageLayerClass("listen", state.activeMode, transition)}
           state={state}
           onTogglePlay={controller.togglePlay}
           onSetVolume={controller.setVolume}
         />
       ) : null}
 
-      {state.activeMode === "flow" ? (
+      {shouldRenderFlow ? (
         <FlowModePage
+          className={getPageLayerClass("flow", state.activeMode, transition)}
           systemState={state}
           onShowControls={controller.showControls}
           onHideControls={controller.hideControls}
@@ -96,8 +135,9 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
         />
       ) : null}
 
-      {state.activeMode === "screen" ? (
+      {shouldRenderScreen ? (
         <ScreenPage
+          className={getPageLayerClass("screen", state.activeMode, transition)}
           state={state}
           onStartPomodoro={controller.startPomodoro}
           onPausePomodoro={controller.pausePomodoro}
