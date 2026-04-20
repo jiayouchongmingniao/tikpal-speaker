@@ -7,6 +7,7 @@ export function ControlOverlay({
   onTogglePlay,
   onVolumeChange,
   onStateSelect,
+  onBack,
 }) {
   return (
     <section className={`control-overlay ${visible ? "is-visible" : ""}`}>
@@ -36,7 +37,7 @@ export function ControlOverlay({
           </button>
         ))}
       </div>
-      <button type="button" className="control-pill control-pill--ghost">
+      <button type="button" className="control-pill control-pill--ghost" onClick={onBack}>
         Back
       </button>
     </section>

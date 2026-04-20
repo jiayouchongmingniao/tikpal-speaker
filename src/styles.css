@@ -291,6 +291,10 @@ input {
   color: rgba(255, 255, 255, 0.92);
   background: rgba(255, 255, 255, 0.12);
   cursor: pointer;
+  transition:
+    opacity 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
 }
 
 .shell-button,
@@ -329,11 +333,78 @@ input {
   opacity: 1;
 }
 
+.shell-button:disabled,
+.shell-mode-chip:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.shell-debug-badge {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 30;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  opacity: 0.82;
+  pointer-events: none;
+}
+
 .overview-page,
 .mode-page {
   position: fixed;
   inset: 0;
   padding: 108px 32px 32px;
+  transition:
+    opacity 260ms ease,
+    transform 260ms ease;
+}
+
+.transition-animating .overview-page,
+.transition-animating .mode-page {
+  opacity: 0.92;
+  transform: scale(0.995);
+}
+
+.app-error-boundary {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  padding: 40px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 97, 97, 0.16), transparent 30%),
+    #06080f;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.app-error-boundary__label {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app-error-boundary h1 {
+  margin: 0;
+  font-size: 42px;
+}
+
+.app-error-boundary pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font: 500 16px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.84;
 }
 
 .overview-grid {

@@ -1,3 +1,4 @@
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { SystemShell } from "./components/SystemShell";
 
 export function App() {
@@ -5,5 +6,9 @@ export function App() {
   const initialState = params.get("state") ?? "focus";
   const initialMode = params.get("mode") ?? "overview";
 
-  return <SystemShell initialFlowState={initialState} initialMode={initialMode} />;
+  return (
+    <AppErrorBoundary>
+      <SystemShell initialFlowState={initialState} initialMode={initialMode} />
+    </AppErrorBoundary>
+  );
 }

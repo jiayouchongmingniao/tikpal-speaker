@@ -18,6 +18,7 @@ function createInitialState() {
       from: "overview",
       to: "overview",
       startedAt: nowIso(),
+      lockedUntil: 0,
     },
     overlay: {
       state: "hidden",
@@ -86,6 +87,22 @@ function createInitialState() {
   };
 }
 
+function normalizeTransition(transition) {
+  if (!transition || transition.status === "idle") {
+    return transition;
+  }
+
+  if ((transition.lockedUntil ?? 0) <= Date.now()) {
+    return {
+      ...transition,
+      status: "idle",
+      lockedUntil: 0,
+    };
+  }
+
+  return transition;
+}
+
 function deriveFlowSubtitle(flowState) {
   if (flowState === "focus") {
     return "Deep Work";
@@ -144,6 +161,18 @@ export function createSystemStateStore() {
   let state = createInitialState();
   const sessions = new Map();
 
+  function getNormalizedState() {
+    const normalizedTransition = normalizeTransition(state.transition);
+    if (normalizedTransition !== state.transition) {
+      state = {
+        ...state,
+        transition: normalizedTransition,
+      };
+    }
+
+    return state;
+  }
+
   function updateState(nextState, source = state.lastSource) {
     state = {
       ...nextState,
@@ -158,18 +187,20 @@ export function createSystemStateStore() {
   }
 
   function setMode(mode, source) {
+    const liveState = getNormalizedState();
     const activeMode = mode === "overview" ? "overview" : mode;
     const focusedPanel = mode === "overview" ? null : mode;
     return updateState(
       {
-        ...state,
+        ...liveState,
         activeMode,
         focusedPanel,
         transition: {
-          status: "idle",
-          from: state.activeMode,
+          status: "animating",
+          from: liveState.activeMode,
           to: activeMode,
           startedAt: nowIso(),
+          lockedUntil: Date.now() + 520,
         },
       },
       source,
@@ -203,41 +234,42 @@ export function createSystemStateStore() {
   }
 
   function getSnapshot() {
-    return state;
+    return getNormalizedState();
   }
 
   function patchFlowState(patch, source = "remote-client") {
+    const liveState = getNormalizedState();
     const nextPlayback = patch.playerState
       ? {
-          ...state.playback,
-          state: patch.playerState.playbackState ?? state.playback.state,
-          volume: patch.playerState.volume ?? state.playback.volume,
-          trackTitle: patch.playerState.trackTitle ?? state.playback.trackTitle,
-          artist: patch.playerState.artist ?? state.playback.artist,
-          source: patch.playerState.source ?? state.playback.source,
-          progress: patch.playerState.progress ?? state.playback.progress,
+          ...liveState.playback,
+          state: patch.playerState.playbackState ?? liveState.playback.state,
+          volume: patch.playerState.volume ?? liveState.playback.volume,
+          trackTitle: patch.playerState.trackTitle ?? liveState.playback.trackTitle,
+          artist: patch.playerState.artist ?? liveState.playback.artist,
+          source: patch.playerState.source ?? liveState.playback.source,
+          progress: patch.playerState.progress ?? liveState.playback.progress,
         }
-      : state.playback;
+      : liveState.playback;
 
     const nextFlow = {
-      ...state.flow,
-      state: patch.currentState ?? state.flow.state,
-      subtitle: deriveFlowSubtitle(patch.currentState ?? state.flow.state),
+      ...liveState.flow,
+      state: patch.currentState ?? liveState.flow.state,
+      subtitle: deriveFlowSubtitle(patch.currentState ?? liveState.flow.state),
       audioMetrics: {
-        ...state.flow.audioMetrics,
+        ...liveState.flow.audioMetrics,
         ...(patch.audioMetrics ?? {}),
       },
     };
 
     updateState(
       {
-        ...state,
+        ...liveState,
         activeMode: "flow",
         focusedPanel: "flow",
         overlay: {
-          ...state.overlay,
-          visible: patch.uiVisible ?? state.overlay.visible,
-          state: (patch.uiVisible ?? state.overlay.visible) ? "controls" : "hidden",
+          ...liveState.overlay,
+          visible: patch.uiVisible ?? liveState.overlay.visible,
+          state: (patch.uiVisible ?? liveState.overlay.visible) ? "controls" : "hidden",
         },
         playback: nextPlayback,
         flow: nextFlow,
@@ -249,13 +281,15 @@ export function createSystemStateStore() {
   }
 
   function runFlowAction(type, payload = {}, source = "remote-client") {
+    const liveState = getNormalizedState();
+
     if (type === "set_state") {
       runAction("set_flow_state", { state: payload.state }, source);
       return toFlowSnapshot(state);
     }
 
     if (type === "next_state") {
-      const currentIndex = FLOW_ORDER.indexOf(state.flow.state);
+      const currentIndex = FLOW_ORDER.indexOf(liveState.flow.state);
       const direction = payload.direction === "left" ? -1 : 1;
       const nextIndex = (currentIndex + direction + FLOW_ORDER.length) % FLOW_ORDER.length;
       runAction("set_flow_state", { state: FLOW_ORDER[nextIndex] }, source);
@@ -283,10 +317,19 @@ export function createSystemStateStore() {
   }
 
   function runAction(type, payload = {}, source = "remote-client") {
-    if (state.system.otaStatus === "applying" && !type.startsWith("ota_")) {
+    const liveState = getNormalizedState();
+
+    if (liveState.system.otaStatus === "applying" && !type.startsWith("ota_")) {
       const error = new Error("OTA is in progress");
       error.code = "OTA_IN_PROGRESS";
       throw error;
+    }
+
+    if (
+      liveState.transition.status !== "idle" &&
+      ["set_mode", "return_overview", "set_flow_state"].includes(type)
+    ) {
+      return liveState;
     }
 
     if (type === "set_mode") {
@@ -300,7 +343,7 @@ export function createSystemStateStore() {
     if (type === "show_controls") {
       return updateState(
         {
-          ...state,
+          ...liveState,
           overlay: {
             state: "controls",
             reason: payload.reason ?? "user",
@@ -314,7 +357,7 @@ export function createSystemStateStore() {
     if (type === "hide_controls") {
       return updateState(
         {
-          ...state,
+          ...liveState,
           overlay: {
             state: "hidden",
             reason: null,
@@ -326,18 +369,18 @@ export function createSystemStateStore() {
     }
 
     if (type === "toggle_play") {
-      const nextPlaybackState = state.playback.state === "play" ? "pause" : "play";
+      const nextPlaybackState = liveState.playback.state === "play" ? "pause" : "play";
       return updateState(
         {
-          ...state,
+          ...liveState,
           playback: {
-            ...state.playback,
+            ...liveState.playback,
             state: nextPlaybackState,
           },
           flow: {
-            ...state.flow,
+            ...liveState.flow,
             audioMetrics: {
-              ...state.flow.audioMetrics,
+              ...liveState.flow.audioMetrics,
               isPlaying: nextPlaybackState === "play",
             },
           },
@@ -347,18 +390,18 @@ export function createSystemStateStore() {
     }
 
     if (type === "set_volume") {
-      const volume = clamp(Number(payload.volume ?? state.playback.volume), 0, 100);
+      const volume = clamp(Number(payload.volume ?? liveState.playback.volume), 0, 100);
       return updateState(
         {
-          ...state,
+          ...liveState,
           playback: {
-            ...state.playback,
+            ...liveState.playback,
             volume,
           },
           flow: {
-            ...state.flow,
+            ...liveState.flow,
             audioMetrics: {
-              ...state.flow.audioMetrics,
+              ...liveState.flow.audioMetrics,
               volumeNormalized: volume / 100,
             },
           },
@@ -368,14 +411,21 @@ export function createSystemStateStore() {
     }
 
     if (type === "set_flow_state") {
-      const nextFlowState = FLOW_ORDER.includes(payload.state) ? payload.state : state.flow.state;
+      const nextFlowState = FLOW_ORDER.includes(payload.state) ? payload.state : liveState.flow.state;
       return updateState(
         {
-          ...state,
+          ...liveState,
           activeMode: "flow",
           focusedPanel: "flow",
+          transition: {
+            status: "animating",
+            from: liveState.activeMode,
+            to: "flow",
+            startedAt: nowIso(),
+            lockedUntil: Date.now() + 420,
+          },
           flow: {
-            ...state.flow,
+            ...liveState.flow,
             state: nextFlowState,
             subtitle: deriveFlowSubtitle(nextFlowState),
           },
@@ -388,11 +438,11 @@ export function createSystemStateStore() {
       const durationSec = clamp(Number(payload.durationSec ?? 1500), 60, 7200);
       return updateState(
         {
-          ...state,
+          ...liveState,
           activeMode: "screen",
           focusedPanel: "screen",
           screen: {
-            ...state.screen,
+            ...liveState.screen,
             pomodoroState: "running",
             pomodoroDurationSec: durationSec,
             pomodoroRemainingSec: durationSec,
@@ -405,9 +455,9 @@ export function createSystemStateStore() {
     if (type === "screen_pause_pomodoro") {
       return updateState(
         {
-          ...state,
+          ...liveState,
           screen: {
-            ...state.screen,
+            ...liveState.screen,
             pomodoroState: "paused",
           },
         },
@@ -418,11 +468,11 @@ export function createSystemStateStore() {
     if (type === "screen_reset_pomodoro") {
       return updateState(
         {
-          ...state,
+          ...liveState,
           screen: {
-            ...state.screen,
+            ...liveState.screen,
             pomodoroState: "idle",
-            pomodoroRemainingSec: state.screen.pomodoroDurationSec,
+            pomodoroRemainingSec: liveState.screen.pomodoroDurationSec,
           },
         },
         source,
@@ -432,14 +482,14 @@ export function createSystemStateStore() {
     if (type === "screen_complete_current_task") {
       return updateState(
         {
-          ...state,
+          ...liveState,
           screen: {
-            ...state.screen,
-            currentTask: state.screen.nextTask,
+            ...liveState.screen,
+            currentTask: liveState.screen.nextTask,
             nextTask: "Plan next session",
             todaySummary: {
-              ...state.screen.todaySummary,
-              remainingTasks: Math.max(0, state.screen.todaySummary.remainingTasks - 1),
+              ...liveState.screen.todaySummary,
+              remainingTasks: Math.max(0, liveState.screen.todaySummary.remainingTasks - 1),
             },
           },
         },
@@ -450,19 +500,19 @@ export function createSystemStateStore() {
     if (type === "screen_set_focus_item") {
       return updateState(
         {
-          ...state,
+          ...liveState,
           activeMode: "screen",
           focusedPanel: "screen",
           screen: {
-            ...state.screen,
-            currentTask: payload.title ?? state.screen.currentTask,
+            ...liveState.screen,
+            currentTask: payload.title ?? liveState.screen.currentTask,
           },
         },
         source,
       );
     }
 
-    return state;
+    return liveState;
   }
 
   function createSession(payload = {}, source = "portable_controller") {

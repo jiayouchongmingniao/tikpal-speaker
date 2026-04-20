@@ -5,10 +5,12 @@ import { OverviewPage } from "./OverviewPage";
 import { ScreenPage } from "./ScreenPage";
 import { useSystemController } from "../hooks/useSystemController";
 
-function ShellChrome({ activeMode, onModeChange, onReturnOverview, onTogglePlay }) {
+function ShellChrome({ activeMode, transitionStatus, onModeChange, onReturnOverview, onTogglePlay }) {
+  const isLocked = transitionStatus !== "idle";
+
   return (
     <div className="shell-chrome">
-      <button className="shell-button shell-button--ghost" onClick={onReturnOverview} type="button">
+      <button className="shell-button shell-button--ghost" onClick={onReturnOverview} type="button" disabled={isLocked}>
         Overview
       </button>
       <div className="shell-mode-switcher" role="tablist" aria-label="System modes">
@@ -18,6 +20,7 @@ function ShellChrome({ activeMode, onModeChange, onReturnOverview, onTogglePlay 
             className={`shell-mode-chip ${activeMode === mode ? "is-active" : ""}`}
             onClick={() => onModeChange(mode)}
             type="button"
+            disabled={isLocked}
           >
             {mode}
           </button>
@@ -33,6 +36,7 @@ function ShellChrome({ activeMode, onModeChange, onReturnOverview, onTogglePlay 
 export function SystemShell({ initialMode = "overview", initialFlowState = "focus" }) {
   const controller = useSystemController({ initialMode, initialFlowState });
   const { state } = controller;
+  const transitionStatus = state.transition?.status ?? "idle";
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -61,7 +65,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   }, [controller]);
 
   return (
-    <div className={`system-shell mode-${state.activeMode}`}>
+    <div className={`system-shell mode-${state.activeMode} transition-${transitionStatus}`}>
       {state.activeMode === "overview" ? (
         <OverviewPage
           state={state}
@@ -80,7 +84,17 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
         />
       ) : null}
 
-      {state.activeMode === "flow" ? <FlowModePage initialState={state.flow.state} /> : null}
+      {state.activeMode === "flow" ? (
+        <FlowModePage
+          systemState={state}
+          onShowControls={controller.showControls}
+          onHideControls={controller.hideControls}
+          onSetFlowState={controller.setFlowState}
+          onSetVolume={controller.setVolume}
+          onTogglePlay={controller.togglePlay}
+          onReturnOverview={controller.returnOverview}
+        />
+      ) : null}
 
       {state.activeMode === "screen" ? (
         <ScreenPage
@@ -93,10 +107,14 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
 
       <ShellChrome
         activeMode={state.activeMode}
+        transitionStatus={transitionStatus}
         onModeChange={controller.setMode}
         onReturnOverview={controller.returnOverview}
         onTogglePlay={controller.togglePlay}
       />
+      <div className="shell-debug-badge">
+        {state.activeMode} · {transitionStatus}
+      </div>
     </div>
   );
 }

@@ -5,6 +5,13 @@ function createFallbackState(initialMode = "overview", initialFlowState = "focus
   return {
     activeMode: initialMode,
     focusedPanel: initialMode === "overview" ? null : initialMode,
+    transition: {
+      status: "idle",
+      from: initialMode,
+      to: initialMode,
+      startedAt: new Date().toISOString(),
+      lockedUntil: 0,
+    },
     overlay: {
       state: "hidden",
       visible: false,
@@ -49,6 +56,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
   const [state, setState] = useState(() => createFallbackState(initialMode, initialFlowState));
   const [capabilities, setCapabilities] = useState(null);
   const bootstrappedRef = useRef(false);
+  const preferOverviewUntilActionRef = useRef(initialMode === "overview");
 
   useEffect(() => {
     let alive = true;
@@ -64,7 +72,17 @@ export function useSystemController({ initialMode = "overview", initialFlowState
           return;
         }
 
-        setState(nextState);
+        setState((current) => {
+          if (preferOverviewUntilActionRef.current) {
+            return {
+              ...nextState,
+              activeMode: "overview",
+              focusedPanel: null,
+            };
+          }
+
+          return nextState;
+        });
         if (!capabilities) {
           setCapabilities(nextCapabilities);
         }
@@ -97,6 +115,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
   }, [initialFlowState, initialMode, systemApi]);
 
   async function dispatch(type, payload = {}, source = "speaker-ui") {
+    preferOverviewUntilActionRef.current = false;
     const response = await systemApi.sendAction(type, payload, source);
     if (response?.state) {
       setState(response.state);
