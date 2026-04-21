@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createSystemServiceClient } from "../bridge/systemServiceClient";
 
 const MODE_ORDER = ["listen", "flow", "screen"];
+const MODE_TRANSITION_MS = 280;
+const FLOW_TRANSITION_MS = 220;
 
 function nowIso() {
   return new Date().toISOString();
@@ -49,14 +51,30 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
     return {
       ...liveState,
       activeMode: targetMode,
-      focusedPanel: targetMode === "overview" ? null : targetMode,
+      focusedPanel:
+        targetMode === "overview"
+          ? liveState.activeMode === "overview"
+            ? liveState.focusedPanel
+            : liveState.activeMode
+          : targetMode,
       transition: {
         status: "animating",
         from: liveState.activeMode,
         to: targetMode,
         startedAt: nowIso(),
-        lockedUntil: Date.now() + 520,
+        lockedUntil: Date.now() + MODE_TRANSITION_MS,
       },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "focus_panel") {
+    const panel = MODE_ORDER.includes(payload.panel) ? payload.panel : liveState.focusedPanel ?? "listen";
+    return {
+      ...liveState,
+      activeMode: "overview",
+      focusedPanel: panel,
       lastSource: source,
       lastUpdatedAt: nowIso(),
     };
@@ -119,12 +137,89 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
         from: liveState.activeMode,
         to: "flow",
         startedAt: nowIso(),
-        lockedUntil: Date.now() + 420,
+        lockedUntil: Date.now() + FLOW_TRANSITION_MS,
       },
       flow: {
         ...liveState.flow,
         state: nextFlowState,
         subtitle: deriveFlowSubtitle(nextFlowState),
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "screen_start_pomodoro") {
+    const durationSec = clamp(Number(payload.durationSec ?? liveState.screen?.pomodoroDurationSec ?? 1500), 60, 7200);
+    return {
+      ...liveState,
+      activeMode: "screen",
+      focusedPanel: "screen",
+      screen: {
+        ...liveState.screen,
+        pomodoroState: "running",
+        pomodoroFocusTask: liveState.screen?.currentTask,
+        pomodoroDurationSec: durationSec,
+        pomodoroRemainingSec: durationSec,
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "screen_resume_pomodoro") {
+    return {
+      ...liveState,
+      screen: {
+        ...liveState.screen,
+        pomodoroState: "running",
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "screen_pause_pomodoro") {
+    return {
+      ...liveState,
+      screen: {
+        ...liveState.screen,
+        pomodoroState: "paused",
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "screen_reset_pomodoro") {
+    return {
+      ...liveState,
+      screen: {
+        ...liveState.screen,
+        pomodoroState: "idle",
+        pomodoroFocusTask: liveState.screen?.currentTask,
+        pomodoroRemainingSec: liveState.screen?.pomodoroDurationSec ?? 1500,
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "screen_complete_current_task") {
+    return {
+      ...liveState,
+      screen: {
+        ...liveState.screen,
+        currentTask: liveState.screen?.nextTask ?? "Plan next session",
+        nextTask: "Plan next session",
+        pomodoroFocusTask: liveState.screen?.nextTask ?? "Plan next session",
+        pomodoroState: "idle",
+        pomodoroRemainingSec: liveState.screen?.pomodoroDurationSec ?? 1500,
+        completedPomodoros: Number(liveState.screen?.completedPomodoros ?? 0) + 1,
+        todaySummary: {
+          ...liveState.screen?.todaySummary,
+          remainingTasks: Math.max(0, Number(liveState.screen?.todaySummary?.remainingTasks ?? 0) - 1),
+        },
       },
       lastSource: source,
       lastUpdatedAt: nowIso(),
@@ -172,7 +267,10 @@ function createFallbackState(initialMode = "overview", initialFlowState = "focus
       nextTask: "Review notes",
       currentBlockTitle: "Deep Work Block",
       pomodoroState: "running",
+      pomodoroFocusTask: "Write Ambient OS Spec",
+      pomodoroDurationSec: 1500,
       pomodoroRemainingSec: 1124,
+      completedPomodoros: 0,
       todaySummary: {
         remainingTasks: 3,
         remainingEvents: 2,
@@ -194,6 +292,11 @@ export function useSystemController({ initialMode = "overview", initialFlowState
   const [capabilities, setCapabilities] = useState(null);
   const bootstrappedRef = useRef(false);
   const preferOverviewUntilActionRef = useRef(initialMode === "overview");
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     let alive = true;
@@ -251,9 +354,54 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     }
   }, [initialFlowState, initialMode, systemApi]);
 
+  useEffect(() => {
+    const lockedUntil = Number(state.transition?.lockedUntil ?? 0);
+    if (state.transition?.status !== "animating" || lockedUntil <= 0) {
+      return undefined;
+    }
+
+    const remainingMs = lockedUntil - Date.now();
+    if (remainingMs <= 0) {
+      setState((current) => {
+        if (current.transition?.status !== "animating") {
+          return current;
+        }
+
+        return {
+          ...current,
+          transition: {
+            ...current.transition,
+            status: "idle",
+            lockedUntil: 0,
+          },
+        };
+      });
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setState((current) => {
+        if (current.transition?.status !== "animating") {
+          return current;
+        }
+
+        return {
+          ...current,
+          transition: {
+            ...current.transition,
+            status: "idle",
+            lockedUntil: 0,
+          },
+        };
+      });
+    }, remainingMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [state.transition]);
+
   async function dispatch(type, payload = {}, source = "speaker-ui") {
     preferOverviewUntilActionRef.current = false;
-    const optimisticState = applyLocalAction(state, type, payload, source);
+    const optimisticState = applyLocalAction(stateRef.current, type, payload, source);
     setState(optimisticState);
 
     try {
@@ -279,6 +427,9 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     },
     async returnOverview() {
       return dispatch("return_overview");
+    },
+    async focusPanel(panel) {
+      return dispatch("focus_panel", { panel });
     },
     async nextMode() {
       return dispatch("next_mode");

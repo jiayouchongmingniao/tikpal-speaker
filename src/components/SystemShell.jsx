@@ -86,6 +86,20 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   const { state } = controller;
   const overlayRef = useRef(null);
   const overlayTimerRef = useRef(null);
+  const pointerTapRef = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    moved: false,
+    interactive: false,
+  });
+  const singleTouchTapRef = useRef({
+    active: false,
+    identifier: null,
+    startX: 0,
+    startY: 0,
+    moved: false,
+  });
   const trackpadGestureRef = useRef({
     pinch: 0,
     horizontal: 0,
@@ -190,19 +204,25 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   }, [state.activeMode, state.overlay.visible, transitionStatus]);
 
   useEffect(() => {
-    const nextIndex = OVERVIEW_MODES.indexOf(state.activeMode);
+    const focusPanel = state.activeMode === "overview" ? state.focusedPanel : state.activeMode;
+    const nextIndex = OVERVIEW_MODES.indexOf(focusPanel);
     if (nextIndex >= 0) {
       setOverviewFocusIndex(nextIndex);
     }
-  }, [state.activeMode]);
+  }, [state.activeMode, state.focusedPanel]);
 
   useEffect(() => {
     if (!state.overlay.visible) {
       setOverlayFocusIndex(0);
+      const actions = getOverlayActions(overlayRef.current);
+      actions.forEach((action) => action.setAttribute("data-overlay-focused", "false"));
       return;
     }
 
     const actions = getOverlayActions(overlayRef.current);
+    actions.forEach((action, index) => {
+      action.setAttribute("data-overlay-focused", index === overlayFocusIndex ? "true" : "false");
+    });
     const nextIndex = Math.min(overlayFocusIndex, Math.max(actions.length - 1, 0));
     const nextAction = actions[nextIndex];
     if (nextAction) {
@@ -235,13 +255,15 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       if (state.activeMode === "overview") {
         if (event.key === "ArrowLeft") {
           event.preventDefault();
-          setOverviewFocusIndex((current) => (current - 1 + OVERVIEW_MODES.length) % OVERVIEW_MODES.length);
+          const nextIndex = (overviewFocusIndex - 1 + OVERVIEW_MODES.length) % OVERVIEW_MODES.length;
+          controller.focusPanel(OVERVIEW_MODES[nextIndex]);
           return;
         }
 
         if (event.key === "ArrowRight") {
           event.preventDefault();
-          setOverviewFocusIndex((current) => (current + 1) % OVERVIEW_MODES.length);
+          const nextIndex = (overviewFocusIndex + 1) % OVERVIEW_MODES.length;
+          controller.focusPanel(OVERVIEW_MODES[nextIndex]);
           return;
         }
 
@@ -308,10 +330,9 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
 
   useEffect(() => {
     function moveOverviewFocus(direction) {
-      setOverviewFocusIndex((current) => {
-        const step = direction === "right" ? 1 : -1;
-        return (current + step + OVERVIEW_MODES.length) % OVERVIEW_MODES.length;
-      });
+      const step = direction === "right" ? 1 : -1;
+      const nextIndex = (overviewFocusIndex + step + OVERVIEW_MODES.length) % OVERVIEW_MODES.length;
+      controller.focusPanel(OVERVIEW_MODES[nextIndex]);
     }
 
     function moveOverlayFocus(direction) {
@@ -469,14 +490,59 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       window.removeEventListener("gestureend", onGestureEnd);
       document.removeEventListener("gestureend", onGestureEnd);
     };
-  }, [controller, debug, overlayFocusIndex, state.activeMode, state.overlay.visible, transitionStatus]);
+  }, [controller, debug, overlayFocusIndex, overviewFocusIndex, state.activeMode, state.overlay.visible, transitionStatus]);
 
   function onShellPointerDown(event) {
-    if (!isFocusMode || isInteractiveTarget(event.target)) {
+    if (event.pointerType === "touch") {
+      return;
+    }
+    if (!isFocusMode) {
+      return;
+    }
+    pointerTapRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+      interactive: isInteractiveTarget(event.target),
+    };
+  }
+
+  function onShellPointerMove(event) {
+    if (event.pointerType === "touch") {
+      return;
+    }
+    if (!pointerTapRef.current.active) {
       return;
     }
 
-    revealOverlay("blank-tap");
+    const deltaX = event.clientX - pointerTapRef.current.startX;
+    const deltaY = event.clientY - pointerTapRef.current.startY;
+    if (Math.hypot(deltaX, deltaY) > 14) {
+      pointerTapRef.current.moved = true;
+    }
+  }
+
+  function onShellPointerUp(event) {
+    if (event.pointerType === "touch") {
+      return;
+    }
+    if (!pointerTapRef.current.active) {
+      return;
+    }
+
+    const shouldReveal = !pointerTapRef.current.interactive && !pointerTapRef.current.moved;
+    pointerTapRef.current.active = false;
+    if (shouldReveal) {
+      revealOverlay("blank-tap");
+    }
+  }
+
+  function onShellPointerCancel(event) {
+    if (event.pointerType === "touch") {
+      return;
+    }
+    pointerTapRef.current.active = false;
   }
 
   function onShellTouchStart(event) {
@@ -485,11 +551,18 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
     }
 
     if (event.touches.length < 2) {
-      if (!isInteractiveTarget(event.target)) {
-        revealOverlay("blank-tap");
-      }
+      const touch = event.touches[0];
+      singleTouchTapRef.current = {
+        active: !isInteractiveTarget(event.target),
+        identifier: touch?.identifier ?? null,
+        startX: touch?.clientX ?? 0,
+        startY: touch?.clientY ?? 0,
+        moved: false,
+      };
       return;
     }
+
+    singleTouchTapRef.current.active = false;
 
     const [firstTouch, secondTouch] = event.touches;
     const startDistance = Math.hypot(
@@ -531,11 +604,52 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
     window.addEventListener("touchcancel", cleanupPinchTracking, { once: true });
   }
 
+  function onShellTouchMove(event) {
+    if (!singleTouchTapRef.current.active) {
+      return;
+    }
+
+    const touch = Array.from(event.touches).find((item) => item.identifier === singleTouchTapRef.current.identifier);
+    if (!touch) {
+      singleTouchTapRef.current.active = false;
+      return;
+    }
+
+    if (
+      Math.hypot(touch.clientX - singleTouchTapRef.current.startX, touch.clientY - singleTouchTapRef.current.startY) > 14
+    ) {
+      singleTouchTapRef.current.moved = true;
+    }
+  }
+
+  function onShellTouchEnd(event) {
+    if (!singleTouchTapRef.current.active) {
+      return;
+    }
+
+    const touch = Array.from(event.changedTouches).find((item) => item.identifier === singleTouchTapRef.current.identifier);
+    const didTap = touch && !singleTouchTapRef.current.moved;
+    singleTouchTapRef.current.active = false;
+    if (didTap) {
+      revealOverlay("blank-tap");
+    }
+  }
+
+  function onShellTouchCancel() {
+    singleTouchTapRef.current.active = false;
+  }
+
   return (
     <div
       className={`system-shell mode-${state.activeMode} transition-${transitionStatus}`}
       onPointerDown={onShellPointerDown}
+      onPointerMove={onShellPointerMove}
+      onPointerUp={onShellPointerUp}
+      onPointerCancel={onShellPointerCancel}
       onTouchStart={onShellTouchStart}
+      onTouchMove={onShellTouchMove}
+      onTouchEnd={onShellTouchEnd}
+      onTouchCancel={onShellTouchCancel}
     >
       {shouldRenderOverview ? (
         <OverviewPage
@@ -588,6 +702,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       {isFocusMode ? (
         <GlobalOverlay
           overlayRef={overlayRef}
+          focusIndex={overlayFocusIndex}
           visible={state.overlay.visible}
           state={state}
           onReturnOverview={controller.returnOverview}

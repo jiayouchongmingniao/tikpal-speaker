@@ -13,7 +13,21 @@ async function requestJson(url, options = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(`System API request failed with ${response.status}`);
+    let errorPayload = null;
+    try {
+      errorPayload = await response.json();
+    } catch {
+      // Ignore JSON parse failures for non-JSON error bodies.
+    }
+
+    const message =
+      errorPayload?.error?.message ??
+      errorPayload?.message ??
+      `System API request failed with ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.payload = errorPayload;
+    throw error;
   }
 
   return response.json();
@@ -34,9 +48,16 @@ export function createSystemServiceClient() {
       return requestJson(`${baseUrl}/capabilities`);
     },
     async sendAction(type, payload = {}, source = "speaker-ui") {
+      const requestId = `${type}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       return requestJson(`${baseUrl}/actions`, {
         method: "POST",
-        body: JSON.stringify({ type, payload, source }),
+        body: JSON.stringify({
+          type,
+          payload,
+          source,
+          requestId,
+          timestamp: new Date().toISOString(),
+        }),
       });
     },
   };

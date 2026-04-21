@@ -132,6 +132,7 @@ function FlowControls({ state, onSetFlowState }) {
 
 export function GlobalOverlay({
   overlayRef,
+  focusIndex = 0,
   visible,
   state,
   onReturnOverview,
@@ -165,6 +166,7 @@ export function GlobalOverlay({
               type="button"
               className="global-overlay__button global-overlay__button--ghost"
               data-overlay-action="mode-overview"
+              data-overlay-focused={focusIndex === 0 ? "true" : "false"}
               onClick={onReturnOverview}
             >
               Overview
@@ -175,6 +177,7 @@ export function GlobalOverlay({
                 type="button"
                 className={`global-overlay__chip ${state.activeMode === mode ? "is-active" : ""}`}
                 data-overlay-action={`mode-${mode}`}
+                data-overlay-focused={focusIndex === ["listen", "flow", "screen"].indexOf(mode) + 1 ? "true" : "false"}
                 onClick={() => onModeChange(mode)}
               >
                 {mode}
@@ -190,6 +193,7 @@ export function GlobalOverlay({
               type="button"
               className="global-overlay__button"
               data-overlay-action="play-toggle"
+              data-overlay-focused={focusIndex === 4 ? "true" : "false"}
               onClick={onTogglePlay}
             >
               {state.playback.state === "play" ? "Pause" : "Play"}
@@ -198,6 +202,7 @@ export function GlobalOverlay({
               <span>{state.playback.volume}%</span>
               <input
                 data-overlay-action="volume"
+                data-overlay-focused={focusIndex === 5 ? "true" : "false"}
                 type="range"
                 min="0"
                 max="100"

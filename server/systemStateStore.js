@@ -1,5 +1,7 @@
 const MODE_ORDER = ["listen", "flow", "screen"];
 const FLOW_ORDER = ["focus", "flow", "relax", "sleep"];
+const MODE_TRANSITION_MS = 280;
+const FLOW_TRANSITION_MS = 220;
 const MOCK_QUEUE = [
   {
     trackTitle: "Low Light Corridor",
@@ -50,6 +52,12 @@ function getAdjacentMode(currentMode, direction = 1) {
   return MODE_ORDER[nextIndex];
 }
 
+function createRejectedError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
 function createInitialState() {
   return {
     activeMode: "overview",
@@ -90,8 +98,10 @@ function createInitialState() {
       nextTask: "Review notes",
       currentBlockTitle: "Deep Work Block",
       pomodoroState: "running",
+      pomodoroFocusTask: "Write Ambient OS Spec",
       pomodoroDurationSec: 1500,
       pomodoroRemainingSec: 1124,
+      completedPomodoros: 0,
       timerUpdatedAt: nowIso(),
       todaySummary: {
         remainingTasks: 3,
@@ -248,8 +258,16 @@ export function createSystemStateStore() {
 
   function setMode(mode, source) {
     const liveState = getNormalizedState();
+    if (mode !== "overview" && !MODE_ORDER.includes(mode)) {
+      throw createRejectedError("INVALID_MODE", `Unsupported mode: ${mode}`);
+    }
+
     const activeMode = mode === "overview" ? "overview" : mode;
-    const focusedPanel = mode === "overview" ? null : mode;
+    if (liveState.activeMode === activeMode && liveState.transition.status === "idle") {
+      return liveState;
+    }
+
+    const focusedPanel = mode === "overview" ? liveState.activeMode === "overview" ? liveState.focusedPanel : liveState.activeMode : mode;
     return updateState(
       {
         ...liveState,
@@ -260,8 +278,28 @@ export function createSystemStateStore() {
           from: liveState.activeMode,
           to: activeMode,
           startedAt: nowIso(),
-          lockedUntil: Date.now() + 520,
+          lockedUntil: Date.now() + MODE_TRANSITION_MS,
         },
+      },
+      source,
+    );
+  }
+
+  function focusPanel(panel, source) {
+    const liveState = getNormalizedState();
+    if (!MODE_ORDER.includes(panel)) {
+      throw createRejectedError("INVALID_PANEL", `Unsupported overview panel: ${panel}`);
+    }
+
+    if (liveState.activeMode === "overview" && liveState.focusedPanel === panel) {
+      return liveState;
+    }
+
+    return updateState(
+      {
+        ...liveState,
+        activeMode: "overview",
+        focusedPanel: panel,
       },
       source,
     );
@@ -387,7 +425,7 @@ export function createSystemStateStore() {
 
     if (
       liveState.transition.status !== "idle" &&
-      ["set_mode", "return_overview", "set_flow_state"].includes(type)
+      ["set_mode", "return_overview", "set_flow_state", "next_mode", "prev_mode"].includes(type)
     ) {
       return liveState;
     }
@@ -400,6 +438,10 @@ export function createSystemStateStore() {
       return setMode("overview", source);
     }
 
+    if (type === "focus_panel") {
+      return focusPanel(payload.panel ?? liveState.focusedPanel ?? "listen", source);
+    }
+
     if (type === "next_mode") {
       return setMode(getAdjacentMode(liveState.activeMode, 1), source);
     }
@@ -409,6 +451,10 @@ export function createSystemStateStore() {
     }
 
     if (type === "show_controls") {
+      if (liveState.overlay.visible) {
+        return liveState;
+      }
+
       return updateState(
         {
           ...liveState,
@@ -423,6 +469,10 @@ export function createSystemStateStore() {
     }
 
     if (type === "hide_controls") {
+      if (!liveState.overlay.visible) {
+        return liveState;
+      }
+
       return updateState(
         {
           ...liveState,
@@ -496,6 +546,10 @@ export function createSystemStateStore() {
     }
 
     if (type === "set_flow_state") {
+      if (!FLOW_ORDER.includes(payload.state)) {
+        throw createRejectedError("INVALID_FLOW_STATE", `Unsupported flow state: ${payload.state}`);
+      }
+
       const nextFlowState = FLOW_ORDER.includes(payload.state) ? payload.state : liveState.flow.state;
       return updateState(
         {
@@ -507,7 +561,7 @@ export function createSystemStateStore() {
             from: liveState.activeMode,
             to: "flow",
             startedAt: nowIso(),
-            lockedUntil: Date.now() + 420,
+            lockedUntil: Date.now() + FLOW_TRANSITION_MS,
           },
           flow: {
             ...liveState.flow,
@@ -529,6 +583,7 @@ export function createSystemStateStore() {
           screen: {
             ...liveState.screen,
             pomodoroState: "running",
+            pomodoroFocusTask: liveState.screen.currentTask,
             pomodoroDurationSec: durationSec,
             pomodoroRemainingSec: durationSec,
             timerUpdatedAt: nowIso(),
@@ -573,6 +628,7 @@ export function createSystemStateStore() {
           screen: {
             ...liveState.screen,
             pomodoroState: "idle",
+            pomodoroFocusTask: liveState.screen.currentTask,
             pomodoroRemainingSec: liveState.screen.pomodoroDurationSec,
             timerUpdatedAt: nowIso(),
           },
@@ -589,6 +645,11 @@ export function createSystemStateStore() {
             ...liveState.screen,
             currentTask: liveState.screen.nextTask,
             nextTask: "Plan next session",
+            pomodoroFocusTask: liveState.screen.nextTask,
+            completedPomodoros: Number(liveState.screen.completedPomodoros ?? 0) + 1,
+            pomodoroState: "idle",
+            pomodoroRemainingSec: liveState.screen.pomodoroDurationSec,
+            timerUpdatedAt: nowIso(),
             todaySummary: {
               ...liveState.screen.todaySummary,
               remainingTasks: Math.max(0, liveState.screen.todaySummary.remainingTasks - 1),
@@ -608,13 +669,14 @@ export function createSystemStateStore() {
           screen: {
             ...liveState.screen,
             currentTask: payload.title ?? liveState.screen.currentTask,
+            pomodoroFocusTask: payload.title ?? liveState.screen.currentTask,
           },
         },
         source,
       );
     }
 
-    return liveState;
+    throw createRejectedError("UNKNOWN_ACTION", `Unsupported action: ${type}`);
   }
 
   function createSession(payload = {}, source = "portable_controller") {

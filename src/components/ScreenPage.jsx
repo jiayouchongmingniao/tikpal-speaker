@@ -22,6 +22,7 @@ export function ScreenPage({
   const isRunning = state.screen.pomodoroState === "running";
   const isPaused = state.screen.pomodoroState === "paused";
   const primaryLabel = isRunning ? "Restart timer" : isPaused ? "Resume timer" : "Start timer";
+  const boundTask = state.screen.pomodoroFocusTask ?? state.screen.currentTask;
   const currentTime = new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
     minute: "2-digit",
@@ -42,6 +43,7 @@ export function ScreenPage({
               </div>
               <span>{state.screen.pomodoroState}</span>
             </div>
+            <p className="screen-focus-binding">Bound to {boundTask ?? "no task"} · {state.screen.completedPomodoros ?? 0} sessions done</p>
             <div className="listen-controls listen-controls--inline">
               <button className="shell-button" onClick={isPaused ? onResumePomodoro : onStartPomodoro} type="button">
                 {primaryLabel}

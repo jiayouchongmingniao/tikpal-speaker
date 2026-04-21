@@ -27,6 +27,20 @@ Preview gallery: [http://localhost:4173/preview.html](http://localhost:4173/prev
 npm run build
 ```
 
+## Smoke Test
+
+Run the Batch C system-state smoke checks:
+
+```bash
+npm run test:smoke
+```
+
+Run HTTP-level smoke checks for `/api/v1/system/actions`:
+
+```bash
+npm run test:http-smoke
+```
+
 ## Run As Services
 
 The repo includes `systemd` templates for the API (`8787`) and web preview (`4173`).

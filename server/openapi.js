@@ -1,4 +1,16 @@
 const commonSchemas = {
+  Mode: {
+    type: "string",
+    enum: ["overview", "listen", "flow", "screen"],
+  },
+  FocusPanel: {
+    type: "string",
+    enum: ["listen", "flow", "screen"],
+  },
+  ControlSource: {
+    type: "string",
+    enum: ["touch", "remote", "portable_controller", "api", "system", "speaker-ui", "remote-client"],
+  },
   FlowState: {
     type: "string",
     enum: ["focus", "flow", "relax", "sleep"],
@@ -108,8 +120,7 @@ export const systemOpenApiDocument = {
         type: "object",
         properties: {
           activeMode: {
-            type: "string",
-            enum: ["overview", "listen", "flow", "screen"],
+            $ref: "#/components/schemas/Mode",
           },
           focusedPanel: {
             type: ["string", "null"],
@@ -118,19 +129,85 @@ export const systemOpenApiDocument = {
           overlay: { type: "object" },
           playback: { type: "object" },
           flow: { type: "object" },
-          screen: { type: "object" },
+          screen: { $ref: "#/components/schemas/ScreenState" },
           system: { type: "object" },
           lastSource: { type: "string" },
           lastUpdatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      ScreenState: {
+        type: "object",
+        properties: {
+          currentTask: { type: "string" },
+          nextTask: { type: "string" },
+          currentBlockTitle: { type: "string" },
+          pomodoroState: { type: "string", enum: ["idle", "running", "paused", "break"] },
+          pomodoroFocusTask: { type: "string" },
+          pomodoroDurationSec: { type: "number" },
+          pomodoroRemainingSec: { type: "number" },
+          completedPomodoros: { type: "number" },
+          timerUpdatedAt: { type: "string", format: "date-time" },
+          todaySummary: { type: "object" },
+          sync: { type: "object" },
         },
       },
       ActionRequest: {
         type: "object",
         required: ["type"],
         properties: {
-          type: { type: "string" },
+          type: {
+            type: "string",
+            enum: [
+              "set_mode",
+              "return_overview",
+              "focus_panel",
+              "next_mode",
+              "prev_mode",
+              "show_controls",
+              "hide_controls",
+              "toggle_play",
+              "prev_track",
+              "next_track",
+              "set_volume",
+              "set_flow_state",
+              "screen_start_pomodoro",
+              "screen_resume_pomodoro",
+              "screen_pause_pomodoro",
+              "screen_reset_pomodoro",
+              "screen_complete_current_task",
+              "screen_set_focus_item",
+            ],
+          },
           payload: { type: "object" },
-          source: { type: "string" },
+          source: { $ref: "#/components/schemas/ControlSource" },
+          requestId: { type: "string" },
+          timestamp: { type: "string", format: "date-time" },
+        },
+      },
+      ActionResponse: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+          result: {
+            type: "string",
+            enum: ["applied", "ignored", "rejected"],
+          },
+          state: { $ref: "#/components/schemas/SystemState" },
+          appliedAction: {
+            type: "object",
+            properties: {
+              type: { type: "string" },
+              requestId: { type: ["string", "null"] },
+              timestamp: { type: ["string", "null"], format: "date-time" },
+            },
+          },
+          error: {
+            type: "object",
+            properties: {
+              code: { type: "string" },
+              message: { type: "string" },
+            },
+          },
         },
       },
     },
@@ -172,11 +249,70 @@ export const systemOpenApiDocument = {
           content: {
             "application/json": {
               schema: { $ref: "#/components/schemas/ActionRequest" },
+              examples: {
+                focusPanel: {
+                  summary: "Move overview focus without entering the mode",
+                  value: {
+                    type: "focus_panel",
+                    payload: { panel: "screen" },
+                    source: "remote",
+                    requestId: "req_focus_screen",
+                    timestamp: "2026-04-21T12:00:00Z",
+                  },
+                },
+                nextMode: {
+                  summary: "Move to the next focus mode",
+                  value: {
+                    type: "next_mode",
+                    payload: {},
+                    source: "touch",
+                  },
+                },
+                screenStartPomodoro: {
+                  summary: "Start a pomodoro for the current screen task",
+                  value: {
+                    type: "screen_start_pomodoro",
+                    payload: { durationSec: 1500 },
+                    source: "portable_controller",
+                  },
+                },
+              },
             },
           },
         },
         responses: {
-          200: { description: "Updated system state" },
+          200: {
+            description: "Action result and updated system state",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ActionResponse" },
+              },
+            },
+          },
+          409: {
+            description: "Action rejected in the current system phase",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ActionResponse" },
+              },
+            },
+          },
+          400: {
+            description: "Action request is invalid",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ActionResponse" },
+              },
+            },
+          },
+          500: {
+            description: "Unexpected server-side failure while applying the action",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ActionResponse" },
+              },
+            },
+          },
         },
       },
     },

@@ -8,6 +8,8 @@
     "dev": "vite",
     "dev:api": "node server/index.js",
     "build": "vite build",
+    "test:http-smoke": "node scripts/system-actions-http-smoke-test.mjs",
+    "test:smoke": "node scripts/system-state-smoke-test.mjs",
     "preview": "vite preview",
     "start": "vite",
     "start:api": "node server/index.js"

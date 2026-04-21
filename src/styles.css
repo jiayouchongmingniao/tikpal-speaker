@@ -262,24 +262,24 @@ input {
 
 .overview-page.page-layer {
   transition:
-    opacity 320ms ease,
-    transform 320ms ease;
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .mode-page.page-layer,
 .flow-page.page-layer {
   transition:
-    opacity 360ms ease,
-    transform 360ms ease;
+    opacity 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .overview-page.page-layer.is-exiting {
-  transform: translate3d(0, 10px, 0) scale(1.01);
+  transform: translate3d(0, 6px, 0) scale(1.006);
 }
 
 .flow-page.page-layer.is-hidden,
 .mode-page.page-layer.is-hidden {
-  transform: translate3d(0, 24px, 0) scale(0.985);
+  transform: translate3d(0, 12px, 0) scale(0.992);
 }
 
 .page-layer--slot-left {
@@ -295,35 +295,35 @@ input {
 }
 
 .page-layer--focus-enter.page-layer--slot-left {
-  transform: translate3d(-22%, 0, 0) scale(0.76);
+  transform: translate3d(-12%, 0, 0) scale(0.9);
 }
 
 .page-layer--focus-enter.page-layer--slot-center {
-  transform: translate3d(0, 0, 0) scale(0.72);
+  transform: translate3d(0, 0, 0) scale(0.88);
 }
 
 .page-layer--focus-enter.page-layer--slot-right {
-  transform: translate3d(22%, 0, 0) scale(0.76);
+  transform: translate3d(12%, 0, 0) scale(0.9);
 }
 
 .page-layer--focus-exit.page-layer--slot-left {
-  transform: translate3d(-22%, 0, 0) scale(0.76);
+  transform: translate3d(-12%, 0, 0) scale(0.9);
 }
 
 .page-layer--focus-exit.page-layer--slot-center {
-  transform: translate3d(0, 0, 0) scale(0.72);
+  transform: translate3d(0, 0, 0) scale(0.88);
 }
 
 .page-layer--focus-exit.page-layer--slot-right {
-  transform: translate3d(22%, 0, 0) scale(0.76);
+  transform: translate3d(12%, 0, 0) scale(0.9);
 }
 
 .page-layer--handoff-in {
-  transform: translate3d(8%, 0, 0) scale(0.985);
+  transform: translate3d(4%, 0, 0) scale(0.994);
 }
 
 .page-layer--handoff-out {
-  transform: translate3d(-8%, 0, 0) scale(1.015);
+  transform: translate3d(-4%, 0, 0) scale(1.006);
 }
 
 .app-error-boundary {
@@ -680,6 +680,12 @@ input {
   opacity: 0.56;
 }
 
+.screen-focus-binding {
+  margin-top: 14px;
+  font-size: 15px;
+  opacity: 0.68;
+}
+
 .mode-meta-strip {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -801,6 +807,12 @@ input {
 .shell-button:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.78);
   outline-offset: 2px;
+}
+
+.global-overlay [data-overlay-focused="true"] {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.18);
+  opacity: 1;
 }
 
 .global-overlay__volume {
