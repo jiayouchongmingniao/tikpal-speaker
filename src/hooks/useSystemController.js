@@ -37,6 +37,53 @@ function deriveFlowSubtitle(flowState) {
   return "Motion Loop";
 }
 
+function deriveScreenContext(nextState) {
+  const screen = nextState?.screen ?? {};
+  return {
+    now: new Date().toISOString(),
+    focusItem:
+      screen.pomodoroFocusTask || screen.currentTask
+        ? {
+            id: screen.pomodoroFocusTask ? "manual_pomodoro_focus" : "manual_focus",
+            title: screen.pomodoroFocusTask ?? screen.currentTask,
+            source: "manual",
+          }
+        : null,
+    currentBlock: screen.currentBlockTitle
+      ? {
+          id: "manual_current_block",
+          title: screen.currentBlockTitle,
+          source: "manual",
+        }
+      : null,
+    nextBlock: screen.nextTask
+      ? {
+          id: "manual_next_item",
+          title: screen.nextTask,
+          source: "manual",
+          kind: "task",
+        }
+      : null,
+    pomodoro: {
+      state: screen.pomodoroState ?? "idle",
+      remainingSec: Number(screen.pomodoroRemainingSec ?? screen.pomodoroDurationSec ?? 1500),
+      durationSec: Number(screen.pomodoroDurationSec ?? 1500),
+      boundTaskId: screen.pomodoroFocusTask ? "manual_pomodoro_focus" : screen.currentTask ? "manual_focus" : null,
+    },
+    todaySummary: {
+      remainingTasks: Number(screen.todaySummary?.remainingTasks ?? 0),
+      remainingEvents: Number(screen.todaySummary?.remainingEvents ?? 0),
+    },
+    sync: {
+      stale: Boolean(screen.sync?.stale),
+      lastCalendarSyncAt: null,
+      lastTodoistSyncAt: null,
+      calendarStatus: "idle",
+      todoistStatus: "idle",
+    },
+  };
+}
+
 function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui") {
   const liveState = currentState ?? createFallbackState();
 
@@ -226,6 +273,22 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
     };
   }
 
+  if (type === "screen_set_focus_item") {
+    const title = String(payload.title ?? "").trim() || liveState.screen?.currentTask || "No focus item";
+    return {
+      ...liveState,
+      activeMode: "screen",
+      focusedPanel: "screen",
+      screen: {
+        ...liveState.screen,
+        currentTask: title,
+        pomodoroFocusTask: title,
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
   return {
     ...liveState,
     lastSource: source,
@@ -272,7 +335,7 @@ function createFallbackState(initialMode = "overview", initialFlowState = "focus
       pomodoroRemainingSec: 1124,
       completedPomodoros: 0,
       todaySummary: {
-        remainingTasks: 3,
+        remainingTasks: 55,
         remainingEvents: 2,
       },
     },
@@ -289,6 +352,7 @@ function createFallbackState(initialMode = "overview", initialFlowState = "focus
 export function useSystemController({ initialMode = "overview", initialFlowState = "focus" } = {}) {
   const systemApi = useMemo(() => createSystemServiceClient(), []);
   const [state, setState] = useState(() => createFallbackState(initialMode, initialFlowState));
+  const [screenContext, setScreenContext] = useState(() => deriveScreenContext(createFallbackState(initialMode, initialFlowState)));
   const [capabilities, setCapabilities] = useState(null);
   const bootstrappedRef = useRef(false);
   const preferOverviewUntilActionRef = useRef(initialMode === "overview");
@@ -303,9 +367,10 @@ export function useSystemController({ initialMode = "overview", initialFlowState
 
     async function sync() {
       try {
-        const [nextState, nextCapabilities] = await Promise.all([
+        const [nextState, nextCapabilities, nextScreenContext] = await Promise.all([
           systemApi.getState(),
           capabilities ? Promise.resolve(capabilities) : systemApi.getCapabilities(),
+          systemApi.getScreenContext(),
         ]);
 
         if (!alive) {
@@ -323,6 +388,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
 
           return nextState;
         });
+        setScreenContext(nextScreenContext);
         if (!capabilities) {
           setCapabilities(nextCapabilities);
         }
@@ -403,15 +469,18 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     preferOverviewUntilActionRef.current = false;
     const optimisticState = applyLocalAction(stateRef.current, type, payload, source);
     setState(optimisticState);
+    setScreenContext(deriveScreenContext(optimisticState));
 
     try {
       const response = await systemApi.sendAction(type, payload, source);
       if (response?.state) {
         setState(response.state);
+        setScreenContext(deriveScreenContext(response.state));
         return response.state;
       }
 
       setState(response);
+      setScreenContext(deriveScreenContext(response));
       return response;
     } catch {
       return optimisticState;
@@ -420,6 +489,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
 
   return {
     state,
+    screenContext,
     capabilities,
     dispatch,
     async setMode(mode) {
@@ -472,6 +542,9 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     },
     async completeCurrentTask() {
       return dispatch("screen_complete_current_task");
+    },
+    async setScreenFocusItem(title) {
+      return dispatch("screen_set_focus_item", { title });
     },
   };
 }

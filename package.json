@@ -8,6 +8,7 @@
     "dev": "vite",
     "dev:api": "node server/index.js",
     "build": "vite build",
+    "test:screen-context": "node scripts/screen-context-consumers-smoke-test.mjs",
     "test:http-smoke": "node scripts/system-actions-http-smoke-test.mjs",
     "test:smoke": "node scripts/system-state-smoke-test.mjs",
     "preview": "vite preview",

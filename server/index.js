@@ -1,6 +1,8 @@
 import http from "node:http";
 import { fileURLToPath } from "node:url";
+import { createMockConnectorSyncService } from "./mockConnectorSyncService.js";
 import { flowOpenApiDocument, systemOpenApiDocument } from "./openapi.js";
+import { createScreenContext } from "./screenContextService.js";
 import { createSystemStateStore } from "./systemStateStore.js";
 
 function sendJson(response, statusCode, payload, extraHeaders = {}) {
@@ -67,7 +69,110 @@ function getPathSegments(request) {
 }
 
 function sendUnauthorized(response) {
-  sendJson(response, 401, { error: "Unauthorized" });
+  sendJson(response, 401, {
+    ok: false,
+    error: {
+      code: "UNAUTHORIZED",
+      message: "Unauthorized",
+    },
+  });
+}
+
+function sendForbidden(response, code = "FORBIDDEN", message = "Forbidden") {
+  sendJson(response, 403, {
+    ok: false,
+    error: {
+      code,
+      message,
+    },
+  });
+}
+
+function getBearerToken(request) {
+  const authHeader = request.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return "";
+  }
+
+  return authHeader.slice(7);
+}
+
+function resolveAuthContext(request, store, apiKey) {
+  if (!apiKey) {
+    return {
+      ok: true,
+      role: "admin",
+      kind: "development",
+      session: null,
+    };
+  }
+
+  const headerKey = request.headers["x-tikpal-key"];
+  if (headerKey && headerKey === apiKey) {
+    return {
+      ok: true,
+      role: "admin",
+      kind: "api_key",
+      session: null,
+    };
+  }
+
+  const bearerToken = getBearerToken(request);
+  if (bearerToken === apiKey) {
+    return {
+      ok: true,
+      role: "admin",
+      kind: "api_key",
+      session: null,
+    };
+  }
+
+  if (bearerToken) {
+    const session = store.getSessionByToken(bearerToken, { touch: true });
+    if (session) {
+      return {
+        ok: true,
+        role: session.role,
+        kind: "controller_session",
+        session,
+      };
+    }
+
+    return {
+      ok: false,
+      status: 401,
+      code: "SESSION_INVALID",
+      message: "Controller session is invalid or expired",
+    };
+  }
+
+  return {
+    ok: true,
+    role: "viewer",
+    kind: "anonymous",
+    session: null,
+  };
+}
+
+function authorizeRequest(request, response, store, apiKey, requiredRole = "viewer") {
+  const auth = resolveAuthContext(request, store, apiKey);
+  if (!auth.ok) {
+    sendJson(response, auth.status ?? 401, {
+      ok: false,
+      error: {
+        code: auth.code ?? "UNAUTHORIZED",
+        message: auth.message ?? "Unauthorized",
+      },
+    });
+    return null;
+  }
+
+  if (!store.hasRequiredRole(auth.role, requiredRole)) {
+    sendForbidden(response, "FORBIDDEN", `Role ${auth.role} cannot access this resource`);
+    return null;
+  }
+
+  return auth;
 }
 
 function sendActionResult(response, previousState, nextState, body) {
@@ -101,8 +206,40 @@ function sendActionError(response, statusCode, body, code, message) {
   });
 }
 
+function createSystemApiDescriptor() {
+  return {
+    service: "tikpal-speaker-system-api",
+    version: "1.0.0",
+    auth: {
+      read: "anonymous viewer or authenticated session",
+      write: "controller session or admin api key",
+      pairing: "admin api key required for controller session creation",
+    },
+    endpoints: {
+      health: "/api/v1/system/health",
+      openapi: "/api/v1/system/openapi.json",
+      state: "/api/v1/system/state",
+      capabilities: "/api/v1/system/capabilities",
+      screenContext: "/api/v1/system/screen/context",
+      actions: "/api/v1/system/actions",
+      calendarIntegration: "/api/v1/system/integrations/calendar",
+      calendarFixtures: "/api/v1/system/integrations/calendar/fixtures",
+      calendarSync: "/api/v1/system/integrations/calendar/sync",
+      todoistIntegration: "/api/v1/system/integrations/todoist",
+      todoistFixtures: "/api/v1/system/integrations/todoist/fixtures",
+      todoistSync: "/api/v1/system/integrations/todoist/sync",
+      bootstrap: "/api/v1/system/portable/bootstrap",
+      pairingCodes: "/api/v1/system/pairing-codes",
+      pairingClaim: "/api/v1/system/pairing-codes/claim",
+      controllerSessions: "/api/v1/system/controller-sessions",
+      currentSession: "/api/v1/system/controller-sessions/current",
+    },
+  };
+}
+
 export function createAppServer({
   store = createSystemStateStore(),
+  connectorSyncService = createMockConnectorSyncService(store),
   apiKey = process.env.TIKPAL_API_KEY ?? "",
   allowedOrigins = new Set(
     (process.env.TIKPAL_ALLOWED_ORIGINS ??
@@ -135,38 +272,225 @@ export function createAppServer({
         return;
       }
 
+      if (path === "/api/v1/system" && request.method === "GET") {
+        sendJson(response, 200, createSystemApiDescriptor());
+        return;
+      }
+
       if (path === "/api/v1/system/openapi.json" && request.method === "GET") {
         sendJson(response, 200, systemOpenApiDocument);
         return;
       }
 
       if (path === "/api/v1/system/state" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "viewer");
+        if (!auth) {
+          return;
+        }
         sendJson(response, 200, store.getSnapshot());
         return;
       }
 
       if (path === "/api/v1/system/capabilities" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "viewer");
+        if (!auth) {
+          return;
+        }
         sendJson(response, 200, store.getCapabilities());
         return;
       }
 
-      if (path === "/api/v1/system/actions" && request.method === "POST") {
-        if (!isAuthorized(request, apiKey)) {
-          sendUnauthorized(response);
+      if (path === "/api/v1/system/screen/context" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "viewer");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, createScreenContext(store.getSnapshot()));
+        return;
+      }
+
+      if (path === "/api/v1/system/integrations/calendar" && request.method === "PATCH") {
+        const auth = authorizeRequest(request, response, store, apiKey, "operator");
+        if (!auth) {
           return;
         }
 
         const body = await parseBody(request);
+        sendJson(response, 200, store.patchIntegration("calendar", body, "admin_client"));
+        return;
+      }
+
+      if (path === "/api/v1/system/integrations/calendar/sync" && request.method === "POST") {
+        const auth = authorizeRequest(request, response, store, apiKey, "operator");
+        if (!auth) {
+          return;
+        }
+
+        const body = await parseBody(request);
+        sendJson(response, 202, connectorSyncService.runSync("calendar", body));
+        return;
+      }
+
+      if (path === "/api/v1/system/integrations/calendar/fixtures" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "viewer");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, {
+          connector: "calendar",
+          fixtures: connectorSyncService.listFixtures("calendar"),
+        });
+        return;
+      }
+
+      if (path === "/api/v1/system/integrations/todoist" && request.method === "PATCH") {
+        const auth = authorizeRequest(request, response, store, apiKey, "operator");
+        if (!auth) {
+          return;
+        }
+
+        const body = await parseBody(request);
+        sendJson(response, 200, store.patchIntegration("todoist", body, "admin_client"));
+        return;
+      }
+
+      if (path === "/api/v1/system/integrations/todoist/sync" && request.method === "POST") {
+        const auth = authorizeRequest(request, response, store, apiKey, "operator");
+        if (!auth) {
+          return;
+        }
+
+        const body = await parseBody(request);
+        sendJson(response, 202, connectorSyncService.runSync("todoist", body));
+        return;
+      }
+
+      if (path === "/api/v1/system/integrations/todoist/fixtures" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "viewer");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, {
+          connector: "todoist",
+          fixtures: connectorSyncService.listFixtures("todoist"),
+        });
+        return;
+      }
+
+      if (
+        segments[0] === "api" &&
+        segments[1] === "v1" &&
+        segments[2] === "system" &&
+        segments[3] === "integrations" &&
+        segments[5] === "sync-jobs" &&
+        request.method === "GET"
+      ) {
+        const auth = authorizeRequest(request, response, store, apiKey, "viewer");
+        if (!auth) {
+          return;
+        }
+
+        const job = connectorSyncService.getJob(segments[6] ?? "");
+        if (!job) {
+          sendJson(response, 404, {
+            ok: false,
+            error: {
+              code: "SYNC_JOB_NOT_FOUND",
+              message: "Sync job not found",
+            },
+          });
+          return;
+        }
+
+        sendJson(response, 200, job);
+        return;
+      }
+
+      if (path === "/api/v1/system/portable/bootstrap" && request.method === "GET") {
+        const auth = resolveAuthContext(request, store, apiKey);
+        if (!auth.ok) {
+          sendJson(response, auth.status ?? 401, {
+            ok: false,
+            error: {
+              code: auth.code ?? "UNAUTHORIZED",
+              message: auth.message ?? "Unauthorized",
+            },
+          });
+          return;
+        }
+
+        sendJson(response, 200, {
+          ok: true,
+          session: auth.session ?? null,
+          capabilities: store.getCapabilities(),
+          state: store.getSnapshot(),
+          screenContext: createScreenContext(store.getSnapshot()),
+          links: createSystemApiDescriptor().endpoints,
+        });
+        return;
+      }
+
+      if (path === "/api/v1/system/actions" && request.method === "POST") {
+        const body = await parseBody(request);
         actionBody = body;
+        const requiredRole = store.getRequiredRoleForAction(body.type) ?? "controller";
+        const auth = resolveAuthContext(request, store, apiKey);
+        if (!auth.ok) {
+          sendActionError(
+            response,
+            auth.status ?? 401,
+            body,
+            auth.code ?? "UNAUTHORIZED",
+            auth.message ?? "Unauthorized",
+          );
+          return;
+        }
+
+        if (!store.hasRequiredRole(auth.role, requiredRole)) {
+          sendActionError(
+            response,
+            403,
+            body,
+            "FORBIDDEN",
+            `Role ${auth.role} cannot execute ${body.type}`,
+          );
+          return;
+        }
         const previousState = structuredClone(store.getSnapshot());
         const snapshot = store.runAction(body.type, body.payload ?? {}, body.source ?? "remote-client");
         sendActionResult(response, previousState, snapshot, body);
         return;
       }
 
+      if (path === "/api/v1/system/pairing-codes" && request.method === "POST") {
+        const auth = authorizeRequest(request, response, store, apiKey, "admin");
+        if (!auth) {
+          return;
+        }
+
+        const body = await parseBody(request);
+        const pairing = store.createPairingCode(body, auth.kind === "api_key" ? "admin_client" : "system");
+        sendJson(response, 201, pairing);
+        return;
+      }
+
+      if (path === "/api/v1/system/pairing-codes/claim" && request.method === "POST") {
+        const body = await parseBody(request);
+        const session = store.claimPairingCode(body.code ?? "", body, body.source ?? "portable_controller");
+        sendJson(response, 201, {
+          ...session,
+          stateUrl: "/api/v1/system/state",
+          actionsUrl: "/api/v1/system/actions",
+        });
+        return;
+      }
+
       if (path === "/api/v1/system/controller-sessions" && request.method === "POST") {
-        if (!isAuthorized(request, apiKey)) {
-          sendUnauthorized(response);
+        const auth = authorizeRequest(request, response, store, apiKey, "admin");
+        if (!auth) {
           return;
         }
 
@@ -181,8 +505,36 @@ export function createAppServer({
       }
 
       if (segments[0] === "api" && segments[1] === "v1" && segments[2] === "system" && segments[3] === "controller-sessions") {
-        if (!isAuthorized(request, apiKey)) {
-          sendUnauthorized(response);
+        if (segments[4] === "current" && request.method === "GET") {
+          const auth = resolveAuthContext(request, store, apiKey);
+          if (!auth.ok) {
+            sendJson(response, auth.status ?? 401, {
+              ok: false,
+              error: {
+                code: auth.code ?? "UNAUTHORIZED",
+                message: auth.message ?? "Unauthorized",
+              },
+            });
+            return;
+          }
+
+          if (!auth.session) {
+            sendJson(response, 401, {
+              ok: false,
+              error: {
+                code: "SESSION_REQUIRED",
+                message: "Controller session required",
+              },
+            });
+            return;
+          }
+
+          sendJson(response, 200, auth.session);
+          return;
+        }
+
+        const auth = authorizeRequest(request, response, store, apiKey, "controller");
+        if (!auth) {
           return;
         }
 
@@ -194,11 +546,19 @@ export function createAppServer({
 
         if (request.method === "GET") {
           const session = store.getSession(sessionId);
+          if (session && auth.kind === "controller_session" && auth.session?.id !== sessionId) {
+            sendForbidden(response, "FORBIDDEN", "Controller sessions can only read themselves");
+            return;
+          }
           sendJson(response, session ? 200 : 404, session ?? { error: "Session not found" });
           return;
         }
 
         if (request.method === "DELETE") {
+          if (auth.kind === "controller_session" && auth.session?.id !== sessionId) {
+            sendForbidden(response, "FORBIDDEN", "Controller sessions can only revoke themselves");
+            return;
+          }
           const deleted = store.deleteSession(sessionId);
           sendJson(response, deleted ? 200 : 404, deleted ? { ok: true } : { error: "Session not found" });
           return;
@@ -292,7 +652,16 @@ export function createAppServer({
       sendJson(response, 404, { error: "Not found" });
     } catch (error) {
       const code = error instanceof Error && "code" in error ? error.code : null;
-      if (code === "OTA_IN_PROGRESS" || code === "INVALID_MODE" || code === "INVALID_PANEL" || code === "INVALID_FLOW_STATE" || code === "UNKNOWN_ACTION") {
+      if (
+        code === "OTA_IN_PROGRESS" ||
+        code === "INVALID_MODE" ||
+        code === "INVALID_PANEL" ||
+        code === "INVALID_FLOW_STATE" ||
+        code === "UNKNOWN_ACTION" ||
+        code === "PAIRING_CODE_INVALID" ||
+        code === "INVALID_CONNECTOR" ||
+        code === "INVALID_FIXTURE"
+      ) {
         sendActionError(
           response,
           code === "OTA_IN_PROGRESS" ? 409 : 400,

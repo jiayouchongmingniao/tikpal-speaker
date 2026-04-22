@@ -83,7 +83,7 @@ function getGestureDirection(delta) {
 
 export function SystemShell({ initialMode = "overview", initialFlowState = "focus", debug = false }) {
   const controller = useSystemController({ initialMode, initialFlowState });
-  const { state } = controller;
+  const { state, screenContext } = controller;
   const overlayRef = useRef(null);
   const overlayTimerRef = useRef(null);
   const pointerTapRef = useRef({
@@ -655,6 +655,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
         <OverviewPage
           className={getPageLayerClass("overview", state.activeMode, transition)}
           state={state}
+          screenContext={screenContext}
           focusTarget={overviewFocusTarget}
           activeCard={OVERVIEW_MODES[overviewFocusIndex]}
           onOpenMode={controller.setMode}
@@ -689,6 +690,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
         <ScreenPage
           className={getPageLayerClass("screen", state.activeMode, transition)}
           state={state}
+          screenContext={screenContext}
           onOpenMode={controller.setMode}
           onReturnOverview={controller.returnOverview}
           onStartPomodoro={controller.startPomodoro}
@@ -705,6 +707,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
           focusIndex={overlayFocusIndex}
           visible={state.overlay.visible}
           state={state}
+          screenContext={screenContext}
           onReturnOverview={controller.returnOverview}
           onModeChange={controller.setMode}
           onTogglePlay={controller.togglePlay}

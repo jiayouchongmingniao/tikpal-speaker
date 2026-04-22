@@ -1,3 +1,5 @@
+import { getOverlayScreenViewModel, getOverlayStatusHint } from "../viewmodels/screenContextConsumers";
+
 function formatPomodoro(remainingSec) {
   const totalSeconds = Math.max(0, Number(remainingSec ?? 0));
   const minutes = Math.floor(totalSeconds / 60);
@@ -5,29 +7,10 @@ function formatPomodoro(remainingSec) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function getStatusHint(state) {
-  if (state.system?.otaStatus === "applying") {
-    return "Applying update";
-  }
-
-  if (state.controller?.activeSessionCount > 0) {
-    return `${state.controller.activeSessionCount} controller connected`;
-  }
-
-  if (state.screen?.sync?.stale) {
-    return "Screen sync stale";
-  }
-
-  if (state.system?.performanceTier && state.system.performanceTier !== "normal") {
-    return `Performance ${state.system.performanceTier}`;
-  }
-
-  return null;
-}
-
-function ScreenControls({ state, onStartPomodoro, onResumePomodoro, onPausePomodoro, onResetPomodoro, onCompleteTask }) {
-  const isRunning = state.screen.pomodoroState === "running";
-  const isPaused = state.screen.pomodoroState === "paused";
+function ScreenControls({ state, screenContext, onStartPomodoro, onResumePomodoro, onPausePomodoro, onResetPomodoro, onCompleteTask }) {
+  const screenView = getOverlayScreenViewModel(state, screenContext);
+  const isRunning = screenView.isRunning;
+  const isPaused = screenView.isPaused;
 
   return (
     <div className="global-overlay__section global-overlay__section--mode" role="group" aria-label="Screen controls">
@@ -67,9 +50,7 @@ function ScreenControls({ state, onStartPomodoro, onResumePomodoro, onPausePomod
           Done
         </button>
       </div>
-      <p className="global-overlay__hint">
-        {state.screen.currentTask ?? "No focus item"} · {formatPomodoro(state.screen.pomodoroRemainingSec)} left
-      </p>
+      <p className="global-overlay__hint">{screenView.hint}</p>
     </div>
   );
 }
@@ -135,6 +116,7 @@ export function GlobalOverlay({
   focusIndex = 0,
   visible,
   state,
+  screenContext,
   onReturnOverview,
   onModeChange,
   onTogglePlay,
@@ -149,7 +131,7 @@ export function GlobalOverlay({
   onCompleteTask,
   onInteract,
 }) {
-  const statusHint = getStatusHint(state);
+  const statusHint = getOverlayStatusHint(state, screenContext);
 
   return (
     <section
@@ -220,6 +202,7 @@ export function GlobalOverlay({
         {state.activeMode === "screen" ? (
           <ScreenControls
             state={state}
+            screenContext={screenContext}
             onStartPomodoro={onStartPomodoro}
             onResumePomodoro={onResumePomodoro}
             onPausePomodoro={onPausePomodoro}

@@ -1,3 +1,5 @@
+import { getOverviewScreenCardViewModel } from "../viewmodels/screenContextConsumers";
+
 function OverviewCard({
   mode,
   label,
@@ -68,6 +70,7 @@ function formatPomodoro(remainingSec) {
 
 export function OverviewPage({
   state,
+  screenContext,
   onOpenMode,
   onPrevTrack,
   onTogglePlay,
@@ -82,8 +85,9 @@ export function OverviewPage({
   activeCard = "listen",
   className = "",
 }) {
-  const isRunning = state.screen.pomodoroState === "running";
-  const isPaused = state.screen.pomodoroState === "paused";
+  const screenCard = getOverviewScreenCardViewModel(state, screenContext);
+  const isRunning = screenCard.isRunning;
+  const isPaused = screenCard.isPaused;
   const transitionStatus = state.transition?.status ?? "idle";
 
   return (
@@ -145,10 +149,10 @@ export function OverviewPage({
         <OverviewCard
           mode="screen"
           label="Screen"
-          title={state.screen.currentTask ?? "No focus item"}
-          subtitle={`${formatPomodoro(state.screen.pomodoroRemainingSec)} left`}
-          meta={`${state.screen.todaySummary?.remainingTasks ?? 0} tasks left today`}
-          detail={`Next ${state.screen.nextTask ?? "None"}`}
+          title={screenCard.title}
+          subtitle={screenCard.subtitle}
+          meta={screenCard.meta}
+          detail={screenCard.detail}
           tone="screen"
           transitionStatus={transitionStatus}
           isFocusTarget={focusTarget === "screen"}

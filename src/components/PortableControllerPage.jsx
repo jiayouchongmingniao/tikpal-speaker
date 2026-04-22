@@ -1,0 +1,404 @@
+import { useEffect, useState } from "react";
+import { usePortableController } from "../hooks/usePortableController";
+import { getPortableScreenCardViewModel } from "../viewmodels/screenContextConsumers";
+
+const FLOW_STATES = ["focus", "flow", "relax", "sleep"];
+const MODES = ["overview", "listen", "flow", "screen"];
+
+function formatPomodoro(remainingSec) {
+  const totalSeconds = Math.max(0, Number(remainingSec ?? 0));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function statusLabel(status) {
+  if (status === "connected") {
+    return "controller connected";
+  }
+
+  if (status === "expired") {
+    return "session expired";
+  }
+
+  if (status === "offline") {
+    return "offline";
+  }
+
+  if (status === "connecting") {
+    return "connecting";
+  }
+
+  if (status === "error") {
+    return "connect failed";
+  }
+
+  return "read only";
+}
+
+function formatCountdown(expiresAt) {
+  const remainingSec = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  const minutes = Math.floor(remainingSec / 60);
+  const seconds = remainingSec % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function PortablePairingView({
+  controller,
+  status,
+  error,
+  apiKey,
+  pairingCode,
+  generatedPairing,
+  lastSyncAt,
+  onEnterController,
+}) {
+  const [, setPairingNow] = useState(Date.now());
+  const pairingRemaining = generatedPairing?.expiresAt ? formatCountdown(generatedPairing.expiresAt) : "00:00";
+
+  useEffect(() => {
+    if (!generatedPairing?.expiresAt || generatedPairing.expired) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setPairingNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [generatedPairing?.expiresAt, generatedPairing?.expired]);
+
+  async function copyPairingCode() {
+    if (!generatedPairing?.code || !navigator.clipboard) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(generatedPairing.code);
+  }
+
+  return (
+    <section className="portable-pairing-view">
+      <div className="portable-pairing-shell">
+        <header className="portable-pairing-hero">
+          <span className="portable-kicker">Portable Pairing</span>
+          <h1>6-digit onboarding</h1>
+          <p>Pair first, control later. This screen is dedicated to session setup and recovery.</p>
+          <div className={`portable-status portable-status--${status}`}>
+            <strong>{statusLabel(status)}</strong>
+            <span>{generatedPairing?.code ? "Pairing active" : "Waiting for setup"}</span>
+          </div>
+        </header>
+
+        <section className="portable-pairing-layout">
+          <article className="portable-pairing-panel">
+            <span className="portable-card__label">Admin Side</span>
+            <h2>Generate code</h2>
+            <p>Use admin key to mint a short-lived 6-digit code. The portable device claims it once and gets a controller session.</p>
+            <div className="portable-connect-row">
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(event) => controller.setApiKey(event.target.value)}
+                placeholder="Admin API key"
+              />
+              <button
+                type="button"
+                className="portable-button"
+                onClick={() => controller.generatePairingCode()}
+                disabled={!apiKey || status === "connecting"}
+              >
+                Generate code
+              </button>
+            </div>
+            {generatedPairing ? (
+              <div className={`portable-pairing-card portable-pairing-card--hero ${generatedPairing.expired ? "is-expired" : ""}`.trim()}>
+                <span>Pairing code</span>
+                <strong>{generatedPairing.code}</strong>
+                <p>
+                  {generatedPairing.expired ? "Expired" : `Valid for ${pairingRemaining}`} · expires{" "}
+                  {new Date(generatedPairing.expiresAt).toLocaleString()}
+                </p>
+                <div className="portable-pairing-actions">
+                  <button type="button" className="portable-button portable-button--ghost" onClick={() => copyPairingCode()} disabled={generatedPairing.expired}>
+                    Copy code
+                  </button>
+                  <button type="button" className="portable-button portable-button--ghost" onClick={() => controller.clearGeneratedPairing()}>
+                    Clear
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </article>
+
+          <article className="portable-pairing-panel">
+            <span className="portable-card__label">Portable Side</span>
+            <h2>Claim code</h2>
+            <p>Enter the 6-digit code here. Once claimed, the device gets a controller session and moves into the main control surface.</p>
+            <div className="portable-connect-row">
+              <input
+                type="text"
+                value={pairingCode}
+                onChange={(event) => controller.setPairingCode(event.target.value)}
+                placeholder="6-digit pairing code"
+                inputMode="numeric"
+              />
+              <button type="button" className="portable-button" onClick={() => controller.claimCode()} disabled={!pairingCode || status === "connecting"}>
+                Claim code
+              </button>
+              <button type="button" className="portable-button portable-button--ghost" onClick={() => controller.connect()} disabled={status === "connecting"}>
+                Connect with key
+              </button>
+            </div>
+            {error ? <p className="portable-error">{error}</p> : null}
+            <div className="portable-pairing-hints">
+              <p>Code format: 6 digits</p>
+              <p>Single use: a claimed code cannot be reused</p>
+              <p>Fallback: admin key can still mint a direct session when needed</p>
+            </div>
+            {lastSyncAt ? <p className="portable-session-meta">Last sync {new Date(lastSyncAt).toLocaleString()}</p> : null}
+          </article>
+        </section>
+
+        <footer className="portable-pairing-footer">
+          <button type="button" className="portable-button portable-button--ghost" onClick={() => controller.refresh()}>
+            Refresh
+          </button>
+          <button type="button" className="portable-button portable-button--ghost" onClick={() => controller.disconnect()}>
+            Clear session
+          </button>
+          <button type="button" className="portable-button" onClick={onEnterController}>
+            Open controller
+          </button>
+        </footer>
+      </div>
+    </section>
+  );
+}
+
+function PortableControlView({ controller, state, screenContext, capabilities, session, status, error, hasWriteAccess, lastSyncAt, onOpenPairing }) {
+  const activeMode = state?.activeMode ?? "overview";
+  const playbackState = state?.playback?.state ?? "pause";
+  const playbackVolume = state?.playback?.volume ?? 58;
+  const flowState = state?.flow?.state ?? "focus";
+  const screenCard = getPortableScreenCardViewModel(state, screenContext);
+  const pomodoroState = screenCard.pomodoroState;
+
+  return (
+    <section className="portable-control-view">
+      <section className="portable-shell">
+        <header className="portable-header">
+          <div>
+            <span className="portable-kicker">Portable</span>
+            <h1>System controller</h1>
+            <p>Mode, playback, Flow and Screen rhythm without mirroring the main display.</p>
+          </div>
+          <div className={`portable-status portable-status--${status}`}>
+            <strong>{statusLabel(status)}</strong>
+            <span>{session?.name ?? (status === "expired" ? "Session token cleared" : "No controller session")}</span>
+          </div>
+        </header>
+
+        <section className="portable-connect-card">
+          <div>
+            <strong>Session</strong>
+            <p>Controller surface is now separate from onboarding. Pairing and recovery live in a dedicated full-screen view.</p>
+          </div>
+          <div className="portable-connect-row">
+            <button type="button" className="portable-button" onClick={onOpenPairing}>
+              Open pairing
+            </button>
+            <button type="button" className="portable-button portable-button--ghost" onClick={() => controller.refresh()}>
+              Refresh
+            </button>
+            <button
+              type="button"
+              className="portable-button portable-button--ghost"
+              onClick={() => controller.reconnect()}
+              disabled={status === "connecting"}
+            >
+              Reconnect
+            </button>
+            <button type="button" className="portable-button portable-button--ghost" onClick={() => controller.disconnect()}>
+              Disconnect
+            </button>
+          </div>
+          {error ? <p className="portable-error">{error}</p> : null}
+          {session ? (
+            <p className="portable-session-meta">
+              {session.role} · expires {new Date(session.expiresAt).toLocaleString()} · last seen {session.lastSeenAt ?? "not yet"}
+            </p>
+          ) : status === "expired" ? (
+            <p className="portable-session-meta">Session expired. Reconnect or return to pairing to recover write access.</p>
+          ) : null}
+          {lastSyncAt ? <p className="portable-session-meta">Last sync {new Date(lastSyncAt).toLocaleString()}</p> : null}
+        </section>
+
+        <section className="portable-grid">
+          <article className="portable-card">
+            <span className="portable-card__label">System</span>
+            <div className="portable-mode-row">
+              {MODES.map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`portable-chip ${activeMode === mode ? "is-active" : ""}`}
+                  disabled={!hasWriteAccess}
+                  onClick={() => controller.sendAction(mode === "overview" ? "return_overview" : "set_mode", mode === "overview" ? {} : { mode })}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+            <div className="portable-stat-grid">
+              <div>
+                <span>Current mode</span>
+                <strong>{activeMode}</strong>
+              </div>
+              <div>
+                <span>Last source</span>
+                <strong>{state?.lastSource ?? "unknown"}</strong>
+              </div>
+              <div>
+                <span>Performance</span>
+                <strong>{state?.system?.performanceTier ?? capabilities?.performance?.tier ?? "normal"}</strong>
+              </div>
+              <div>
+                <span>Controllers</span>
+                <strong>{state?.controller?.activeSessionCount ?? 0}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article className="portable-card">
+            <span className="portable-card__label">Playback</span>
+            <h2>{state?.playback?.trackTitle ?? "No track"}</h2>
+            <p>{state?.playback?.artist ?? "Unknown artist"}</p>
+            <div className="portable-control-row">
+              <button type="button" className="portable-button portable-button--ghost" disabled={!hasWriteAccess} onClick={() => controller.sendAction("prev_track")}>
+                Prev
+              </button>
+              <button type="button" className="portable-button" disabled={!hasWriteAccess} onClick={() => controller.sendAction("toggle_play")}>
+                {playbackState === "play" ? "Pause" : "Play"}
+              </button>
+              <button type="button" className="portable-button portable-button--ghost" disabled={!hasWriteAccess} onClick={() => controller.sendAction("next_track")}>
+                Next
+              </button>
+            </div>
+            <label className="portable-slider">
+              <span>Volume {playbackVolume}%</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={playbackVolume}
+                disabled={!hasWriteAccess}
+                onChange={(event) => controller.sendAction("set_volume", { volume: Number(event.target.value) })}
+              />
+            </label>
+          </article>
+
+          <article className="portable-card">
+            <span className="portable-card__label">Flow</span>
+            <h2>{flowState}</h2>
+            <p>{state?.flow?.subtitle ?? "Motion Loop"}</p>
+            <div className="portable-mode-row">
+              {FLOW_STATES.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={`portable-chip ${flowState === item ? "is-active" : ""}`}
+                  disabled={!hasWriteAccess}
+                  onClick={() => controller.sendAction("set_flow_state", { state: item })}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </article>
+
+          <article className="portable-card">
+            <span className="portable-card__label">Screen</span>
+            <h2>{screenCard.title}</h2>
+            <p>{screenCard.timerLabel}</p>
+            <div className="portable-control-row">
+              <button
+                type="button"
+                className="portable-button"
+                disabled={!hasWriteAccess}
+                onClick={() => controller.sendAction(pomodoroState === "paused" ? "screen_resume_pomodoro" : "screen_start_pomodoro", { durationSec: 1500 })}
+              >
+                {pomodoroState === "paused" ? "Resume" : "Start"}
+              </button>
+              <button type="button" className="portable-button portable-button--ghost" disabled={!hasWriteAccess} onClick={() => controller.sendAction("screen_pause_pomodoro")}>
+                Pause
+              </button>
+              <button type="button" className="portable-button portable-button--ghost" disabled={!hasWriteAccess} onClick={() => controller.sendAction("screen_reset_pomodoro")}>
+                Reset
+              </button>
+              <button type="button" className="portable-button portable-button--ghost" disabled={!hasWriteAccess} onClick={() => controller.sendAction("screen_complete_current_task")}>
+                Done
+              </button>
+            </div>
+            <div className="portable-stat-grid">
+              <div>
+                <span>Next task</span>
+                <strong>{screenCard.nextTitle}</strong>
+              </div>
+              <div>
+                <span>Done today</span>
+                <strong>{state?.screen?.completedPomodoros ?? 0}</strong>
+              </div>
+            </div>
+          </article>
+        </section>
+      </section>
+    </section>
+  );
+}
+
+export function PortableControllerPage() {
+  const controller = usePortableController();
+  const { state, screenContext, capabilities, session, status, error, apiKey, pairingCode, generatedPairing, hasWriteAccess, lastSyncAt } = controller;
+  const [view, setView] = useState(session ? "controller" : "pairing");
+
+  useEffect(() => {
+    if (session && view !== "controller") {
+      setView("controller");
+      return;
+    }
+
+    if (!session && view === "controller") {
+      setView("pairing");
+    }
+  }, [session, view]);
+
+  return (
+    <main className="portable-page">
+      {view === "pairing" ? (
+        <PortablePairingView
+          controller={controller}
+          status={status}
+          error={error}
+          apiKey={apiKey}
+          pairingCode={pairingCode}
+          generatedPairing={generatedPairing}
+          lastSyncAt={lastSyncAt}
+          onEnterController={() => setView("controller")}
+        />
+      ) : (
+        <PortableControlView
+          controller={controller}
+          state={state}
+          screenContext={screenContext}
+          capabilities={capabilities}
+          session={session}
+          status={status}
+          error={error}
+          hasWriteAccess={hasWriteAccess}
+          lastSyncAt={lastSyncAt}
+          onOpenPairing={() => setView("pairing")}
+        />
+      )}
+    </main>
+  );
+}

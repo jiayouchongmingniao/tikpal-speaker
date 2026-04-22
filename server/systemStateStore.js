@@ -2,6 +2,40 @@ const MODE_ORDER = ["listen", "flow", "screen"];
 const FLOW_ORDER = ["focus", "flow", "relax", "sleep"];
 const MODE_TRANSITION_MS = 280;
 const FLOW_TRANSITION_MS = 220;
+const ROLE_ORDER = ["viewer", "controller", "operator", "admin"];
+const DEFAULT_SESSION_TTL_SEC = 24 * 60 * 60;
+const MAX_SESSION_TTL_SEC = 7 * 24 * 60 * 60;
+const DEFAULT_PAIRING_TTL_SEC = 5 * 60;
+const MAX_PAIRING_TTL_SEC = 30 * 60;
+const ROLE_SCOPES = {
+  viewer: ["state:read", "capabilities:read"],
+  controller: ["state:read", "capabilities:read", "actions:control"],
+  operator: ["state:read", "capabilities:read", "actions:control", "runtime:debug"],
+  admin: ["state:read", "capabilities:read", "actions:control", "runtime:debug", "ota:manage", "sessions:manage"],
+};
+const ACTION_ROLE_REQUIREMENTS = {
+  set_mode: "controller",
+  return_overview: "controller",
+  focus_panel: "controller",
+  next_mode: "controller",
+  prev_mode: "controller",
+  show_controls: "controller",
+  hide_controls: "controller",
+  toggle_play: "controller",
+  prev_track: "controller",
+  next_track: "controller",
+  set_volume: "controller",
+  set_flow_state: "controller",
+  screen_start_pomodoro: "controller",
+  screen_resume_pomodoro: "controller",
+  screen_pause_pomodoro: "controller",
+  screen_reset_pomodoro: "controller",
+  screen_complete_current_task: "controller",
+  screen_set_focus_item: "controller",
+  ota_check: "admin",
+  ota_apply: "admin",
+  ota_rollback: "admin",
+};
 const MOCK_QUEUE = [
   {
     trackTitle: "Low Light Corridor",
@@ -38,6 +72,22 @@ function nowIso() {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function createSessionToken() {
+  return `sess_${Math.random().toString(36).slice(2, 12)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createPairingCodeValue() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function normalizeRole(role = "controller") {
+  return ROLE_ORDER.includes(role) ? role : "controller";
+}
+
+function hasRequiredRole(role, requiredRole = "viewer") {
+  return ROLE_ORDER.indexOf(role) >= ROLE_ORDER.indexOf(requiredRole);
 }
 
 function getQueueTrack(index) {
@@ -104,7 +154,7 @@ function createInitialState() {
       completedPomodoros: 0,
       timerUpdatedAt: nowIso(),
       todaySummary: {
-        remainingTasks: 3,
+        remainingTasks: 55,
         remainingEvents: 2,
       },
       sync: {
@@ -116,10 +166,24 @@ function createInitialState() {
       calendar: {
         connected: false,
         status: "unconfigured",
+        accountLabel: null,
+        lastSyncAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        currentEvent: null,
+        nextEvent: null,
+        remainingEvents: 0,
       },
       todoist: {
         connected: false,
         status: "unconfigured",
+        accountLabel: null,
+        lastSyncAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        currentTask: null,
+        nextTask: null,
+        remainingTasks: 55,
       },
     },
     controller: {
@@ -187,6 +251,19 @@ function deriveFlowSubtitle(flowState) {
   return "Motion Loop";
 }
 
+function mergeConnectorState(currentConnector = {}, patch = {}) {
+  return {
+    ...currentConnector,
+    ...patch,
+    connected: patch.connected ?? currentConnector.connected ?? false,
+    status: patch.status ?? currentConnector.status ?? "idle",
+    accountLabel: patch.accountLabel ?? currentConnector.accountLabel ?? null,
+    lastSyncAt: patch.lastSyncAt ?? currentConnector.lastSyncAt ?? null,
+    lastErrorCode: patch.lastErrorCode ?? currentConnector.lastErrorCode ?? null,
+    lastErrorMessage: patch.lastErrorMessage ?? currentConnector.lastErrorMessage ?? null,
+  };
+}
+
 function toFlowSnapshot(state) {
   const overlayVisible = state.overlay.visible;
   const playbackState = state.playback.state;
@@ -228,8 +305,91 @@ function toFlowSnapshot(state) {
 export function createSystemStateStore() {
   let state = createInitialState();
   const sessions = new Map();
+  const sessionIdsByToken = new Map();
+  const pairingCodes = new Map();
+
+  function syncControllerCount() {
+    if ((state.controller?.activeSessionCount ?? 0) === sessions.size) {
+      return;
+    }
+
+    state = {
+      ...state,
+      controller: {
+        ...state.controller,
+        activeSessionCount: sessions.size,
+      },
+    };
+  }
+
+  function isSessionExpired(session) {
+    return Boolean(session?.expiresAt && new Date(session.expiresAt).getTime() <= Date.now());
+  }
+
+  function sanitizeSession(session, { includeToken = false } = {}) {
+    if (!session) {
+      return null;
+    }
+
+    const snapshot = {
+      id: session.id,
+      deviceId: session.deviceId,
+      name: session.name,
+      role: session.role,
+      scopes: [...session.scopes],
+      capabilities: [...session.capabilities],
+      source: session.source,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+      lastSeenAt: session.lastSeenAt ?? null,
+      revoked: Boolean(session.revoked),
+    };
+
+    if (includeToken) {
+      snapshot.token = session.token;
+    }
+
+    return snapshot;
+  }
+
+  function removeSession(sessionId) {
+    const session = sessions.get(sessionId);
+    if (!session) {
+      return false;
+    }
+
+    sessions.delete(sessionId);
+    if (session.token) {
+      sessionIdsByToken.delete(session.token);
+    }
+    syncControllerCount();
+    return true;
+  }
+
+  function cleanupExpiredSessions() {
+    let removed = false;
+    for (const [sessionId, session] of sessions.entries()) {
+      if (session.revoked || isSessionExpired(session)) {
+        removeSession(sessionId);
+        removed = true;
+      }
+    }
+
+    if (!removed) {
+      syncControllerCount();
+    }
+  }
+
+  function cleanupExpiredPairingCodes() {
+    for (const [code, pairing] of pairingCodes.entries()) {
+      if ((pairing.expiresAt && new Date(pairing.expiresAt).getTime() <= Date.now()) || pairing.claimedAt) {
+        pairingCodes.delete(code);
+      }
+    }
+  }
 
   function getNormalizedState() {
+    cleanupExpiredSessions();
     const normalizedTransition = normalizeTransition(state.transition);
     const normalizedScreen = normalizeScreenTimer(state.screen);
     if (normalizedTransition !== state.transition || normalizedScreen !== state.screen) {
@@ -328,6 +488,15 @@ export function createSystemStateStore() {
       performance: {
         tier: state.system.performanceTier,
       },
+      auth: {
+        roles: ROLE_ORDER,
+        sessionAuth: true,
+      },
+      controllerSessions: {
+        supported: true,
+        defaultRole: "controller",
+        defaultTtlSec: DEFAULT_SESSION_TTL_SEC,
+      },
     };
   }
 
@@ -376,6 +545,24 @@ export function createSystemStateStore() {
     );
 
     return toFlowSnapshot(state);
+  }
+
+  function patchIntegration(name, patch = {}, source = "system") {
+    const liveState = getNormalizedState();
+    if (!["calendar", "todoist"].includes(name)) {
+      throw createRejectedError("INVALID_CONNECTOR", `Unsupported connector: ${name}`);
+    }
+
+    return updateState(
+      {
+        ...liveState,
+        integrations: {
+          ...liveState.integrations,
+          [name]: mergeConnectorState(liveState.integrations?.[name], patch),
+        },
+      },
+      source,
+    );
   }
 
   function runFlowAction(type, payload = {}, source = "remote-client") {
@@ -680,44 +867,129 @@ export function createSystemStateStore() {
   }
 
   function createSession(payload = {}, source = "portable_controller") {
+    cleanupExpiredSessions();
     const id = `ctrl_${Math.random().toString(36).slice(2, 10)}`;
+    const role = normalizeRole(payload.role ?? "controller");
+    const ttlSec = clamp(Number(payload.ttlSec ?? DEFAULT_SESSION_TTL_SEC), 0, MAX_SESSION_TTL_SEC);
     const session = {
       id,
       deviceId: payload.deviceId ?? id,
       name: payload.name ?? "Tikpal Portable Controller",
+      role,
+      scopes: payload.scopes ?? ROLE_SCOPES[role],
       capabilities: payload.capabilities ?? [],
+      token: createSessionToken(),
       source,
       createdAt: nowIso(),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + ttlSec * 1000).toISOString(),
+      lastSeenAt: null,
+      revoked: false,
     };
     sessions.set(id, session);
+    sessionIdsByToken.set(session.token, id);
     updateState(state, source);
-    return session;
+    return sanitizeSession(session, { includeToken: true });
+  }
+
+  function createPairingCode(payload = {}, source = "system") {
+    cleanupExpiredPairingCodes();
+    const ttlSec = clamp(Number(payload.ttlSec ?? DEFAULT_PAIRING_TTL_SEC), 0, MAX_PAIRING_TTL_SEC);
+    let code = createPairingCodeValue();
+    while (pairingCodes.has(code)) {
+      code = createPairingCodeValue();
+    }
+
+    const pairing = {
+      code,
+      role: normalizeRole(payload.role ?? "controller"),
+      capabilities: payload.capabilities ?? [],
+      scopes: payload.scopes ?? null,
+      createdAt: nowIso(),
+      expiresAt: new Date(Date.now() + ttlSec * 1000).toISOString(),
+      createdBy: source,
+      claimedAt: null,
+    };
+    pairingCodes.set(code, pairing);
+    return structuredClone(pairing);
+  }
+
+  function claimPairingCode(code, payload = {}, source = "portable_controller") {
+    cleanupExpiredPairingCodes();
+    const pairing = pairingCodes.get(code);
+    if (!pairing) {
+      throw createRejectedError("PAIRING_CODE_INVALID", "Pairing code is invalid or expired");
+    }
+
+    pairing.claimedAt = nowIso();
+    pairingCodes.delete(code);
+    return createSession(
+      {
+        deviceId: payload.deviceId,
+        name: payload.name,
+        role: pairing.role,
+        scopes: pairing.scopes ?? undefined,
+        capabilities: payload.capabilities ?? pairing.capabilities,
+        ttlSec: payload.ttlSec,
+      },
+      source,
+    );
   }
 
   function getSession(id) {
-    return sessions.get(id) ?? null;
+    cleanupExpiredSessions();
+    return sanitizeSession(sessions.get(id) ?? null);
+  }
+
+  function getSessionByToken(token, { touch = true } = {}) {
+    cleanupExpiredSessions();
+    const sessionId = sessionIdsByToken.get(token);
+    if (!sessionId) {
+      return null;
+    }
+
+    const session = sessions.get(sessionId);
+    if (!session) {
+      sessionIdsByToken.delete(token);
+      syncControllerCount();
+      return null;
+    }
+
+    if (touch) {
+      session.lastSeenAt = nowIso();
+    }
+
+    return sanitizeSession(session);
   }
 
   function deleteSession(id) {
-    const deleted = sessions.delete(id);
+    const deleted = removeSession(id);
     if (deleted) {
       updateState(state, "system");
     }
     return deleted;
   }
 
+  function getRequiredRoleForAction(type) {
+    return ACTION_ROLE_REQUIREMENTS[type] ?? null;
+  }
+
   return {
     getSnapshot,
     getCapabilities,
+    getRequiredRoleForAction,
+    hasRequiredRole,
     getFlowSnapshot() {
       return toFlowSnapshot(state);
     },
     patchFlowState,
+    patchIntegration,
     runAction,
     runFlowAction,
     createSession,
+    createPairingCode,
+    claimPairingCode,
     getSession,
+    getSessionByToken,
     deleteSession,
   };
 }

@@ -102,6 +102,58 @@ Suggested control flow for `tikpal.ai`:
 
 Mutation endpoints support `X-Tikpal-Key` or `Authorization: Bearer <key>` when `TIKPAL_API_KEY` is configured.
 
+## System API And Batch E Debugging
+
+Run the system API locally:
+
+```bash
+npm run dev:api
+```
+
+Key endpoints:
+
+- `GET /api/v1/system/state`
+- `GET /api/v1/system/capabilities`
+- `GET /api/v1/system/screen/context`
+- `PATCH /api/v1/system/integrations/calendar`
+- `PATCH /api/v1/system/integrations/todoist`
+- `GET /api/v1/system/integrations/calendar/fixtures`
+- `GET /api/v1/system/integrations/todoist/fixtures`
+- `POST /api/v1/system/integrations/calendar/sync`
+- `POST /api/v1/system/integrations/todoist/sync`
+- `GET /api/v1/system/integrations/{connector}/sync-jobs/{jobId}`
+
+Open the Batch E debug surface in the browser:
+
+- `http://localhost:4173/debug`
+- `http://localhost:4173/?surface=debug`
+
+The debug surface lets you:
+
+- inspect live `ScreenContext`
+- inspect `SystemState.integrations`
+- list connector fixtures
+- trigger mock sync jobs with `success`, `stale`, or `error`
+- verify how `ScreenContext` reacts to `calendar` and `todoist` changes
+
+Minimal manual verification flow:
+
+```bash
+curl -s http://localhost:8787/api/v1/system/integrations/calendar/fixtures
+curl -s -X POST http://localhost:8787/api/v1/system/integrations/calendar/sync \
+  -H 'Content-Type: application/json' \
+  -H 'X-Tikpal-Key: dev-admin-key' \
+  -d '{"scenario":"success","fixture":"meeting_heavy","delayMs":50}'
+curl -s http://localhost:8787/api/v1/system/screen/context
+```
+
+Current Batch E scope:
+
+- `ScreenContext service` exists and is consumed by `ScreenPage`
+- connector mock sync lifecycle covers `syncing -> ok/stale/error`
+- fixture-based sample scenarios are available for `calendar` and `todoist`
+- HTTP smoke tests cover action responses, connector sync, stale/error behavior, and fixture application
+
 ## Architecture
 
 ```text

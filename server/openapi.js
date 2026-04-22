@@ -7,6 +7,10 @@ const commonSchemas = {
     type: "string",
     enum: ["listen", "flow", "screen"],
   },
+  Role: {
+    type: "string",
+    enum: ["viewer", "controller", "operator", "admin"],
+  },
   ControlSource: {
     type: "string",
     enum: ["touch", "remote", "portable_controller", "api", "system", "speaker-ui", "remote-client"],
@@ -151,6 +155,93 @@ export const systemOpenApiDocument = {
           sync: { type: "object" },
         },
       },
+      ScreenContext: {
+        type: "object",
+        properties: {
+          now: { type: "string", format: "date-time" },
+          focusItem: { type: ["object", "null"] },
+          currentBlock: { type: ["object", "null"] },
+          nextBlock: { type: ["object", "null"] },
+          pomodoro: { type: "object" },
+          todaySummary: { type: "object" },
+          sync: { type: "object" },
+        },
+      },
+      ConnectorStatus: {
+        type: "object",
+        properties: {
+          connected: { type: "boolean" },
+          accountLabel: { type: ["string", "null"] },
+          status: { type: "string" },
+          lastSyncAt: { type: ["string", "null"], format: "date-time" },
+          lastErrorCode: { type: ["string", "null"] },
+          lastErrorMessage: { type: ["string", "null"] },
+        },
+      },
+      CalendarIntegrationPatch: {
+        allOf: [
+          { $ref: "#/components/schemas/ConnectorStatus" },
+          {
+            type: "object",
+            properties: {
+              currentEvent: { type: ["object", "null"] },
+              nextEvent: { type: ["object", "null"] },
+              remainingEvents: { type: "number" },
+            },
+          },
+        ],
+      },
+      TodoistIntegrationPatch: {
+        allOf: [
+          { $ref: "#/components/schemas/ConnectorStatus" },
+          {
+            type: "object",
+            properties: {
+              currentTask: { type: ["object", "null"] },
+              nextTask: { type: ["object", "null"] },
+              remainingTasks: { type: "number" },
+            },
+          },
+        ],
+      },
+      ConnectorSyncRequest: {
+        type: "object",
+        properties: {
+          scenario: {
+            type: "string",
+            enum: ["success", "stale", "error"],
+          },
+          fixture: {
+            type: "string",
+          },
+          delayMs: {
+            type: "number",
+            minimum: 0,
+          },
+        },
+      },
+      ConnectorSyncJob: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          connector: { type: "string", enum: ["calendar", "todoist"] },
+          scenario: { type: "string" },
+          fixture: { type: "string" },
+          startedAt: { type: "string", format: "date-time" },
+          finishedAt: { type: ["string", "null"], format: "date-time" },
+          status: { type: "string" },
+        },
+      },
+      ConnectorFixtureList: {
+        type: "object",
+        properties: {
+          connector: { type: "string", enum: ["calendar", "todoist"] },
+          fixtures: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+      },
       ActionRequest: {
         type: "object",
         required: ["type"],
@@ -210,9 +301,144 @@ export const systemOpenApiDocument = {
           },
         },
       },
+      SystemCapabilities: {
+        type: "object",
+        properties: {
+          modes: {
+            type: "array",
+            items: { $ref: "#/components/schemas/Mode" },
+          },
+          flowStates: {
+            type: "array",
+            items: { $ref: "#/components/schemas/FlowState" },
+          },
+          touch: { type: "object" },
+          screenFeatures: { type: "object" },
+          integrations: { type: "object" },
+          ota: { type: "object" },
+          performance: { type: "object" },
+          auth: { type: "object" },
+          controllerSessions: { type: "object" },
+        },
+      },
+      ControllerSessionRequest: {
+        type: "object",
+        properties: {
+          deviceId: { type: "string" },
+          name: { type: "string" },
+          role: { $ref: "#/components/schemas/Role" },
+          capabilities: {
+            type: "array",
+            items: { type: "string" },
+          },
+          ttlSec: { type: "number", minimum: 0 },
+        },
+      },
+      PairingCodeRequest: {
+        type: "object",
+        properties: {
+          role: { $ref: "#/components/schemas/Role" },
+          capabilities: {
+            type: "array",
+            items: { type: "string" },
+          },
+          ttlSec: { type: "number", minimum: 0 },
+        },
+      },
+      PairingCode: {
+        type: "object",
+        properties: {
+          code: { type: "string" },
+          role: { $ref: "#/components/schemas/Role" },
+          capabilities: {
+            type: "array",
+            items: { type: "string" },
+          },
+          createdAt: { type: "string", format: "date-time" },
+          expiresAt: { type: "string", format: "date-time" },
+          claimedAt: { type: ["string", "null"], format: "date-time" },
+        },
+      },
+      PairingCodeClaimRequest: {
+        type: "object",
+        required: ["code"],
+        properties: {
+          code: { type: "string" },
+          deviceId: { type: "string" },
+          name: { type: "string" },
+          capabilities: {
+            type: "array",
+            items: { type: "string" },
+          },
+          ttlSec: { type: "number", minimum: 0 },
+          source: { $ref: "#/components/schemas/ControlSource" },
+        },
+      },
+      ControllerSession: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          deviceId: { type: "string" },
+          name: { type: "string" },
+          role: { $ref: "#/components/schemas/Role" },
+          scopes: {
+            type: "array",
+            items: { type: "string" },
+          },
+          capabilities: {
+            type: "array",
+            items: { type: "string" },
+          },
+          source: { $ref: "#/components/schemas/ControlSource" },
+          createdAt: { type: "string", format: "date-time" },
+          expiresAt: { type: "string", format: "date-time" },
+          lastSeenAt: { type: ["string", "null"], format: "date-time" },
+          revoked: { type: "boolean" },
+          token: { type: ["string", "null"] },
+          stateUrl: { type: "string" },
+          actionsUrl: { type: "string" },
+        },
+      },
+      SystemApiDescriptor: {
+        type: "object",
+        properties: {
+          service: { type: "string" },
+          version: { type: "string" },
+          auth: { type: "object" },
+          endpoints: { type: "object" },
+        },
+      },
+      PortableBootstrapResponse: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+          session: {
+            oneOf: [{ $ref: "#/components/schemas/ControllerSession" }, { type: "null" }],
+          },
+          capabilities: { $ref: "#/components/schemas/SystemCapabilities" },
+          state: { $ref: "#/components/schemas/SystemState" },
+          screenContext: { $ref: "#/components/schemas/ScreenContext" },
+          links: { type: "object" },
+        },
+      },
     },
   },
   paths: {
+    "/": {
+      get: {
+        summary: "Describe the System API surface for external clients",
+        responses: {
+          200: {
+            description: "System API descriptor",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SystemApiDescriptor" },
+              },
+            },
+          },
+        },
+      },
+    },
     "/health": {
       get: {
         summary: "Health check",
@@ -237,7 +463,197 @@ export const systemOpenApiDocument = {
     "/capabilities": {
       get: {
         summary: "Read the current device capabilities",
-        responses: { 200: { description: "Capabilities snapshot" } },
+        responses: {
+          200: {
+            description: "Capabilities snapshot",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SystemCapabilities" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/screen/context": {
+      get: {
+        summary: "Read the normalized ScreenContext snapshot",
+        responses: {
+          200: {
+            description: "Normalized ScreenContext for Screen surfaces and portable clients",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ScreenContext" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/integrations/calendar": {
+      patch: {
+        summary: "Patch mock Calendar connector state for ScreenContext validation",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/CalendarIntegrationPatch" },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Updated system state with patched Calendar connector",
+          },
+        },
+      },
+    },
+    "/integrations/calendar/sync": {
+      post: {
+        summary: "Trigger a mock Calendar sync worker run",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ConnectorSyncRequest" },
+            },
+          },
+        },
+        responses: {
+          202: {
+            description: "Accepted mock sync job",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ConnectorSyncJob" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/integrations/calendar/fixtures": {
+      get: {
+        summary: "List available mock Calendar fixtures",
+        responses: {
+          200: {
+            description: "Available fixture names for Calendar mock sync",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ConnectorFixtureList" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/integrations/todoist": {
+      patch: {
+        summary: "Patch mock Todoist connector state for ScreenContext validation",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/TodoistIntegrationPatch" },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Updated system state with patched Todoist connector",
+          },
+        },
+      },
+    },
+    "/integrations/todoist/fixtures": {
+      get: {
+        summary: "List available mock Todoist fixtures",
+        responses: {
+          200: {
+            description: "Available fixture names for Todoist mock sync",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ConnectorFixtureList" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/integrations/todoist/sync": {
+      post: {
+        summary: "Trigger a mock Todoist sync worker run",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ConnectorSyncRequest" },
+            },
+          },
+        },
+        responses: {
+          202: {
+            description: "Accepted mock sync job",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ConnectorSyncJob" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/integrations/{connector}/sync-jobs/{jobId}": {
+      get: {
+        summary: "Read mock connector sync job status",
+        parameters: [
+          {
+            name: "connector",
+            in: "path",
+            required: true,
+            schema: {
+              type: "string",
+              enum: ["calendar", "todoist"],
+            },
+          },
+          {
+            name: "jobId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description: "Sync job status",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ConnectorSyncJob" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/portable/bootstrap": {
+      get: {
+        summary: "Bootstrap a portable device with links, state, capabilities and current session",
+        responses: {
+          200: {
+            description: "Portable bootstrap payload",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/PortableBootstrapResponse" },
+              },
+            },
+          },
+          401: {
+            description: "Provided session token is invalid or expired",
+          },
+        },
       },
     },
     "/actions": {
@@ -312,6 +728,155 @@ export const systemOpenApiDocument = {
                 schema: { $ref: "#/components/schemas/ActionResponse" },
               },
             },
+          },
+        },
+      },
+    },
+    "/controller-sessions": {
+      post: {
+        summary: "Create a controller session for portable access",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ControllerSessionRequest" },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: "Controller session created",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ControllerSession" },
+              },
+            },
+          },
+          403: {
+            description: "Only admin credentials can create controller sessions",
+          },
+        },
+      },
+    },
+    "/pairing-codes": {
+      post: {
+        summary: "Create a short-lived pairing code for portable onboarding",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/PairingCodeRequest" },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: "Pairing code created",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/PairingCode" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/pairing-codes/claim": {
+      post: {
+        summary: "Claim a pairing code and mint a controller session",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/PairingCodeClaimRequest" },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: "Controller session created from pairing code",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ControllerSession" },
+              },
+            },
+          },
+          400: {
+            description: "Pairing code is invalid or expired",
+          },
+        },
+      },
+    },
+    "/controller-sessions/{sessionId}": {
+      get: {
+        summary: "Read a controller session",
+        security: [{ tikpalApiKey: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "sessionId",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description: "Controller session snapshot",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ControllerSession" },
+              },
+            },
+          },
+          403: {
+            description: "Only the current session or admin can read this resource",
+          },
+          404: {
+            description: "Session not found",
+          },
+        },
+      },
+      delete: {
+        summary: "Revoke a controller session",
+        security: [{ tikpalApiKey: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "sessionId",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description: "Session revoked",
+          },
+          403: {
+            description: "Only the current session or admin can revoke this resource",
+          },
+          404: {
+            description: "Session not found",
+          },
+        },
+      },
+    },
+    "/controller-sessions/current": {
+      get: {
+        summary: "Read the currently authenticated controller session",
+        security: [{ tikpalApiKey: [] }],
+        responses: {
+          200: {
+            description: "Current controller session",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ControllerSession" },
+              },
+            },
+          },
+          401: {
+            description: "Controller session required or expired",
           },
         },
       },
