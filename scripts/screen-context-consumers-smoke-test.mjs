@@ -3,6 +3,7 @@ import {
   getOverviewScreenCardViewModel,
   getOverlayScreenViewModel,
   getOverlayStatusHint,
+  getOtaStatusHint,
   getPortableScreenCardViewModel,
   getScreenPageViewModel,
 } from "../src/viewmodels/screenContextConsumers.js";
@@ -143,15 +144,34 @@ test("overlay screen view model and status hint honor stale context", () => {
 
 test("overlay status hint prefers controller and ota statuses over stale", () => {
   const otaState = createState({
-    system: { otaStatus: "applying", performanceTier: "normal" },
+    system: { otaStatus: "available", performanceTier: "normal", ota: { targetVersion: "0.1.2", updateAvailable: true } },
   });
-  assert.equal(getOverlayStatusHint(otaState, createScreenContext()), "Applying update");
+  assert.equal(getOverlayStatusHint(otaState, createScreenContext()), "Update available 0.1.2");
 
   const controllerState = createState({
     controller: { activeSessionCount: 2 },
     system: { otaStatus: "idle", performanceTier: "normal" },
   });
   assert.equal(getOverlayStatusHint(controllerState, createScreenContext()), "2 controller connected");
+});
+
+test("overlay ota status hint covers apply, restart, rollback, and error states", () => {
+  assert.equal(
+    getOtaStatusHint({ otaStatus: "applying", performanceTier: "normal", ota: { targetVersion: "0.1.2" } }),
+    "Applying update 0.1.2",
+  );
+  assert.equal(
+    getOtaStatusHint({ otaStatus: "restarting", performanceTier: "normal", ota: { targetVersion: "0.1.2" } }),
+    "Restarting after update",
+  );
+  assert.equal(
+    getOtaStatusHint({ otaStatus: "rollback", performanceTier: "normal", ota: { previousVersion: "0.1.0" } }),
+    "Rolling back update",
+  );
+  assert.equal(
+    getOtaStatusHint({ otaStatus: "error", performanceTier: "normal", ota: { lastErrorCode: "HEALTH_CHECK_FAILED" } }),
+    "Update failed: HEALTH_CHECK_FAILED",
+  );
 });
 
 console.log("ScreenContext consumer smoke tests passed.");

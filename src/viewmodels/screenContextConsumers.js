@@ -69,9 +69,54 @@ export function getOverlayScreenViewModel(state, screenContext) {
   };
 }
 
+export function getOtaStatusHint(system = {}) {
+  const otaStatus = system?.otaStatus ?? "idle";
+  const ota = system?.ota ?? {};
+  const targetVersion = ota.targetVersion ? ` ${ota.targetVersion}` : "";
+
+  if (otaStatus === "checking") {
+    return "Checking for update";
+  }
+
+  if (otaStatus === "available" || ota.updateAvailable) {
+    return `Update available${targetVersion}`;
+  }
+
+  if (otaStatus === "downloading") {
+    return `Downloading update${targetVersion}`;
+  }
+
+  if (otaStatus === "verifying") {
+    return `Verifying update${targetVersion}`;
+  }
+
+  if (otaStatus === "ready") {
+    return `Update ready${targetVersion}`;
+  }
+
+  if (otaStatus === "applying") {
+    return `Applying update${targetVersion}`;
+  }
+
+  if (otaStatus === "restarting") {
+    return "Restarting after update";
+  }
+
+  if (otaStatus === "rollback") {
+    return "Rolling back update";
+  }
+
+  if (otaStatus === "error") {
+    return ota.lastErrorCode ? `Update failed: ${ota.lastErrorCode}` : "Update failed";
+  }
+
+  return null;
+}
+
 export function getOverlayStatusHint(state, screenContext) {
-  if (state?.system?.otaStatus === "applying") {
-    return "Applying update";
+  const otaHint = getOtaStatusHint(state?.system);
+  if (otaHint) {
+    return otaHint;
   }
 
   if (state?.controller?.activeSessionCount > 0) {
