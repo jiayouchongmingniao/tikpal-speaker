@@ -5,6 +5,7 @@ import { ListenPage } from "./ListenPage";
 import { OverviewPage } from "./OverviewPage";
 import { ScreenPage } from "./ScreenPage";
 import { useSystemController } from "../hooks/useSystemController";
+import { getOtaStatusHint } from "../viewmodels/screenContextConsumers";
 
 const OVERVIEW_MODES = ["listen", "flow", "screen"];
 
@@ -128,6 +129,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
           ? transition.to
           : null
       : null;
+  const otaStatusHint = getOtaStatusHint(state.system);
 
   function clearOverlayTimer() {
     if (overlayTimerRef.current) {
@@ -202,6 +204,14 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       revealOverlay("mode-entry");
     }
   }, [state.activeMode, state.overlay.visible, transitionStatus]);
+
+  useEffect(() => {
+    if (!otaStatusHint || !isFocusMode || transitionStatus !== "idle") {
+      return;
+    }
+
+    revealOverlay("system-status");
+  }, [otaStatusHint, isFocusMode, transitionStatus]);
 
   useEffect(() => {
     const focusPanel = state.activeMode === "overview" ? state.focusedPanel : state.activeMode;

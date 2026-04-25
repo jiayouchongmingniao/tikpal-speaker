@@ -92,9 +92,20 @@ export function ConnectorDebugPage() {
   const [apiKey, setApiKey] = useState(client.apiKey);
   const [state, setState] = useState(null);
   const [screenContext, setScreenContext] = useState(null);
+  const [runtimeSummary, setRuntimeSummary] = useState(null);
+  const [actionLog, setActionLog] = useState([]);
+  const [stateTransitions, setStateTransitions] = useState([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [manualFocusTitle, setManualFocusTitle] = useState("Manual focus from debug");
+  const [performanceDraft, setPerformanceDraft] = useState({
+    tier: "normal",
+    avgFps: "60",
+    reason: "manual",
+  });
+  const [otaDraft, setOtaDraft] = useState({
+    targetVersion: "0.1.2",
+  });
   const [controls, setControls] = useState(() => ({
     calendar: { scenario: "success", fixture: "default", delayMs: "80", fixtures: FALLBACK_FIXTURES.calendar, running: false },
     todoist: { scenario: "success", fixture: "default", delayMs: "80", fixtures: FALLBACK_FIXTURES.todoist, running: false },
@@ -133,9 +144,12 @@ export function ConnectorDebugPage() {
           client.getState(),
           client.getScreenContext(),
         ]);
-        const [calendarFixtures, todoistFixtures] = await Promise.all([
+        const [calendarFixtures, todoistFixtures, nextRuntimeSummary, nextActionLog, nextStateTransitions] = await Promise.all([
           loadFixtures("calendar"),
           loadFixtures("todoist"),
+          client.getRuntimeSummary().catch(() => null),
+          client.getRuntimeActionLog(12).catch(() => ({ items: [] })),
+          client.getRuntimeStateTransitions(12).catch(() => ({ items: [] })),
         ]);
 
         if (!alive) {
@@ -144,6 +158,9 @@ export function ConnectorDebugPage() {
 
         setState(nextState);
         setScreenContext(nextScreenContext);
+        setRuntimeSummary(nextRuntimeSummary);
+        setActionLog(nextActionLog?.items ?? []);
+        setStateTransitions(nextStateTransitions?.items ?? []);
         setControls((current) => ({
           ...current,
           calendar: {
@@ -210,10 +227,18 @@ export function ConnectorDebugPage() {
       window.setTimeout(async () => {
         try {
           const nextJob = await client.getConnectorSyncJob(connector, job.id);
+          const [nextRuntimeSummary, nextActionLog, nextStateTransitions] = await Promise.all([
+            client.getRuntimeSummary().catch(() => null),
+            client.getRuntimeActionLog(12).catch(() => ({ items: [] })),
+            client.getRuntimeStateTransitions(12).catch(() => ({ items: [] })),
+          ]);
           setJobs((current) => ({
             ...current,
             [connector]: nextJob,
           }));
+          setRuntimeSummary(nextRuntimeSummary);
+          setActionLog(nextActionLog?.items ?? []);
+          setStateTransitions(nextStateTransitions?.items ?? []);
         } catch {
           // Keep last accepted job snapshot on polling failures.
         } finally {
@@ -231,9 +256,85 @@ export function ConnectorDebugPage() {
 
     try {
       await client.sendAction("screen_set_focus_item", { title: manualFocusTitle }, "debug_surface");
-      const [nextState, nextScreenContext] = await Promise.all([client.getState(), client.getScreenContext()]);
+      const [nextState, nextScreenContext, nextRuntimeSummary, nextActionLog, nextStateTransitions] = await Promise.all([
+        client.getState(),
+        client.getScreenContext(),
+        client.getRuntimeSummary().catch(() => null),
+        client.getRuntimeActionLog(12).catch(() => ({ items: [] })),
+        client.getRuntimeStateTransitions(12).catch(() => ({ items: [] })),
+      ]);
       setState(nextState);
       setScreenContext(nextScreenContext);
+      setRuntimeSummary(nextRuntimeSummary);
+      setActionLog(nextActionLog?.items ?? []);
+      setStateTransitions(nextStateTransitions?.items ?? []);
+    } catch (nextError) {
+      setError(nextError.message);
+    }
+  }
+
+  async function refreshRuntimePanels() {
+    const [nextRuntimeSummary, nextActionLog, nextStateTransitions] = await Promise.all([
+      client.getRuntimeSummary().catch(() => null),
+      client.getRuntimeActionLog(12).catch(() => ({ items: [] })),
+      client.getRuntimeStateTransitions(12).catch(() => ({ items: [] })),
+    ]);
+    setRuntimeSummary(nextRuntimeSummary);
+    setActionLog(nextActionLog?.items ?? []);
+    setStateTransitions(nextStateTransitions?.items ?? []);
+  }
+
+  async function applyPerformanceTier() {
+    setError("");
+
+    try {
+      await client.sendAction(
+        "runtime_set_performance_tier",
+        {
+          tier: performanceDraft.tier,
+          reason: performanceDraft.reason || "manual",
+        },
+        "debug_surface",
+      );
+      await refreshRuntimePanels();
+    } catch (nextError) {
+      setError(nextError.message);
+    }
+  }
+
+  async function reportPerformanceSample() {
+    setError("");
+
+    try {
+      await client.sendAction(
+        "runtime_report_performance",
+        {
+          avgFps: Number(performanceDraft.avgFps || 0),
+          reason: performanceDraft.reason || "manual",
+        },
+        "debug_surface",
+      );
+      await refreshRuntimePanels();
+    } catch (nextError) {
+      setError(nextError.message);
+    }
+  }
+
+  async function runOtaStep(step) {
+    setError("");
+
+    try {
+      if (step === "check") {
+        await client.checkOta({ targetVersion: otaDraft.targetVersion, source: "debug_surface" });
+      } else if (step === "apply") {
+        await client.applyOta({ source: "debug_surface" });
+      } else {
+        await client.rollbackOta({ source: "debug_surface" });
+      }
+
+      const nextState = await client.getState();
+      setState(nextState);
+      await refreshRuntimePanels();
     } catch (nextError) {
       setError(nextError.message);
     }
@@ -267,6 +368,49 @@ export function ConnectorDebugPage() {
           </button>
         </section>
 
+        <section className="debug-manual-focus">
+          <label className="debug-field">
+            <span>Performance tier</span>
+            <select value={performanceDraft.tier} onChange={(event) => setPerformanceDraft((current) => ({ ...current, tier: event.target.value }))}>
+              {["normal", "reduced", "safe"].map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="debug-field">
+            <span>avgFps</span>
+            <input value={performanceDraft.avgFps} onChange={(event) => setPerformanceDraft((current) => ({ ...current, avgFps: event.target.value }))} />
+          </label>
+          <label className="debug-field">
+            <span>Reason</span>
+            <input value={performanceDraft.reason} onChange={(event) => setPerformanceDraft((current) => ({ ...current, reason: event.target.value }))} />
+          </label>
+          <button type="button" className="debug-button" onClick={applyPerformanceTier}>
+            Set tier
+          </button>
+          <button type="button" className="debug-button debug-button--ghost" onClick={reportPerformanceSample}>
+            Report sample
+          </button>
+        </section>
+
+        <section className="debug-manual-focus">
+          <label className="debug-field">
+            <span>OTA target</span>
+            <input value={otaDraft.targetVersion} onChange={(event) => setOtaDraft({ targetVersion: event.target.value })} />
+          </label>
+          <button type="button" className="debug-button" onClick={() => runOtaStep("check")}>
+            Check OTA
+          </button>
+          <button type="button" className="debug-button debug-button--ghost" onClick={() => runOtaStep("apply")}>
+            Apply OTA
+          </button>
+          <button type="button" className="debug-button debug-button--ghost" onClick={() => runOtaStep("rollback")}>
+            Rollback OTA
+          </button>
+        </section>
+
         <section className="debug-grid">
           {CONNECTORS.map((connector) => (
             <ConnectorControlCard
@@ -283,12 +427,24 @@ export function ConnectorDebugPage() {
 
         <section className="debug-panels">
           <article className="debug-panel">
+            <span className="debug-kicker">RuntimeSummary</span>
+            <pre>{prettyJson(runtimeSummary ?? {})}</pre>
+          </article>
+          <article className="debug-panel">
             <span className="debug-kicker">ScreenContext</span>
             <pre>{prettyJson(screenContext ?? {})}</pre>
           </article>
           <article className="debug-panel">
             <span className="debug-kicker">Integrations State</span>
             <pre>{prettyJson(state?.integrations ?? {})}</pre>
+          </article>
+          <article className="debug-panel">
+            <span className="debug-kicker">ActionTimeline</span>
+            <pre>{prettyJson(actionLog)}</pre>
+          </article>
+          <article className="debug-panel">
+            <span className="debug-kicker">StateTransitions</span>
+            <pre>{prettyJson(stateTransitions)}</pre>
           </article>
         </section>
       </section>

@@ -112,6 +112,47 @@ export function createSystemServiceClient() {
         headers: getAuthHeaders(),
       });
     },
+    async getRuntimeSummary() {
+      return requestJson(`${baseUrl}/runtime/summary`, {
+        headers: getAuthHeaders({ admin: true }),
+      });
+    },
+    async getRuntimeActionLog(limit = 30) {
+      return requestJson(`${baseUrl}/runtime/action-log?limit=${encodeURIComponent(limit)}`, {
+        headers: getAuthHeaders({ admin: true }),
+      });
+    },
+    async getRuntimeStateTransitions(limit = 30) {
+      return requestJson(`${baseUrl}/runtime/state-transitions?limit=${encodeURIComponent(limit)}`, {
+        headers: getAuthHeaders({ admin: true }),
+      });
+    },
+    async getOtaStatus() {
+      return requestJson(`${baseUrl}/ota/status`, {
+        headers: getAuthHeaders(),
+      });
+    },
+    async checkOta(payload = {}) {
+      return requestJson(`${baseUrl}/ota/check`, {
+        method: "POST",
+        headers: getAuthHeaders({ admin: true }),
+        body: JSON.stringify(payload),
+      });
+    },
+    async applyOta(payload = {}) {
+      return requestJson(`${baseUrl}/ota/apply`, {
+        method: "POST",
+        headers: getAuthHeaders({ admin: true }),
+        body: JSON.stringify(payload),
+      });
+    },
+    async rollbackOta(payload = {}) {
+      return requestJson(`${baseUrl}/ota/rollback`, {
+        method: "POST",
+        headers: getAuthHeaders({ admin: true }),
+        body: JSON.stringify(payload),
+      });
+    },
     async listConnectorFixtures(connector) {
       return requestJson(`${baseUrl}/integrations/${connector}/fixtures`, {
         headers: getAuthHeaders(),

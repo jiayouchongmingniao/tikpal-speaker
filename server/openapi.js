@@ -242,6 +242,92 @@ export const systemOpenApiDocument = {
           },
         },
       },
+      RuntimeSummary: {
+        type: "object",
+        properties: {
+          activeMode: { type: ["string", "null"] },
+          focusedPanel: { type: ["string", "null"] },
+          overlay: { type: ["string", "null"] },
+          playbackState: { type: ["string", "null"] },
+          playbackSource: { type: ["string", "null"] },
+          playbackVolume: { type: ["number", "null"] },
+          flowState: { type: ["string", "null"] },
+          pomodoroState: { type: ["string", "null"] },
+          screenTask: { type: ["string", "null"] },
+          performanceTier: { type: ["string", "null"] },
+          avgFps: { type: ["number", "null"] },
+          temperatureC: { type: ["number", "null"] },
+          interactionLatencyMs: { type: ["number", "null"] },
+          memoryUsageMb: { type: ["number", "null"] },
+          lastDegradeReason: { type: ["string", "null"] },
+          otaStatus: { type: ["string", "null"] },
+          lastSource: { type: ["string", "null"] },
+          controllerCount: { type: "number" },
+          screenSyncStale: { type: "boolean" },
+          lastUpdatedAt: { type: ["string", "null"], format: "date-time" },
+        },
+      },
+      RuntimeActionLogEntry: {
+        type: "object",
+        properties: {
+          timestamp: { type: "string", format: "date-time" },
+          source: { type: "string" },
+          actionType: { type: "string" },
+          payloadSummary: { type: ["object", "null"] },
+          result: { type: "string", enum: ["applied", "ignored", "rejected"] },
+          errorCode: { type: ["string", "null"] },
+          durationMs: { type: "number" },
+        },
+      },
+      RuntimeStateTransitionLogEntry: {
+        type: "object",
+        properties: {
+          timestamp: { type: "string", format: "date-time" },
+          source: { type: "string" },
+          reasonAction: { type: ["string", "null"] },
+          from: { type: "object" },
+          to: { type: "object" },
+        },
+      },
+      RuntimeLogList: {
+        type: "object",
+        properties: {
+          items: {
+            type: "array",
+            items: { type: "object" },
+          },
+        },
+      },
+      OtaStatus: {
+        type: "object",
+        properties: {
+          currentVersion: { type: "string" },
+          previousVersion: { type: ["string", "null"] },
+          targetVersion: { type: ["string", "null"] },
+          updateAvailable: { type: "boolean" },
+          canRollback: { type: "boolean" },
+          releaseRoot: { type: "string" },
+          currentPath: { type: "string" },
+          previousPath: { type: "string" },
+          restartRequired: { type: "boolean" },
+          lastCheckedAt: { type: ["string", "null"], format: "date-time" },
+          lastAppliedAt: { type: ["string", "null"], format: "date-time" },
+          lastRestartedAt: { type: ["string", "null"], format: "date-time" },
+          lastHealthCheckAt: { type: ["string", "null"], format: "date-time" },
+          lastRolledBackAt: { type: ["string", "null"], format: "date-time" },
+          lastErrorCode: { type: ["string", "null"] },
+          lastOperation: { type: ["object", "null"] },
+        },
+      },
+      OtaActionRequest: {
+        type: "object",
+        properties: {
+          targetVersion: { type: "string" },
+          source: { $ref: "#/components/schemas/ControlSource" },
+          requestId: { type: "string" },
+          timestamp: { type: "string", format: "date-time" },
+        },
+      },
       ActionRequest: {
         type: "object",
         required: ["type"],
@@ -267,6 +353,11 @@ export const systemOpenApiDocument = {
               "screen_reset_pomodoro",
               "screen_complete_current_task",
               "screen_set_focus_item",
+              "runtime_set_performance_tier",
+              "runtime_report_performance",
+              "ota_check",
+              "ota_apply",
+              "ota_rollback",
             ],
           },
           payload: { type: "object" },
@@ -486,6 +577,150 @@ export const systemOpenApiDocument = {
                 schema: { $ref: "#/components/schemas/ScreenContext" },
               },
             },
+          },
+        },
+      },
+    },
+    "/runtime/summary": {
+      get: {
+        summary: "Read the current runtime summary for debug panels",
+        responses: {
+          200: {
+            description: "Runtime summary",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/RuntimeSummary" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/runtime/action-log": {
+      get: {
+        summary: "Read recent action log entries",
+        responses: {
+          200: {
+            description: "Recent action logs",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/RuntimeLogList" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/runtime/state-transitions": {
+      get: {
+        summary: "Read recent state transition log entries",
+        responses: {
+          200: {
+            description: "Recent state transition logs",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/RuntimeLogList" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/ota/status": {
+      get: {
+        summary: "Read current OTA status and version pointers",
+        responses: {
+          200: {
+            description: "OTA status",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OtaStatus" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/ota/check": {
+      post: {
+        summary: "Check for an available application OTA release",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/OtaActionRequest" },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "OTA check result and updated system state",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ActionResponse" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/ota/apply": {
+      post: {
+        summary: "Apply the staged application OTA release and run a health-check pass",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/OtaActionRequest" },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "OTA apply result and updated system state",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ActionResponse" },
+              },
+            },
+          },
+          400: {
+            description: "No available OTA release can be applied",
+          },
+          409: {
+            description: "OTA is already applying or rolling back",
+          },
+        },
+      },
+    },
+    "/ota/rollback": {
+      post: {
+        summary: "Rollback to the previous application OTA release and run a health-check pass",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/OtaActionRequest" },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "OTA rollback result and updated system state",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ActionResponse" },
+              },
+            },
+          },
+          400: {
+            description: "No rollback release is available",
+          },
+          409: {
+            description: "OTA is already applying or rolling back",
           },
         },
       },

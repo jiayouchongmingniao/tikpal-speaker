@@ -402,6 +402,10 @@ input {
     opacity 160ms ease;
 }
 
+.debug-button--ghost {
+  background: rgba(255, 255, 255, 0.07);
+}
+
 .debug-button:hover {
   transform: translateY(-1px);
   background: rgba(255, 255, 255, 0.16);

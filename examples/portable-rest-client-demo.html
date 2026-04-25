@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tikpal portable REST client demo</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "SF Pro Display", "Segoe UI", sans-serif;
+        background: #06080f;
+        color: rgba(255, 255, 255, 0.94);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top left, rgba(91, 124, 255, 0.14), transparent 28%),
+          radial-gradient(circle at bottom right, rgba(255, 179, 138, 0.12), transparent 32%),
+          #06080f;
+      }
+
+      .app {
+        width: min(1080px, calc(100vw - 24px));
+        margin: 0 auto;
+        padding: 24px 0 40px;
+      }
+
+      .panel,
+      .card {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+      }
+
+      .panel {
+        padding: 20px 22px;
+      }
+
+      .hero {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .hero h1,
+      .card h2 {
+        margin: 10px 0 0;
+        font-size: clamp(24px, 3vw, 38px);
+        line-height: 1;
+      }
+
+      .hero p,
+      .card p,
+      .hint,
+      .meta {
+        opacity: 0.72;
+        line-height: 1.5;
+      }
+
+      .kicker {
+        display: inline-flex;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .status {
+        min-width: 240px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .stack {
+        display: grid;
+        gap: 16px;
+        margin-top: 16px;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      input,
+      button {
+        font: inherit;
+      }
+
+      input[type="text"],
+      input[type="password"] {
+        flex: 1 1 220px;
+        min-width: 0;
+        padding: 12px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 14px;
+        color: inherit;
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 11px 16px;
+        color: inherit;
+        background: rgba(255, 255, 255, 0.12);
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      button.active {
+        background: rgba(255, 255, 255, 0.24);
+      }
+
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        padding: 20px;
+      }
+
+      .metric {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      .metric span {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        opacity: 0.56;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 16px;
+      }
+
+      pre {
+        margin: 0;
+        padding: 16px;
+        overflow: auto;
+        border-radius: 18px;
+        background: rgba(0, 0, 0, 0.24);
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .log {
+        max-height: 280px;
+      }
+
+      @media (max-width: 900px) {
+        .hero,
+        .grid {
+          grid-template-columns: 1fr;
+          display: grid;
+        }
+
+        .status {
+          min-width: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <section class="panel hero">
+        <div>
+          <span class="kicker">Portable Demo</span>
+          <h1>REST client</h1>
+          <p>独立便携设备最小对接示例。只调用 system REST API，不依赖主屏前端工程。</p>
+        </div>
+        <div class="status">
+          <strong id="status-title">idle</strong>
+          <div class="meta" id="status-meta">未连接</div>
+        </div>
+      </section>
+
+      <section class="panel stack">
+        <div class="row">
+          <input id="base-url" type="text" placeholder="http://speaker-host:8787/api/v1/system" />
+          <input id="api-key" type="password" placeholder="Admin API key" />
+        </div>
+        <div class="row">
+          <button id="pair-button">Create Session</button>
+          <button id="bootstrap-button" class="secondary">Bootstrap</button>
+          <button id="disconnect-button" class="secondary">Disconnect</button>
+        </div>
+        <div class="hint" id="session-hint">建议先用 admin key 配对，再保存 session token。</div>
+      </section>
+
+      <section class="grid" style="margin-top: 16px;">
+        <section class="card">
+          <span class="kicker">System</span>
+          <h2 id="mode-title">overview</h2>
+          <p id="track-copy">No track</p>
+          <div class="row">
+            <button data-action="return_overview">Overview</button>
+            <button data-action="set_mode" data-mode="listen">Listen</button>
+            <button data-action="set_mode" data-mode="flow">Flow</button>
+            <button data-action="set_mode" data-mode="screen">Screen</button>
+          </div>
+          <div class="metric">
+            <div><span>Last source</span><strong id="last-source">unknown</strong></div>
+            <div><span>Controllers</span><strong id="controller-count">0</strong></div>
+            <div><span>Performance</span><strong id="performance-tier">normal</strong></div>
+            <div><span>Volume</span><strong id="volume-value">58</strong></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <span class="kicker">Flow</span>
+          <h2 id="flow-title">focus</h2>
+          <p id="flow-subtitle">Deep Work</p>
+          <div class="row">
+            <button data-action="set_flow_state" data-flow-state="focus">Focus</button>
+            <button data-action="set_flow_state" data-flow-state="flow">Flow</button>
+            <button data-action="set_flow_state" data-flow-state="relax">Relax</button>
+            <button data-action="set_flow_state" data-flow-state="sleep">Sleep</button>
+          </div>
+          <div class="row" style="margin-top: 12px;">
+            <button data-action="prev_track" class="secondary">Prev</button>
+            <button data-action="toggle_play">Play/Pause</button>
+            <button data-action="next_track" class="secondary">Next</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <span class="kicker">Screen</span>
+          <h2 id="screen-task">No focus item</h2>
+          <p id="screen-timer">00:00 · idle</p>
+          <div class="row">
+            <button data-action="screen_start_pomodoro">Start</button>
+            <button data-action="screen_pause_pomodoro" class="secondary">Pause</button>
+            <button data-action="screen_reset_pomodoro" class="secondary">Reset</button>
+            <button data-action="screen_complete_current_task" class="secondary">Done</button>
+          </div>
+          <div class="metric">
+            <div><span>Next task</span><strong id="next-task">None</strong></div>
+            <div><span>Done today</span><strong id="done-count">0</strong></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <span class="kicker">Debug</span>
+          <h2>Session</h2>
+          <pre id="session-view">{}</pre>
+          <p class="hint">最近响应</p>
+          <pre class="log" id="response-view">{}</pre>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const state = {
+        baseUrl: localStorage.getItem("portable-demo-base-url") || `${location.origin}/api/v1/system`,
+        apiKey: localStorage.getItem("portable-demo-api-key") || "",
+        sessionId: localStorage.getItem("portable-demo-session-id") || "",
+        sessionToken: localStorage.getItem("portable-demo-session-token") || "",
+        bootstrap: null,
+        lastResponse: null,
+      };
+
+      const elements = {
+        baseUrl: document.getElementById("base-url"),
+        apiKey: document.getElementById("api-key"),
+        pairButton: document.getElementById("pair-button"),
+        bootstrapButton: document.getElementById("bootstrap-button"),
+        disconnectButton: document.getElementById("disconnect-button"),
+        statusTitle: document.getElementById("status-title"),
+        statusMeta: document.getElementById("status-meta"),
+        sessionHint: document.getElementById("session-hint"),
+        modeTitle: document.getElementById("mode-title"),
+        trackCopy: document.getElementById("track-copy"),
+        lastSource: document.getElementById("last-source"),
+        controllerCount: document.getElementById("controller-count"),
+        performanceTier: document.getElementById("performance-tier"),
+        volumeValue: document.getElementById("volume-value"),
+        flowTitle: document.getElementById("flow-title"),
+        flowSubtitle: document.getElementById("flow-subtitle"),
+        screenTask: document.getElementById("screen-task"),
+        screenTimer: document.getElementById("screen-timer"),
+        nextTask: document.getElementById("next-task"),
+        doneCount: document.getElementById("done-count"),
+        sessionView: document.getElementById("session-view"),
+        responseView: document.getElementById("response-view"),
+      };
+
+      function formatPomodoro(remainingSec) {
+        const totalSeconds = Math.max(0, Number(remainingSec || 0));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      }
+
+      function authHeaders({ admin = false } = {}) {
+        if (admin && state.apiKey) {
+          return { "X-Tikpal-Key": state.apiKey };
+        }
+        if (state.sessionToken) {
+          return { Authorization: `Bearer ${state.sessionToken}` };
+        }
+        return {};
+      }
+
+      async function request(path = "", { method = "GET", body, admin = false } = {}) {
+        const response = await fetch(`${state.baseUrl}${path}`, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders({ admin }),
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+
+        const payload = await response.json();
+        state.lastResponse = payload;
+        renderDebug();
+
+        if (!response.ok) {
+          throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+        }
+
+        return payload;
+      }
+
+      function setStatus(title, meta) {
+        elements.statusTitle.textContent = title;
+        elements.statusMeta.textContent = meta;
+      }
+
+      function renderDebug() {
+        elements.sessionView.textContent = JSON.stringify(
+          {
+            sessionId: state.sessionId,
+            sessionToken: state.sessionToken ? `${state.sessionToken.slice(0, 10)}...` : "",
+            session: state.bootstrap?.session || null,
+          },
+          null,
+          2,
+        );
+        elements.responseView.textContent = JSON.stringify(state.lastResponse || {}, null, 2);
+      }
+
+      function renderBootstrap(bootstrap) {
+        state.bootstrap = bootstrap;
+        const snapshot = bootstrap.state || {};
+        const playback = snapshot.playback || {};
+        const flow = snapshot.flow || {};
+        const screen = snapshot.screen || {};
+
+        elements.modeTitle.textContent = snapshot.activeMode || "overview";
+        elements.trackCopy.textContent = `${playback.trackTitle || "No track"} · ${playback.artist || "Unknown artist"}`;
+        elements.lastSource.textContent = snapshot.lastSource || "unknown";
+        elements.controllerCount.textContent = String(snapshot.controller?.activeSessionCount || 0);
+        elements.performanceTier.textContent = snapshot.system?.performanceTier || bootstrap.capabilities?.performance?.tier || "normal";
+        elements.volumeValue.textContent = String(playback.volume ?? 0);
+        elements.flowTitle.textContent = flow.state || "focus";
+        elements.flowSubtitle.textContent = flow.subtitle || "Deep Work";
+        elements.screenTask.textContent = screen.currentTask || "No focus item";
+        elements.screenTimer.textContent = `${formatPomodoro(screen.pomodoroRemainingSec)} · ${screen.pomodoroState || "idle"}`;
+        elements.nextTask.textContent = screen.nextTask || "None";
+        elements.doneCount.textContent = String(screen.completedPomodoros || 0);
+
+        if (bootstrap.session) {
+          setStatus("connected", `${bootstrap.session.name} · ${bootstrap.session.role}`);
+          elements.sessionHint.textContent = `session expires at ${bootstrap.session.expiresAt}`;
+        } else {
+          setStatus("viewer", "anonymous read-only");
+          elements.sessionHint.textContent = "未建立 controller session，只能读状态。";
+        }
+        renderDebug();
+      }
+
+      async function bootstrap() {
+        try {
+          setStatus("loading", "bootstrap");
+          const payload = await request("/portable/bootstrap");
+          renderBootstrap(payload);
+        } catch (error) {
+          setStatus("error", error.message);
+        }
+      }
+
+      async function pair() {
+        try {
+          setStatus("pairing", "creating session");
+          const session = await request("/controller-sessions", {
+            method: "POST",
+            admin: true,
+            body: {
+              deviceId: "tikpal-portable-demo",
+              name: "Portable Demo",
+              role: "controller",
+              capabilities: ["mode_switch", "playback", "flow_control", "screen_control"],
+            },
+          });
+          state.sessionId = session.id;
+          state.sessionToken = session.token;
+          localStorage.setItem("portable-demo-session-id", session.id);
+          localStorage.setItem("portable-demo-session-token", session.token);
+          await bootstrap();
+        } catch (error) {
+          setStatus("error", error.message);
+        }
+      }
+
+      async function disconnect() {
+        if (state.sessionId) {
+          try {
+            await request(`/controller-sessions/${state.sessionId}`, {
+              method: "DELETE",
+            });
+          } catch {
+            // local cleanup anyway
+          }
+        }
+        state.sessionId = "";
+        state.sessionToken = "";
+        state.bootstrap = null;
+        localStorage.removeItem("portable-demo-session-id");
+        localStorage.removeItem("portable-demo-session-token");
+        renderDebug();
+        setStatus("idle", "session cleared");
+      }
+
+      async function sendAction(type, payload = {}) {
+        try {
+          setStatus("sending", type);
+          await request("/actions", {
+            method: "POST",
+            body: {
+              type,
+              payload,
+              source: "portable_controller",
+              requestId: `demo_${type}_${Date.now()}`,
+              timestamp: new Date().toISOString(),
+            },
+          });
+          await bootstrap();
+        } catch (error) {
+          setStatus("error", error.message);
+        }
+      }
+
+      elements.baseUrl.value = state.baseUrl;
+      elements.apiKey.value = state.apiKey;
+
+      elements.baseUrl.addEventListener("change", (event) => {
+        state.baseUrl = event.target.value.trim().replace(/\/$/, "");
+        localStorage.setItem("portable-demo-base-url", state.baseUrl);
+      });
+
+      elements.apiKey.addEventListener("change", (event) => {
+        state.apiKey = event.target.value.trim();
+        localStorage.setItem("portable-demo-api-key", state.apiKey);
+      });
+
+      elements.pairButton.addEventListener("click", pair);
+      elements.bootstrapButton.addEventListener("click", bootstrap);
+      elements.disconnectButton.addEventListener("click", disconnect);
+
+      document.querySelectorAll("[data-action]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const type = button.dataset.action;
+          if (type === "set_mode") {
+            sendAction(type, { mode: button.dataset.mode });
+            return;
+          }
+          if (type === "set_flow_state") {
+            sendAction(type, { state: button.dataset.flowState });
+            return;
+          }
+          if (type === "screen_start_pomodoro") {
+            sendAction(type, { durationSec: 1500 });
+            return;
+          }
+          sendAction(type, {});
+        });
+      });
+
+      bootstrap();
+      setInterval(() => {
+        if (document.visibilityState === "visible") {
+          bootstrap();
+        }
+      }, 1000);
+    </script>
+  </body>
+</html>

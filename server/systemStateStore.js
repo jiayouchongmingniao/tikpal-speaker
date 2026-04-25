@@ -3,6 +3,7 @@ const FLOW_ORDER = ["focus", "flow", "relax", "sleep"];
 const MODE_TRANSITION_MS = 280;
 const FLOW_TRANSITION_MS = 220;
 const ROLE_ORDER = ["viewer", "controller", "operator", "admin"];
+const MAX_RUNTIME_LOG_ENTRIES = 200;
 const DEFAULT_SESSION_TTL_SEC = 24 * 60 * 60;
 const MAX_SESSION_TTL_SEC = 7 * 24 * 60 * 60;
 const DEFAULT_PAIRING_TTL_SEC = 5 * 60;
@@ -32,6 +33,8 @@ const ACTION_ROLE_REQUIREMENTS = {
   screen_reset_pomodoro: "controller",
   screen_complete_current_task: "controller",
   screen_set_focus_item: "controller",
+  runtime_set_performance_tier: "operator",
+  runtime_report_performance: "operator",
   ota_check: "admin",
   ota_apply: "admin",
   ota_rollback: "admin",
@@ -106,6 +109,60 @@ function createRejectedError(code, message) {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+function summarizeRuntimeState(state) {
+  return {
+    activeMode: state.activeMode ?? null,
+    focusedPanel: state.focusedPanel ?? null,
+    overlay: state.overlay?.state ?? (state.overlay?.visible ? "controls" : "hidden"),
+    playbackState: state.playback?.state ?? null,
+    flowState: state.flow?.state ?? null,
+    pomodoroState: state.screen?.pomodoroState ?? null,
+    screenTask: state.screen?.currentTask ?? null,
+    performanceTier: state.system?.performanceTier ?? null,
+    avgFps: state.system?.performance?.avgFps ?? null,
+    otaStatus: state.system?.otaStatus ?? null,
+    lastSource: state.lastSource ?? null,
+  };
+}
+
+function didRuntimeStateChange(previousState, nextState) {
+  const previousSummary = summarizeRuntimeState(previousState);
+  const nextSummary = summarizeRuntimeState(nextState);
+  return Object.keys(previousSummary).some((key) => previousSummary[key] !== nextSummary[key]);
+}
+
+function summarizeActionPayload(type, payload = {}) {
+  if (type === "set_mode") {
+    return { mode: payload.mode ?? null };
+  }
+
+  if (type === "focus_panel") {
+    return { panel: payload.panel ?? null };
+  }
+
+  if (type === "set_flow_state") {
+    return { state: payload.state ?? null };
+  }
+
+  if (type === "set_volume") {
+    return { volume: payload.volume ?? null };
+  }
+
+  if (type === "screen_start_pomodoro") {
+    return { durationSec: payload.durationSec ?? null };
+  }
+
+  if (type === "screen_set_focus_item") {
+    return { title: payload.title ?? null };
+  }
+
+  if (type === "ota_check" || type === "ota_apply") {
+    return { targetVersion: payload.targetVersion ?? null };
+  }
+
+  return Object.keys(payload).length ? payload : null;
 }
 
 function createInitialState() {
@@ -193,6 +250,32 @@ function createInitialState() {
       version: process.env.npm_package_version ?? "0.1.0",
       otaStatus: "idle",
       performanceTier: "normal",
+      ota: {
+        currentVersion: process.env.npm_package_version ?? "0.1.0",
+        previousVersion: null,
+        targetVersion: null,
+        updateAvailable: false,
+        canRollback: false,
+        releaseRoot: "/opt/tikpal/app/releases",
+        currentPath: "/opt/tikpal/app/current",
+        previousPath: "/opt/tikpal/app/previous",
+        restartRequired: false,
+        lastAppliedAt: null,
+        lastRestartedAt: null,
+        lastHealthCheckAt: null,
+        lastRolledBackAt: null,
+        lastCheckedAt: null,
+        lastErrorCode: null,
+        lastOperation: null,
+      },
+      performance: {
+        avgFps: 60,
+        temperatureC: null,
+        interactionLatencyMs: null,
+        memoryUsageMb: null,
+        lastDegradeReason: null,
+        updatedAt: nowIso(),
+      },
     },
     lastSource: "system",
     lastUpdatedAt: nowIso(),
@@ -307,6 +390,33 @@ export function createSystemStateStore() {
   const sessions = new Map();
   const sessionIdsByToken = new Map();
   const pairingCodes = new Map();
+  const actionLogs = [];
+  const stateTransitionLogs = [];
+
+  function appendLog(buffer, entry) {
+    buffer.push(entry);
+    if (buffer.length > MAX_RUNTIME_LOG_ENTRIES) {
+      buffer.splice(0, buffer.length - MAX_RUNTIME_LOG_ENTRIES);
+    }
+  }
+
+  function recordActionLog(entry) {
+    appendLog(actionLogs, entry);
+  }
+
+  function recordStateTransition(source, reasonAction, previousState, nextState) {
+    if (!didRuntimeStateChange(previousState, nextState)) {
+      return;
+    }
+
+    appendLog(stateTransitionLogs, {
+      timestamp: nowIso(),
+      source,
+      reasonAction: reasonAction ?? null,
+      from: summarizeRuntimeState(previousState),
+      to: summarizeRuntimeState(nextState),
+    });
+  }
 
   function syncControllerCount() {
     if ((state.controller?.activeSessionCount ?? 0) === sessions.size) {
@@ -403,7 +513,8 @@ export function createSystemStateStore() {
     return state;
   }
 
-  function updateState(nextState, source = state.lastSource) {
+  function updateState(nextState, source = state.lastSource, reasonAction = null) {
+    const previousState = state;
     state = {
       ...nextState,
       controller: {
@@ -413,10 +524,11 @@ export function createSystemStateStore() {
       lastSource: source,
       lastUpdatedAt: nowIso(),
     };
+    recordStateTransition(source, reasonAction, previousState, state);
     return state;
   }
 
-  function setMode(mode, source) {
+  function setMode(mode, source, reasonAction = "set_mode") {
     const liveState = getNormalizedState();
     if (mode !== "overview" && !MODE_ORDER.includes(mode)) {
       throw createRejectedError("INVALID_MODE", `Unsupported mode: ${mode}`);
@@ -442,10 +554,11 @@ export function createSystemStateStore() {
         },
       },
       source,
+      reasonAction,
     );
   }
 
-  function focusPanel(panel, source) {
+  function focusPanel(panel, source, reasonAction = "focus_panel") {
     const liveState = getNormalizedState();
     if (!MODE_ORDER.includes(panel)) {
       throw createRejectedError("INVALID_PANEL", `Unsupported overview panel: ${panel}`);
@@ -462,6 +575,7 @@ export function createSystemStateStore() {
         focusedPanel: panel,
       },
       source,
+      reasonAction,
     );
   }
 
@@ -542,6 +656,7 @@ export function createSystemStateStore() {
         flow: nextFlow,
       },
       source,
+      "patch_flow_state",
     );
 
     return toFlowSnapshot(state);
@@ -562,6 +677,7 @@ export function createSystemStateStore() {
         },
       },
       source,
+      `patch_integration_${name}`,
     );
   }
 
@@ -603,267 +719,521 @@ export function createSystemStateStore() {
 
   function runAction(type, payload = {}, source = "remote-client") {
     const liveState = getNormalizedState();
+    const startedAtMs = Date.now();
+    const timestamp = nowIso();
 
-    if (liveState.system.otaStatus === "applying" && !type.startsWith("ota_")) {
-      const error = new Error("OTA is in progress");
-      error.code = "OTA_IN_PROGRESS";
+    function finalize(snapshot) {
+      recordActionLog({
+        timestamp,
+        source,
+        actionType: type,
+        payloadSummary: summarizeActionPayload(type, payload),
+        result: didRuntimeStateChange(liveState, snapshot) ? "applied" : "ignored",
+        errorCode: null,
+        durationMs: Date.now() - startedAtMs,
+      });
+      return snapshot;
+    }
+
+    try {
+      if (liveState.system.otaStatus === "applying" && !type.startsWith("ota_")) {
+        const error = new Error("OTA is in progress");
+        error.code = "OTA_IN_PROGRESS";
+        throw error;
+      }
+
+      if (
+        liveState.transition.status !== "idle" &&
+        ["set_mode", "return_overview", "set_flow_state", "next_mode", "prev_mode"].includes(type)
+      ) {
+        return finalize(liveState);
+      }
+
+      if (type === "set_mode") {
+        return finalize(setMode(payload.mode ?? "overview", source, "set_mode"));
+      }
+
+      if (type === "return_overview") {
+        return finalize(setMode("overview", source, "return_overview"));
+      }
+
+      if (type === "focus_panel") {
+        return finalize(focusPanel(payload.panel ?? liveState.focusedPanel ?? "listen", source, "focus_panel"));
+      }
+
+      if (type === "next_mode") {
+        return finalize(setMode(getAdjacentMode(liveState.activeMode, 1), source, "next_mode"));
+      }
+
+      if (type === "prev_mode") {
+        return finalize(setMode(getAdjacentMode(liveState.activeMode, -1), source, "prev_mode"));
+      }
+
+      if (type === "show_controls") {
+        if (liveState.overlay.visible) {
+          return finalize(liveState);
+        }
+
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              overlay: {
+                state: "controls",
+                reason: payload.reason ?? "user",
+                visible: true,
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "hide_controls") {
+        if (!liveState.overlay.visible) {
+          return finalize(liveState);
+        }
+
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              overlay: {
+                state: "hidden",
+                reason: null,
+                visible: false,
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "toggle_play") {
+        const nextPlaybackState = liveState.playback.state === "play" ? "pause" : "play";
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              playback: {
+                ...liveState.playback,
+                state: nextPlaybackState,
+              },
+              flow: {
+                ...liveState.flow,
+                audioMetrics: {
+                  ...liveState.flow.audioMetrics,
+                  isPlaying: nextPlaybackState === "play",
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "prev_track" || type === "next_track") {
+        const step = type === "next_track" ? 1 : -1;
+        const nextIndex = (Number(liveState.playback.currentTrackIndex ?? 0) + step + MOCK_QUEUE.length) % MOCK_QUEUE.length;
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              playback: {
+                ...liveState.playback,
+                currentTrackIndex: nextIndex,
+                queueLength: MOCK_QUEUE.length,
+                ...getQueueTrack(nextIndex),
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "set_volume") {
+        const volume = clamp(Number(payload.volume ?? liveState.playback.volume), 0, 100);
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              playback: {
+                ...liveState.playback,
+                volume,
+              },
+              flow: {
+                ...liveState.flow,
+                audioMetrics: {
+                  ...liveState.flow.audioMetrics,
+                  volumeNormalized: volume / 100,
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "set_flow_state") {
+        if (!FLOW_ORDER.includes(payload.state)) {
+          throw createRejectedError("INVALID_FLOW_STATE", `Unsupported flow state: ${payload.state}`);
+        }
+
+        const nextFlowState = FLOW_ORDER.includes(payload.state) ? payload.state : liveState.flow.state;
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              activeMode: "flow",
+              focusedPanel: "flow",
+              transition: {
+                status: "animating",
+                from: liveState.activeMode,
+                to: "flow",
+                startedAt: nowIso(),
+                lockedUntil: Date.now() + FLOW_TRANSITION_MS,
+              },
+              flow: {
+                ...liveState.flow,
+                state: nextFlowState,
+                subtitle: deriveFlowSubtitle(nextFlowState),
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "screen_start_pomodoro") {
+        const durationSec = clamp(Number(payload.durationSec ?? liveState.screen.pomodoroDurationSec ?? 1500), 60, 7200);
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              activeMode: "screen",
+              focusedPanel: "screen",
+              screen: {
+                ...liveState.screen,
+                pomodoroState: "running",
+                pomodoroFocusTask: liveState.screen.currentTask,
+                pomodoroDurationSec: durationSec,
+                pomodoroRemainingSec: durationSec,
+                timerUpdatedAt: nowIso(),
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "screen_resume_pomodoro") {
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              screen: {
+                ...liveState.screen,
+                pomodoroState: "running",
+                timerUpdatedAt: nowIso(),
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "screen_pause_pomodoro") {
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              screen: {
+                ...liveState.screen,
+                pomodoroState: "paused",
+                timerUpdatedAt: nowIso(),
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "screen_reset_pomodoro") {
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              screen: {
+                ...liveState.screen,
+                pomodoroState: "idle",
+                pomodoroFocusTask: liveState.screen.currentTask,
+                pomodoroRemainingSec: liveState.screen.pomodoroDurationSec,
+                timerUpdatedAt: nowIso(),
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "screen_complete_current_task") {
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              screen: {
+                ...liveState.screen,
+                currentTask: liveState.screen.nextTask,
+                nextTask: "Plan next session",
+                pomodoroFocusTask: liveState.screen.nextTask,
+                completedPomodoros: Number(liveState.screen.completedPomodoros ?? 0) + 1,
+                pomodoroState: "idle",
+                pomodoroRemainingSec: liveState.screen.pomodoroDurationSec,
+                timerUpdatedAt: nowIso(),
+                todaySummary: {
+                  ...liveState.screen.todaySummary,
+                  remainingTasks: Math.max(0, liveState.screen.todaySummary.remainingTasks - 1),
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "screen_set_focus_item") {
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              activeMode: "screen",
+              focusedPanel: "screen",
+              screen: {
+                ...liveState.screen,
+                currentTask: payload.title ?? liveState.screen.currentTask,
+                pomodoroFocusTask: payload.title ?? liveState.screen.currentTask,
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "runtime_set_performance_tier") {
+        const nextTier = ["normal", "reduced", "safe"].includes(payload.tier) ? payload.tier : liveState.system.performanceTier;
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              system: {
+                ...liveState.system,
+                performanceTier: nextTier,
+                performance: {
+                  ...liveState.system.performance,
+                  lastDegradeReason: payload.reason ?? "manual",
+                  updatedAt: nowIso(),
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "runtime_report_performance") {
+        const avgFps = payload.avgFps ?? liveState.system.performance?.avgFps ?? null;
+        const nextTier =
+          payload.tier ??
+          (typeof avgFps === "number"
+            ? avgFps < 24
+              ? "safe"
+              : avgFps < 30
+                ? "reduced"
+                : "normal"
+            : liveState.system.performanceTier);
+
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              system: {
+                ...liveState.system,
+                performanceTier: nextTier,
+                performance: {
+                  ...liveState.system.performance,
+                  avgFps,
+                  temperatureC: payload.temperatureC ?? liveState.system.performance?.temperatureC ?? null,
+                  interactionLatencyMs: payload.interactionLatencyMs ?? liveState.system.performance?.interactionLatencyMs ?? null,
+                  memoryUsageMb: payload.memoryUsageMb ?? liveState.system.performance?.memoryUsageMb ?? null,
+                  lastDegradeReason: payload.reason ?? liveState.system.performance?.lastDegradeReason ?? null,
+                  updatedAt: nowIso(),
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "ota_check") {
+        const currentVersion = liveState.system.ota?.currentVersion ?? liveState.system.version;
+        const targetVersion = payload.targetVersion ?? "0.1.1";
+        const updateAvailable = currentVersion !== targetVersion;
+
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              system: {
+                ...liveState.system,
+                otaStatus: updateAvailable ? "available" : "idle",
+                ota: {
+                  ...liveState.system.ota,
+                  currentVersion,
+                  targetVersion,
+                  updateAvailable,
+                  canRollback: Boolean(liveState.system.ota?.canRollback),
+                  restartRequired: false,
+                  lastCheckedAt: nowIso(),
+                  lastErrorCode: null,
+                  lastOperation: {
+                    type,
+                    status: "completed",
+                    phases: ["checking", updateAvailable ? "available" : "idle"],
+                    updatedAt: nowIso(),
+                  },
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "ota_apply") {
+        if (["applying", "restarting", "rollback"].includes(liveState.system.otaStatus)) {
+          throw createRejectedError("OTA_IN_PROGRESS", "OTA is already applying or rolling back");
+        }
+
+        const currentVersion = liveState.system.ota?.currentVersion ?? liveState.system.version;
+        const targetVersion = payload.targetVersion ?? liveState.system.ota?.targetVersion;
+        if (!targetVersion || targetVersion === currentVersion) {
+          throw createRejectedError("NO_UPDATE_AVAILABLE", "No OTA update is available to apply");
+        }
+
+        const appliedAt = nowIso();
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              system: {
+                ...liveState.system,
+                version: targetVersion,
+                otaStatus: "idle",
+                ota: {
+                  ...liveState.system.ota,
+                  currentVersion: targetVersion,
+                  previousVersion: currentVersion,
+                  targetVersion,
+                  updateAvailable: false,
+                  canRollback: true,
+                  restartRequired: false,
+                  lastAppliedAt: appliedAt,
+                  lastRestartedAt: appliedAt,
+                  lastHealthCheckAt: appliedAt,
+                  lastErrorCode: null,
+                  lastOperation: {
+                    type,
+                    status: "completed",
+                    phases: ["downloading", "verifying", "applying", "restarting", "health_check", "completed"],
+                    releasePath: `${liveState.system.ota?.releaseRoot ?? "/opt/tikpal/app/releases"}/${targetVersion}`,
+                    updatedAt: appliedAt,
+                  },
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "ota_rollback") {
+        if (["applying", "restarting", "rollback"].includes(liveState.system.otaStatus)) {
+          throw createRejectedError("OTA_IN_PROGRESS", "OTA is already applying or rolling back");
+        }
+
+        const currentVersion = liveState.system.ota?.currentVersion ?? liveState.system.version;
+        const previousVersion = payload.targetVersion ?? liveState.system.ota?.previousVersion;
+        if (!liveState.system.ota?.canRollback || !previousVersion) {
+          throw createRejectedError("ROLLBACK_UNAVAILABLE", "No OTA rollback target is available");
+        }
+
+        const rolledBackAt = nowIso();
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              system: {
+                ...liveState.system,
+                version: previousVersion,
+                otaStatus: "idle",
+                ota: {
+                  ...liveState.system.ota,
+                  currentVersion: previousVersion,
+                  previousVersion: currentVersion,
+                  targetVersion: null,
+                  updateAvailable: false,
+                  canRollback: false,
+                  restartRequired: false,
+                  lastRolledBackAt: rolledBackAt,
+                  lastRestartedAt: rolledBackAt,
+                  lastHealthCheckAt: rolledBackAt,
+                  lastErrorCode: null,
+                  lastOperation: {
+                    type,
+                    status: "completed",
+                    phases: ["rollback", "restarting", "health_check", "completed"],
+                    releasePath: `${liveState.system.ota?.releaseRoot ?? "/opt/tikpal/app/releases"}/${previousVersion}`,
+                    updatedAt: rolledBackAt,
+                  },
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      throw createRejectedError("UNKNOWN_ACTION", `Unsupported action: ${type}`);
+    } catch (error) {
+      recordActionLog({
+        timestamp,
+        source,
+        actionType: type,
+        payloadSummary: summarizeActionPayload(type, payload),
+        result: "rejected",
+        errorCode: error.code ?? "UNKNOWN_ERROR",
+        durationMs: Date.now() - startedAtMs,
+      });
       throw error;
     }
-
-    if (
-      liveState.transition.status !== "idle" &&
-      ["set_mode", "return_overview", "set_flow_state", "next_mode", "prev_mode"].includes(type)
-    ) {
-      return liveState;
-    }
-
-    if (type === "set_mode") {
-      return setMode(payload.mode ?? "overview", source);
-    }
-
-    if (type === "return_overview") {
-      return setMode("overview", source);
-    }
-
-    if (type === "focus_panel") {
-      return focusPanel(payload.panel ?? liveState.focusedPanel ?? "listen", source);
-    }
-
-    if (type === "next_mode") {
-      return setMode(getAdjacentMode(liveState.activeMode, 1), source);
-    }
-
-    if (type === "prev_mode") {
-      return setMode(getAdjacentMode(liveState.activeMode, -1), source);
-    }
-
-    if (type === "show_controls") {
-      if (liveState.overlay.visible) {
-        return liveState;
-      }
-
-      return updateState(
-        {
-          ...liveState,
-          overlay: {
-            state: "controls",
-            reason: payload.reason ?? "user",
-            visible: true,
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "hide_controls") {
-      if (!liveState.overlay.visible) {
-        return liveState;
-      }
-
-      return updateState(
-        {
-          ...liveState,
-          overlay: {
-            state: "hidden",
-            reason: null,
-            visible: false,
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "toggle_play") {
-      const nextPlaybackState = liveState.playback.state === "play" ? "pause" : "play";
-      return updateState(
-        {
-          ...liveState,
-          playback: {
-            ...liveState.playback,
-            state: nextPlaybackState,
-          },
-          flow: {
-            ...liveState.flow,
-            audioMetrics: {
-              ...liveState.flow.audioMetrics,
-              isPlaying: nextPlaybackState === "play",
-            },
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "prev_track" || type === "next_track") {
-      const step = type === "next_track" ? 1 : -1;
-      const nextIndex = (Number(liveState.playback.currentTrackIndex ?? 0) + step + MOCK_QUEUE.length) % MOCK_QUEUE.length;
-      return updateState(
-        {
-          ...liveState,
-          playback: {
-            ...liveState.playback,
-            currentTrackIndex: nextIndex,
-            queueLength: MOCK_QUEUE.length,
-            ...getQueueTrack(nextIndex),
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "set_volume") {
-      const volume = clamp(Number(payload.volume ?? liveState.playback.volume), 0, 100);
-      return updateState(
-        {
-          ...liveState,
-          playback: {
-            ...liveState.playback,
-            volume,
-          },
-          flow: {
-            ...liveState.flow,
-            audioMetrics: {
-              ...liveState.flow.audioMetrics,
-              volumeNormalized: volume / 100,
-            },
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "set_flow_state") {
-      if (!FLOW_ORDER.includes(payload.state)) {
-        throw createRejectedError("INVALID_FLOW_STATE", `Unsupported flow state: ${payload.state}`);
-      }
-
-      const nextFlowState = FLOW_ORDER.includes(payload.state) ? payload.state : liveState.flow.state;
-      return updateState(
-        {
-          ...liveState,
-          activeMode: "flow",
-          focusedPanel: "flow",
-          transition: {
-            status: "animating",
-            from: liveState.activeMode,
-            to: "flow",
-            startedAt: nowIso(),
-            lockedUntil: Date.now() + FLOW_TRANSITION_MS,
-          },
-          flow: {
-            ...liveState.flow,
-            state: nextFlowState,
-            subtitle: deriveFlowSubtitle(nextFlowState),
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "screen_start_pomodoro") {
-      const durationSec = clamp(Number(payload.durationSec ?? liveState.screen.pomodoroDurationSec ?? 1500), 60, 7200);
-      return updateState(
-        {
-          ...liveState,
-          activeMode: "screen",
-          focusedPanel: "screen",
-          screen: {
-            ...liveState.screen,
-            pomodoroState: "running",
-            pomodoroFocusTask: liveState.screen.currentTask,
-            pomodoroDurationSec: durationSec,
-            pomodoroRemainingSec: durationSec,
-            timerUpdatedAt: nowIso(),
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "screen_resume_pomodoro") {
-      return updateState(
-        {
-          ...liveState,
-          screen: {
-            ...liveState.screen,
-            pomodoroState: "running",
-            timerUpdatedAt: nowIso(),
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "screen_pause_pomodoro") {
-      return updateState(
-        {
-          ...liveState,
-          screen: {
-            ...liveState.screen,
-            pomodoroState: "paused",
-            timerUpdatedAt: nowIso(),
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "screen_reset_pomodoro") {
-      return updateState(
-        {
-          ...liveState,
-          screen: {
-            ...liveState.screen,
-            pomodoroState: "idle",
-            pomodoroFocusTask: liveState.screen.currentTask,
-            pomodoroRemainingSec: liveState.screen.pomodoroDurationSec,
-            timerUpdatedAt: nowIso(),
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "screen_complete_current_task") {
-      return updateState(
-        {
-          ...liveState,
-          screen: {
-            ...liveState.screen,
-            currentTask: liveState.screen.nextTask,
-            nextTask: "Plan next session",
-            pomodoroFocusTask: liveState.screen.nextTask,
-            completedPomodoros: Number(liveState.screen.completedPomodoros ?? 0) + 1,
-            pomodoroState: "idle",
-            pomodoroRemainingSec: liveState.screen.pomodoroDurationSec,
-            timerUpdatedAt: nowIso(),
-            todaySummary: {
-              ...liveState.screen.todaySummary,
-              remainingTasks: Math.max(0, liveState.screen.todaySummary.remainingTasks - 1),
-            },
-          },
-        },
-        source,
-      );
-    }
-
-    if (type === "screen_set_focus_item") {
-      return updateState(
-        {
-          ...liveState,
-          activeMode: "screen",
-          focusedPanel: "screen",
-          screen: {
-            ...liveState.screen,
-            currentTask: payload.title ?? liveState.screen.currentTask,
-            pomodoroFocusTask: payload.title ?? liveState.screen.currentTask,
-          },
-        },
-        source,
-      );
-    }
-
-    throw createRejectedError("UNKNOWN_ACTION", `Unsupported action: ${type}`);
   }
 
   function createSession(payload = {}, source = "portable_controller") {
@@ -964,7 +1334,7 @@ export function createSystemStateStore() {
   function deleteSession(id) {
     const deleted = removeSession(id);
     if (deleted) {
-      updateState(state, "system");
+      updateState(state, "system", "delete_session");
     }
     return deleted;
   }
@@ -978,6 +1348,31 @@ export function createSystemStateStore() {
     getCapabilities,
     getRequiredRoleForAction,
     hasRequiredRole,
+    getRuntimeSummary() {
+      const liveState = getNormalizedState();
+      return {
+        ...summarizeRuntimeState(liveState),
+        controllerCount: liveState.controller?.activeSessionCount ?? 0,
+        playbackSource: liveState.playback?.source ?? null,
+        playbackVolume: liveState.playback?.volume ?? null,
+        screenSyncStale: Boolean(liveState.screen?.sync?.stale),
+        avgFps: liveState.system?.performance?.avgFps ?? null,
+        temperatureC: liveState.system?.performance?.temperatureC ?? null,
+        interactionLatencyMs: liveState.system?.performance?.interactionLatencyMs ?? null,
+        memoryUsageMb: liveState.system?.performance?.memoryUsageMb ?? null,
+        lastDegradeReason: liveState.system?.performance?.lastDegradeReason ?? null,
+        ota: liveState.system?.ota ?? null,
+        lastUpdatedAt: liveState.lastUpdatedAt ?? null,
+      };
+    },
+    getActionLogs(limit = 50) {
+      const normalizedLimit = clamp(Number(limit ?? 50), 1, MAX_RUNTIME_LOG_ENTRIES);
+      return actionLogs.slice(-normalizedLimit).reverse();
+    },
+    getStateTransitionLogs(limit = 50) {
+      const normalizedLimit = clamp(Number(limit ?? 50), 1, MAX_RUNTIME_LOG_ENTRIES);
+      return stateTransitionLogs.slice(-normalizedLimit).reverse();
+    },
     getFlowSnapshot() {
       return toFlowSnapshot(state);
     },
