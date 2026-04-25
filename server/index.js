@@ -221,6 +221,13 @@ function createSystemApiDescriptor() {
       state: "/api/v1/system/state",
       capabilities: "/api/v1/system/capabilities",
       screenContext: "/api/v1/system/screen/context",
+      runtimeSummary: "/api/v1/system/runtime/summary",
+      runtimeActionLog: "/api/v1/system/runtime/action-log",
+      runtimeStateTransitions: "/api/v1/system/runtime/state-transitions",
+      otaStatus: "/api/v1/system/ota/status",
+      otaCheck: "/api/v1/system/ota/check",
+      otaApply: "/api/v1/system/ota/apply",
+      otaRollback: "/api/v1/system/ota/rollback",
       actions: "/api/v1/system/actions",
       calendarIntegration: "/api/v1/system/integrations/calendar",
       calendarFixtures: "/api/v1/system/integrations/calendar/fixtures",
@@ -307,6 +314,119 @@ export function createAppServer({
         }
 
         sendJson(response, 200, createScreenContext(store.getSnapshot()));
+        return;
+      }
+
+      if (path === "/api/v1/system/runtime/summary" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "operator");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, store.getRuntimeSummary());
+        return;
+      }
+
+      if (path === "/api/v1/system/runtime/action-log" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "operator");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, {
+          items: store.getActionLogs(url.searchParams.get("limit")),
+        });
+        return;
+      }
+
+      if (path === "/api/v1/system/runtime/state-transitions" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "operator");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, {
+          items: store.getStateTransitionLogs(url.searchParams.get("limit")),
+        });
+        return;
+      }
+
+      if (path === "/api/v1/system/ota/status" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "viewer");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, store.getSnapshot().system?.ota ?? {});
+        return;
+      }
+
+      if (path === "/api/v1/system/ota/check" && request.method === "POST") {
+        const auth = authorizeRequest(request, response, store, apiKey, "admin");
+        if (!auth) {
+          return;
+        }
+
+        const body = await parseBody(request);
+        actionBody = { ...body, type: "ota_check" };
+        const previousState = structuredClone(store.getSnapshot());
+        const snapshot = store.runAction("ota_check", body, body.source ?? "admin_client");
+        sendActionResult(
+          response,
+          previousState,
+          snapshot,
+          {
+            type: "ota_check",
+            requestId: body.requestId ?? null,
+            timestamp: body.timestamp ?? null,
+          },
+        );
+        return;
+      }
+
+      if (path === "/api/v1/system/ota/apply" && request.method === "POST") {
+        const auth = authorizeRequest(request, response, store, apiKey, "admin");
+        if (!auth) {
+          return;
+        }
+
+        const body = await parseBody(request);
+        actionBody = { ...body, type: "ota_apply" };
+        const previousState = structuredClone(store.getSnapshot());
+        const snapshot = store.runAction("ota_apply", body, body.source ?? "admin_client");
+        sendActionResult(
+          response,
+          previousState,
+          snapshot,
+          {
+            type: "ota_apply",
+            requestId: body.requestId ?? null,
+            timestamp: body.timestamp ?? null,
+          },
+        );
+        return;
+      }
+
+      if (path === "/api/v1/system/ota/rollback" && request.method === "POST") {
+        const auth = authorizeRequest(request, response, store, apiKey, "admin");
+        if (!auth) {
+          return;
+        }
+
+        const body = await parseBody(request);
+        actionBody = { ...body, type: "ota_rollback" };
+        const previousState = structuredClone(store.getSnapshot());
+        const snapshot = store.runAction("ota_rollback", body, body.source ?? "admin_client");
+        sendActionResult(
+          response,
+          previousState,
+          snapshot,
+          {
+            type: "ota_rollback",
+            requestId: body.requestId ?? null,
+            timestamp: body.timestamp ?? null,
+          },
+        );
         return;
       }
 
@@ -657,6 +777,8 @@ export function createAppServer({
         code === "INVALID_MODE" ||
         code === "INVALID_PANEL" ||
         code === "INVALID_FLOW_STATE" ||
+        code === "NO_UPDATE_AVAILABLE" ||
+        code === "ROLLBACK_UNAVAILABLE" ||
         code === "UNKNOWN_ACTION" ||
         code === "PAIRING_CODE_INVALID" ||
         code === "INVALID_CONNECTOR" ||

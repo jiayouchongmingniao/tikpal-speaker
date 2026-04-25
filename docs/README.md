@@ -33,6 +33,7 @@
 - [Actions 语义字典与状态转换表 v1](./04-api/actions-semantics-and-state-transitions-v1.md)
 - [API 认证与权限模型 v1](./04-api/api-authentication-and-authorization-v1.md)
 - [便携控制器（tikpal portable）交互与 API 对接规格 v1](./04-api/tikpal-portable-controller-integration-v1.md)
+- [tikpal portable REST API 对接手册 v1](./04-api/tikpal-portable-rest-api-integration-v1.md)
 
 ### 05 Platform
 

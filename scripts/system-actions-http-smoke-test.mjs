@@ -71,6 +71,8 @@ try {
     assert.equal(response.json.service, "tikpal-speaker-system-api");
     assert.equal(response.json.endpoints.bootstrap, "/api/v1/system/portable/bootstrap");
     assert.equal(response.json.endpoints.currentSession, "/api/v1/system/controller-sessions/current");
+    assert.equal(response.json.endpoints.otaApply, "/api/v1/system/ota/apply");
+    assert.equal(response.json.endpoints.otaRollback, "/api/v1/system/ota/rollback");
   });
 
   await test("applied response includes structured ActionResponse fields", async () => {
@@ -96,6 +98,133 @@ try {
     assert.equal(response.json.appliedAction.type, "focus_panel");
     assert.equal(response.json.appliedAction.requestId, requestId);
     assert.equal(response.json.appliedAction.timestamp, timestamp);
+  });
+
+  await test("runtime endpoints expose summary, action log, and state transitions", async () => {
+    const authHeaders = { "X-Tikpal-Key": API_KEY };
+    const runtimeSummaryResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/summary`, {
+      headers: authHeaders,
+    });
+    assert.equal(runtimeSummaryResponse.status, 200);
+    assert.equal(runtimeSummaryResponse.json.focusedPanel, "screen");
+    assert.equal(typeof runtimeSummaryResponse.json.activeMode, "string");
+
+    const actionLogResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/action-log?limit=5`, {
+      headers: authHeaders,
+    });
+    assert.equal(actionLogResponse.status, 200);
+    assert.equal(Array.isArray(actionLogResponse.json.items), true);
+    assert.equal(actionLogResponse.json.items[0].actionType, "focus_panel");
+    assert.equal(actionLogResponse.json.items[0].result, "applied");
+
+    const transitionsResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/state-transitions?limit=5`, {
+      headers: authHeaders,
+    });
+    assert.equal(transitionsResponse.status, 200);
+    assert.equal(Array.isArray(transitionsResponse.json.items), true);
+    assert.equal(transitionsResponse.json.items[0].reasonAction, "focus_panel");
+    assert.equal(transitionsResponse.json.items[0].to.focusedPanel, "screen");
+  });
+
+  await test("runtime performance actions update summary and logs", async () => {
+    const authHeaders = { "X-Tikpal-Key": API_KEY };
+
+    const setTierResponse = await postAction(
+      baseUrl,
+      {
+        type: "runtime_set_performance_tier",
+        payload: { tier: "reduced", reason: "manual" },
+        source: "api",
+        requestId: "runtime_set_perf_tier",
+      },
+      authHeaders,
+    );
+    assert.equal(setTierResponse.status, 200);
+    assert.equal(setTierResponse.json.state.system.performanceTier, "reduced");
+
+    const reportResponse = await postAction(
+      baseUrl,
+      {
+        type: "runtime_report_performance",
+        payload: { avgFps: 22, reason: "fps" },
+        source: "api",
+        requestId: "runtime_report_perf",
+      },
+      authHeaders,
+    );
+    assert.equal(reportResponse.status, 200);
+    assert.equal(reportResponse.json.state.system.performanceTier, "safe");
+
+    const runtimeSummaryResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/summary`, {
+      headers: authHeaders,
+    });
+    assert.equal(runtimeSummaryResponse.status, 200);
+    assert.equal(runtimeSummaryResponse.json.performanceTier, "safe");
+    assert.equal(runtimeSummaryResponse.json.avgFps, 22);
+    assert.equal(runtimeSummaryResponse.json.lastDegradeReason, "fps");
+  });
+
+  await test("ota check, apply, and rollback expose a verifiable update lifecycle", async () => {
+    const authHeaders = { "X-Tikpal-Key": API_KEY };
+
+    const statusBeforeResponse = await requestJson(`${baseUrl}/api/v1/system/ota/status`, {
+      headers: authHeaders,
+    });
+    assert.equal(statusBeforeResponse.status, 200);
+    assert.equal(statusBeforeResponse.json.currentVersion, "0.1.0");
+    assert.equal(statusBeforeResponse.json.canRollback, false);
+
+    const checkResponse = await requestJson(`${baseUrl}/api/v1/system/ota/check`, {
+      method: "POST",
+      headers: authHeaders,
+      body: {
+        targetVersion: "0.1.2",
+        requestId: "ota_check_available",
+      },
+    });
+    assert.equal(checkResponse.status, 200);
+    assert.equal(checkResponse.json.state.system.otaStatus, "available");
+    assert.equal(checkResponse.json.state.system.ota.targetVersion, "0.1.2");
+    assert.equal(checkResponse.json.state.system.ota.updateAvailable, true);
+
+    const applyResponse = await requestJson(`${baseUrl}/api/v1/system/ota/apply`, {
+      method: "POST",
+      headers: authHeaders,
+      body: {
+        requestId: "ota_apply_available",
+      },
+    });
+    assert.equal(applyResponse.status, 200);
+    assert.equal(applyResponse.json.state.system.version, "0.1.2");
+    assert.equal(applyResponse.json.state.system.ota.currentVersion, "0.1.2");
+    assert.equal(applyResponse.json.state.system.ota.previousVersion, "0.1.0");
+    assert.equal(applyResponse.json.state.system.ota.canRollback, true);
+    assert.deepEqual(applyResponse.json.state.system.ota.lastOperation.phases, [
+      "downloading",
+      "verifying",
+      "applying",
+      "restarting",
+      "health_check",
+      "completed",
+    ]);
+
+    const rollbackResponse = await requestJson(`${baseUrl}/api/v1/system/ota/rollback`, {
+      method: "POST",
+      headers: authHeaders,
+      body: {
+        requestId: "ota_rollback_available",
+      },
+    });
+    assert.equal(rollbackResponse.status, 200);
+    assert.equal(rollbackResponse.json.state.system.version, "0.1.0");
+    assert.equal(rollbackResponse.json.state.system.ota.currentVersion, "0.1.0");
+    assert.equal(rollbackResponse.json.state.system.ota.canRollback, false);
+    assert.deepEqual(rollbackResponse.json.state.system.ota.lastOperation.phases, [
+      "rollback",
+      "restarting",
+      "health_check",
+      "completed",
+    ]);
   });
 
   await test("controller session can read state and execute controller actions", async () => {
