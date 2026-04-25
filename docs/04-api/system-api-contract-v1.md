@@ -13,6 +13,10 @@
 - `POST /api/v1/system/actions`
 - `POST /api/v1/system/controller-sessions`
 - `GET /api/v1/system/screen/context`
+- `GET /api/v1/system/integrations`
+- `POST /api/v1/system/integrations/:provider/connect`
+- `POST /api/v1/system/integrations/:provider/refresh`
+- `DELETE /api/v1/system/integrations/:provider`
 - `GET /api/v1/system/ota/status`
 - `POST /api/v1/system/ota/check`
 - `POST /api/v1/system/ota/apply`

@@ -417,9 +417,9 @@ Last sync: 10:22
 
 ---
 
-## 15. REST API 建议
+## 15. REST API
 
-建议未来增加这些管理接口：
+当前第一版已经提供这些管理接口：
 
 - `GET /api/v1/system/integrations`
 - `POST /api/v1/system/integrations/calendar/connect`
@@ -432,6 +432,14 @@ Last sync: 10:22
 - 最低 `admin`
 
 普通 controller 不应有 connector 管理权限。
+
+### 响应约束
+
+- `connect` 请求可以提交服务端凭据字段
+- API 响应只返回 `connected / status / accountLabel / credentialRef`
+- 不返回 `accessToken`
+- 不返回 `refreshToken`
+- `disconnect` 会撤销服务层凭据引用，但保留最后一次有效 Screen 摘要，避免 Screen 立刻空白
 
 ---
 
