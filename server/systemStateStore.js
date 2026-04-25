@@ -39,6 +39,7 @@ const ACTION_ROLE_REQUIREMENTS = {
   ota_apply: "admin",
   ota_rollback: "admin",
 };
+const CONNECTOR_NAMES = ["calendar", "todoist"];
 const MOCK_QUEUE = [
   {
     trackTitle: "Low Light Corridor",
@@ -224,6 +225,8 @@ function createInitialState() {
         connected: false,
         status: "unconfigured",
         accountLabel: null,
+        credentialRef: null,
+        authUpdatedAt: null,
         lastSyncAt: null,
         lastErrorCode: null,
         lastErrorMessage: null,
@@ -235,6 +238,8 @@ function createInitialState() {
         connected: false,
         status: "unconfigured",
         accountLabel: null,
+        credentialRef: null,
+        authUpdatedAt: null,
         lastSyncAt: null,
         lastErrorCode: null,
         lastErrorMessage: null,
@@ -335,15 +340,18 @@ function deriveFlowSubtitle(flowState) {
 }
 
 function mergeConnectorState(currentConnector = {}, patch = {}) {
+  const valueOrCurrent = (key, fallback = null) => (Object.hasOwn(patch, key) ? patch[key] : currentConnector[key] ?? fallback);
   return {
     ...currentConnector,
     ...patch,
-    connected: patch.connected ?? currentConnector.connected ?? false,
-    status: patch.status ?? currentConnector.status ?? "idle",
-    accountLabel: patch.accountLabel ?? currentConnector.accountLabel ?? null,
-    lastSyncAt: patch.lastSyncAt ?? currentConnector.lastSyncAt ?? null,
-    lastErrorCode: patch.lastErrorCode ?? currentConnector.lastErrorCode ?? null,
-    lastErrorMessage: patch.lastErrorMessage ?? currentConnector.lastErrorMessage ?? null,
+    connected: valueOrCurrent("connected", false),
+    status: valueOrCurrent("status", "idle"),
+    accountLabel: valueOrCurrent("accountLabel"),
+    credentialRef: valueOrCurrent("credentialRef"),
+    authUpdatedAt: valueOrCurrent("authUpdatedAt"),
+    lastSyncAt: valueOrCurrent("lastSyncAt"),
+    lastErrorCode: valueOrCurrent("lastErrorCode"),
+    lastErrorMessage: valueOrCurrent("lastErrorMessage"),
   };
 }
 
@@ -390,6 +398,7 @@ export function createSystemStateStore() {
   const sessions = new Map();
   const sessionIdsByToken = new Map();
   const pairingCodes = new Map();
+  const connectorCredentials = new Map();
   const actionLogs = [];
   const stateTransitionLogs = [];
 
@@ -664,7 +673,7 @@ export function createSystemStateStore() {
 
   function patchIntegration(name, patch = {}, source = "system") {
     const liveState = getNormalizedState();
-    if (!["calendar", "todoist"].includes(name)) {
+    if (!CONNECTOR_NAMES.includes(name)) {
       throw createRejectedError("INVALID_CONNECTOR", `Unsupported connector: ${name}`);
     }
 
@@ -678,6 +687,68 @@ export function createSystemStateStore() {
       },
       source,
       `patch_integration_${name}`,
+    );
+  }
+
+  function getIntegrationStatuses() {
+    return structuredClone(getNormalizedState().integrations ?? {});
+  }
+
+  function hasIntegrationCredential(name) {
+    return connectorCredentials.has(name);
+  }
+
+  function bindIntegration(name, payload = {}, source = "admin_client") {
+    if (!CONNECTOR_NAMES.includes(name)) {
+      throw createRejectedError("INVALID_CONNECTOR", `Unsupported connector: ${name}`);
+    }
+
+    const authUpdatedAt = nowIso();
+    const credentialRef = `local:${name}:${payload.accountLabel ?? "default"}`;
+    connectorCredentials.set(name, {
+      provider: name,
+      accountLabel: payload.accountLabel ?? `${name}.local`,
+      accessToken: payload.accessToken ?? null,
+      refreshToken: payload.refreshToken ?? null,
+      tokenExpiresAt: payload.tokenExpiresAt ?? null,
+      metadata: payload.metadata ?? {},
+      createdAt: connectorCredentials.get(name)?.createdAt ?? authUpdatedAt,
+      updatedAt: authUpdatedAt,
+    });
+
+    return patchIntegration(
+      name,
+      {
+        connected: true,
+        status: payload.status ?? "idle",
+        accountLabel: payload.accountLabel ?? `${name}.local`,
+        credentialRef,
+        authUpdatedAt,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+      },
+      source,
+    );
+  }
+
+  function revokeIntegration(name, source = "admin_client") {
+    if (!CONNECTOR_NAMES.includes(name)) {
+      throw createRejectedError("INVALID_CONNECTOR", `Unsupported connector: ${name}`);
+    }
+
+    connectorCredentials.delete(name);
+    return patchIntegration(
+      name,
+      {
+        connected: false,
+        status: "revoked",
+        accountLabel: null,
+        credentialRef: null,
+        authUpdatedAt: nowIso(),
+        lastErrorCode: null,
+        lastErrorMessage: null,
+      },
+      source,
     );
   }
 
@@ -1378,6 +1449,10 @@ export function createSystemStateStore() {
     },
     patchFlowState,
     patchIntegration,
+    getIntegrationStatuses,
+    hasIntegrationCredential,
+    bindIntegration,
+    revokeIntegration,
     runAction,
     runFlowAction,
     createSession,

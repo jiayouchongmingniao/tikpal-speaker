@@ -127,6 +127,31 @@ export function createSystemServiceClient() {
         headers: getAuthHeaders({ admin: true }),
       });
     },
+    async listIntegrations() {
+      return requestJson(`${baseUrl}/integrations`, {
+        headers: getAuthHeaders({ admin: true }),
+      });
+    },
+    async connectIntegration(connector, payload = {}) {
+      return requestJson(`${baseUrl}/integrations/${encodeURIComponent(connector)}/connect`, {
+        method: "POST",
+        headers: getAuthHeaders({ admin: true }),
+        body: JSON.stringify(payload),
+      });
+    },
+    async refreshIntegration(connector, payload = {}) {
+      return requestJson(`${baseUrl}/integrations/${encodeURIComponent(connector)}/refresh`, {
+        method: "POST",
+        headers: getAuthHeaders({ admin: true }),
+        body: JSON.stringify(payload),
+      });
+    },
+    async disconnectIntegration(connector) {
+      return requestJson(`${baseUrl}/integrations/${encodeURIComponent(connector)}`, {
+        method: "DELETE",
+        headers: getAuthHeaders({ admin: true }),
+      });
+    },
     async getOtaStatus() {
       return requestJson(`${baseUrl}/ota/status`, {
         headers: getAuthHeaders(),

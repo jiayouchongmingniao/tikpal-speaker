@@ -172,10 +172,34 @@ export const systemOpenApiDocument = {
         properties: {
           connected: { type: "boolean" },
           accountLabel: { type: ["string", "null"] },
+          credentialRef: { type: ["string", "null"] },
+          authUpdatedAt: { type: ["string", "null"], format: "date-time" },
           status: { type: "string" },
           lastSyncAt: { type: ["string", "null"], format: "date-time" },
           lastErrorCode: { type: ["string", "null"] },
           lastErrorMessage: { type: ["string", "null"] },
+        },
+      },
+      ConnectorStatusList: {
+        type: "object",
+        properties: {
+          items: {
+            type: "object",
+            properties: {
+              calendar: { $ref: "#/components/schemas/ConnectorStatus" },
+              todoist: { $ref: "#/components/schemas/ConnectorStatus" },
+            },
+          },
+        },
+      },
+      ConnectorConnectRequest: {
+        type: "object",
+        properties: {
+          accountLabel: { type: "string" },
+          accessToken: { type: "string" },
+          refreshToken: { type: "string" },
+          tokenExpiresAt: { type: "string", format: "date-time" },
+          metadata: { type: "object" },
         },
       },
       CalendarIntegrationPatch: {
@@ -721,6 +745,113 @@ export const systemOpenApiDocument = {
           },
           409: {
             description: "OTA is already applying or rolling back",
+          },
+        },
+      },
+    },
+    "/integrations": {
+      get: {
+        summary: "Read connector binding and sync statuses for the admin surface",
+        security: [{ tikpalApiKey: [] }],
+        responses: {
+          200: {
+            description: "Connector statuses without provider tokens",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ConnectorStatusList" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/integrations/{connector}/connect": {
+      post: {
+        summary: "Bind a connector credential in service-owned storage",
+        security: [{ tikpalApiKey: [] }],
+        parameters: [
+          {
+            name: "connector",
+            in: "path",
+            required: true,
+            schema: { type: "string", enum: ["calendar", "todoist"] },
+          },
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ConnectorConnectRequest" },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Updated system state after connector binding",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SystemState" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/integrations/{connector}": {
+      delete: {
+        summary: "Disconnect a connector and revoke its service-owned credential",
+        security: [{ tikpalApiKey: [] }],
+        parameters: [
+          {
+            name: "connector",
+            in: "path",
+            required: true,
+            schema: { type: "string", enum: ["calendar", "todoist"] },
+          },
+        ],
+        responses: {
+          200: {
+            description: "Updated system state after connector disconnect",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SystemState" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/integrations/{connector}/refresh": {
+      post: {
+        summary: "Trigger a connector refresh through the sync worker",
+        security: [{ tikpalApiKey: [] }],
+        parameters: [
+          {
+            name: "connector",
+            in: "path",
+            required: true,
+            schema: { type: "string", enum: ["calendar", "todoist"] },
+          },
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ConnectorSyncRequest" },
+            },
+          },
+        },
+        responses: {
+          202: {
+            description: "Accepted connector refresh job",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ConnectorSyncJob" },
+              },
+            },
+          },
+          409: {
+            description: "Connector is not bound yet",
           },
         },
       },

@@ -227,6 +227,76 @@ try {
     ]);
   });
 
+  await test("admin connector management binds, refreshes, and revokes without exposing tokens", async () => {
+    const authHeaders = { "X-Tikpal-Key": API_KEY };
+
+    const anonymousListResponse = await requestJson(`${baseUrl}/api/v1/system/integrations`);
+    assert.equal(anonymousListResponse.status, 403);
+
+    const unboundRefreshResponse = await requestJson(`${baseUrl}/api/v1/system/integrations/todoist/refresh`, {
+      method: "POST",
+      headers: authHeaders,
+      body: {
+        delayMs: 20,
+      },
+    });
+    assert.equal(unboundRefreshResponse.status, 409);
+    assert.equal(unboundRefreshResponse.json.error.code, "CONNECTOR_NOT_BOUND");
+
+    const connectResponse = await requestJson(`${baseUrl}/api/v1/system/integrations/calendar/connect`, {
+      method: "POST",
+      headers: authHeaders,
+      body: {
+        accountLabel: "calendar.user@example.com",
+        accessToken: "secret-access-token",
+        refreshToken: "secret-refresh-token",
+      },
+    });
+    assert.equal(connectResponse.status, 200);
+    assert.equal(connectResponse.json.integrations.calendar.connected, true);
+    assert.equal(connectResponse.json.integrations.calendar.accountLabel, "calendar.user@example.com");
+    assert.equal(connectResponse.json.integrations.calendar.credentialRef, "local:calendar:calendar.user@example.com");
+    assert.equal(JSON.stringify(connectResponse.json).includes("secret-access-token"), false);
+
+    const listResponse = await requestJson(`${baseUrl}/api/v1/system/integrations`, {
+      headers: authHeaders,
+    });
+    assert.equal(listResponse.status, 200);
+    assert.equal(listResponse.json.items.calendar.connected, true);
+    assert.equal(listResponse.json.items.calendar.credentialRef, "local:calendar:calendar.user@example.com");
+
+    const refreshResponse = await requestJson(`${baseUrl}/api/v1/system/integrations/calendar/refresh`, {
+      method: "POST",
+      headers: authHeaders,
+      body: {
+        scenario: "success",
+        fixture: "default",
+        delayMs: 20,
+      },
+    });
+    assert.equal(refreshResponse.status, 202);
+    assert.equal(refreshResponse.json.connector, "calendar");
+
+    await sleep(40);
+
+    const refreshedStateResponse = await requestJson(`${baseUrl}/api/v1/system/state`, {
+      headers: authHeaders,
+    });
+    assert.equal(refreshedStateResponse.status, 200);
+    assert.equal(refreshedStateResponse.json.integrations.calendar.status, "ok");
+    assert.equal(refreshedStateResponse.json.integrations.calendar.currentEvent.title, "Deep Work Block");
+
+    const disconnectResponse = await requestJson(`${baseUrl}/api/v1/system/integrations/calendar`, {
+      method: "DELETE",
+      headers: authHeaders,
+    });
+    assert.equal(disconnectResponse.status, 200);
+    assert.equal(disconnectResponse.json.integrations.calendar.connected, false);
+    assert.equal(disconnectResponse.json.integrations.calendar.status, "revoked");
+    assert.equal(disconnectResponse.json.integrations.calendar.credentialRef, null);
+    assert.equal(disconnectResponse.json.integrations.calendar.currentEvent.title, "Deep Work Block");
+  });
+
   await test("controller session can read state and execute controller actions", async () => {
     const createResponse = await requestJson(`${baseUrl}/api/v1/system/controller-sessions`, {
       method: "POST",

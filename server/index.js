@@ -229,10 +229,15 @@ function createSystemApiDescriptor() {
       otaApply: "/api/v1/system/ota/apply",
       otaRollback: "/api/v1/system/ota/rollback",
       actions: "/api/v1/system/actions",
+      integrations: "/api/v1/system/integrations",
       calendarIntegration: "/api/v1/system/integrations/calendar",
+      calendarConnect: "/api/v1/system/integrations/calendar/connect",
+      calendarRefresh: "/api/v1/system/integrations/calendar/refresh",
       calendarFixtures: "/api/v1/system/integrations/calendar/fixtures",
       calendarSync: "/api/v1/system/integrations/calendar/sync",
       todoistIntegration: "/api/v1/system/integrations/todoist",
+      todoistConnect: "/api/v1/system/integrations/todoist/connect",
+      todoistRefresh: "/api/v1/system/integrations/todoist/refresh",
       todoistFixtures: "/api/v1/system/integrations/todoist/fixtures",
       todoistSync: "/api/v1/system/integrations/todoist/sync",
       bootstrap: "/api/v1/system/portable/bootstrap",
@@ -427,6 +432,85 @@ export function createAppServer({
             timestamp: body.timestamp ?? null,
           },
         );
+        return;
+      }
+
+      if (path === "/api/v1/system/integrations" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "admin");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, {
+          items: store.getIntegrationStatuses(),
+        });
+        return;
+      }
+
+      if (
+        segments[0] === "api" &&
+        segments[1] === "v1" &&
+        segments[2] === "system" &&
+        segments[3] === "integrations" &&
+        segments[4] &&
+        segments[5] === "connect" &&
+        request.method === "POST"
+      ) {
+        const auth = authorizeRequest(request, response, store, apiKey, "admin");
+        if (!auth) {
+          return;
+        }
+
+        const body = await parseBody(request);
+        sendJson(response, 200, store.bindIntegration(segments[4], body, "admin_client"));
+        return;
+      }
+
+      if (
+        segments[0] === "api" &&
+        segments[1] === "v1" &&
+        segments[2] === "system" &&
+        segments[3] === "integrations" &&
+        segments[4] &&
+        segments[5] === "refresh" &&
+        request.method === "POST"
+      ) {
+        const auth = authorizeRequest(request, response, store, apiKey, "admin");
+        if (!auth) {
+          return;
+        }
+
+        const body = await parseBody(request);
+        if (!store.hasIntegrationCredential(segments[4])) {
+          sendJson(response, 409, {
+            ok: false,
+            error: {
+              code: "CONNECTOR_NOT_BOUND",
+              message: `Connector ${segments[4]} is not bound`,
+            },
+          });
+          return;
+        }
+
+        sendJson(response, 202, connectorSyncService.runSync(segments[4], body));
+        return;
+      }
+
+      if (
+        segments[0] === "api" &&
+        segments[1] === "v1" &&
+        segments[2] === "system" &&
+        segments[3] === "integrations" &&
+        segments[4] &&
+        !segments[5] &&
+        request.method === "DELETE"
+      ) {
+        const auth = authorizeRequest(request, response, store, apiKey, "admin");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, store.revokeIntegration(segments[4], "admin_client"));
         return;
       }
 
