@@ -127,6 +127,11 @@ export function createSystemServiceClient() {
         headers: getAuthHeaders({ admin: true }),
       });
     },
+    async getRuntimePerformanceSamples(limit = 30) {
+      return requestJson(`${baseUrl}/runtime/performance-samples?limit=${encodeURIComponent(limit)}`, {
+        headers: getAuthHeaders({ admin: true }),
+      });
+    },
     async listIntegrations() {
       return requestJson(`${baseUrl}/integrations`, {
         headers: getAuthHeaders({ admin: true }),

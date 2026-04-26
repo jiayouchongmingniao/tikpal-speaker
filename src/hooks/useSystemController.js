@@ -694,5 +694,17 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     async clearVoiceReflection() {
       return dispatch("voice_reflection_clear");
     },
+    async reportPerformance(payload) {
+      try {
+        const response = await systemApi.sendAction("runtime_report_performance", payload, "speaker-ui-performance");
+        if (response?.state) {
+          setState(response.state);
+          return response.state;
+        }
+        return response;
+      } catch {
+        return null;
+      }
+    },
   };
 }

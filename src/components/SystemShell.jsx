@@ -4,6 +4,7 @@ import { GlobalOverlay } from "./GlobalOverlay";
 import { ListenPage } from "./ListenPage";
 import { OverviewPage } from "./OverviewPage";
 import { ScreenPage } from "./ScreenPage";
+import { usePerformanceTelemetry } from "../hooks/usePerformanceTelemetry";
 import { useSystemController } from "../hooks/useSystemController";
 import { getOtaStatusHint } from "../viewmodels/screenContextConsumers";
 
@@ -130,6 +131,11 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
           : null
       : null;
   const otaStatusHint = getOtaStatusHint(state.system);
+
+  usePerformanceTelemetry({
+    activeMode: state.activeMode,
+    reportPerformance: controller.reportPerformance,
+  });
 
   function clearOverlayTimer() {
     if (overlayTimerRef.current) {

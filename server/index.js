@@ -227,6 +227,7 @@ function createSystemApiDescriptor() {
       runtimeSummary: "/api/v1/system/runtime/summary",
       runtimeActionLog: "/api/v1/system/runtime/action-log",
       runtimeStateTransitions: "/api/v1/system/runtime/state-transitions",
+      runtimePerformanceSamples: "/api/v1/system/runtime/performance-samples",
       otaStatus: "/api/v1/system/ota/status",
       otaCheck: "/api/v1/system/ota/check",
       otaApply: "/api/v1/system/ota/apply",
@@ -380,6 +381,18 @@ export function createAppServer({
 
         sendJson(response, 200, {
           items: store.getStateTransitionLogs(url.searchParams.get("limit")),
+        });
+        return;
+      }
+
+      if (path === "/api/v1/system/runtime/performance-samples" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "operator");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, {
+          items: store.getPerformanceSamples(url.searchParams.get("limit")),
         });
         return;
       }

@@ -477,6 +477,12 @@ textarea {
   margin-top: 18px;
 }
 
+.debug-meta-grid--inline {
+  flex: 1 0 100%;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-top: 6px;
+}
+
 .debug-panel pre {
   margin: 14px 0 0;
   padding: 18px;
@@ -853,6 +859,7 @@ textarea {
   .debug-panels,
   .debug-form-grid,
   .debug-meta-grid,
+  .debug-meta-grid--inline,
   .portable-pairing-layout {
     grid-template-columns: 1fr;
   }

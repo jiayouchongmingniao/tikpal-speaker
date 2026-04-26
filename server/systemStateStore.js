@@ -606,6 +606,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
   const connectorCredentials = new Map();
   const actionLogs = [];
   const stateTransitionLogs = [];
+  const performanceSamples = [];
 
   for (const session of persisted?.sessions ?? []) {
     if (!session?.id || !session?.token) {
@@ -673,6 +674,20 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
       reasonAction: reasonAction ?? null,
       from: summarizeRuntimeState(previousState),
       to: summarizeRuntimeState(nextState),
+    });
+  }
+
+  function recordPerformanceSample(sample) {
+    appendLog(performanceSamples, {
+      timestamp: nowIso(),
+      avgFps: sample.avgFps ?? null,
+      tier: sample.tier ?? null,
+      activeMode: sample.activeMode ?? null,
+      temperatureC: sample.temperatureC ?? null,
+      interactionLatencyMs: sample.interactionLatencyMs ?? null,
+      memoryUsageMb: sample.memoryUsageMb ?? null,
+      reason: sample.reason ?? null,
+      source: sample.source ?? null,
     });
   }
 
@@ -1551,6 +1566,12 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
                 ? "reduced"
                 : "normal"
             : liveState.system.performanceTier);
+        recordPerformanceSample({
+          ...payload,
+          avgFps,
+          tier: nextTier,
+          source,
+        });
 
         return finalize(
           updateState(
@@ -1863,6 +1884,10 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
     getStateTransitionLogs(limit = 50) {
       const normalizedLimit = clamp(Number(limit ?? 50), 1, MAX_RUNTIME_LOG_ENTRIES);
       return stateTransitionLogs.slice(-normalizedLimit).reverse();
+    },
+    getPerformanceSamples(limit = 50) {
+      const normalizedLimit = clamp(Number(limit ?? 50), 1, MAX_RUNTIME_LOG_ENTRIES);
+      return performanceSamples.slice(-normalizedLimit).reverse();
     },
     getFlowSnapshot() {
       return toFlowSnapshot(state);

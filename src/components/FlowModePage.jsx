@@ -4,6 +4,7 @@ import { StateTitle } from "./StateTitle";
 import { VisualEngineCanvas } from "./VisualEngineCanvas";
 import { FLOW_THEME } from "../theme";
 import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
+import { getPerformanceRenderBudget } from "../viewmodels/performance";
 
 function deriveAppPhase({ activeMode, overlayVisible, flowState, transitionStatus }) {
   if (transitionStatus !== "idle") {
@@ -85,6 +86,7 @@ export function FlowModePage({
     progress: systemState.playback.progress,
   };
   const transitionState = toFlowTransitionState(transition, currentState);
+  const performanceTier = systemState.system?.performanceTier ?? "normal";
 
   return (
     <main
@@ -98,6 +100,7 @@ export function FlowModePage({
         theme={theme}
         audioMetrics={audioMetrics}
         appPhase={appPhase}
+        renderBudget={getPerformanceRenderBudget(performanceTier)}
       />
       <section className="flow-page__content">
         <div className="flow-care-stack">

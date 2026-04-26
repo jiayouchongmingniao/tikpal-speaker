@@ -54,6 +54,12 @@ Run HTTP-level smoke checks for `/api/v1/system/actions`:
 npm run test:http-smoke
 ```
 
+Run performance budget and telemetry summary checks:
+
+```bash
+npm run test:performance
+```
+
 Run restart/persistence recovery checks:
 
 ```bash
@@ -146,6 +152,7 @@ Key endpoints:
 - `POST /api/v1/system/integrations/calendar/sync`
 - `POST /api/v1/system/integrations/todoist/sync`
 - `GET /api/v1/system/integrations/{connector}/sync-jobs/{jobId}`
+- `GET /api/v1/system/runtime/performance-samples`
 
 Open the Batch E debug surface in the browser:
 
@@ -160,6 +167,8 @@ The debug surface lets you:
 - inspect `SystemState.integrations`
 - inspect `SystemState.creativeCare`
 - submit a manual Creative Care voice-capture sample
+- inspect current performance tier, suggested tier, sampler metrics, and Flow Canvas render budget
+- inspect recent performance samples for FPS, latency, memory, active mode, tier, and reason
 - list connector fixtures
 - trigger mock sync jobs with `success`, `stale`, or `error`
 - verify how `ScreenContext` reacts to `calendar` and `todoist` changes
@@ -197,6 +206,8 @@ Current Batch E scope:
 - fixture-based sample scenarios are available for `calendar` and `todoist`
 - Creative Care debug sampling is available for portable voice-capture flows
 - local persistence keeps restart recovery testable without changing the public API response shape
+- frontend performance sampling reports FPS/latency/memory into `runtime_report_performance`
+- Flow Canvas consumes `normal / reduced / safe` budgets for pixel ratio, wave density, particle count, and frame skipping
 - HTTP smoke tests cover action responses, connector sync, stale/error behavior, and fixture application
 
 Real connector adapter notes:
@@ -225,5 +236,5 @@ Move from mock-backed integrations to real device integrations:
 
 1. Wire real Calendar/Todoist credentials into `server/connectorAdapters.js` through a service-owned secret store or runtime injection while keeping fixtures for tests.
 2. Replace `src/bridge/playerBridge.js` with a moOde-backed implementation that preserves the same subscription and control API.
-3. Add frontend performance sampling so `normal / reduced / safe` can drive real rendering degradation on Raspberry Pi 4.
+3. Validate the frontend performance sampler on Raspberry Pi 4 and tune `normal / reduced / safe` thresholds with real FPS traces.
 4. Turn OTA apply/rollback from the current state-machine skeleton into release-directory, restart, health-check, and rollback behavior.

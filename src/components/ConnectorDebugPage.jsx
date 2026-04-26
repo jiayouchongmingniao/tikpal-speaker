@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createSystemServiceClient } from "../bridge/systemServiceClient";
+import { getPerformanceDebugViewModel } from "../viewmodels/performance";
 
 const CONNECTORS = ["calendar", "todoist"];
 const SCENARIOS = ["success", "stale", "error"];
@@ -118,6 +119,7 @@ export function ConnectorDebugPage() {
   const [runtimeSummary, setRuntimeSummary] = useState(null);
   const [actionLog, setActionLog] = useState([]);
   const [stateTransitions, setStateTransitions] = useState([]);
+  const [performanceSamples, setPerformanceSamples] = useState([]);
   const [adminStatus, setAdminStatus] = useState("checking");
   const [apiHealth, setApiHealth] = useState(null);
   const [apiHealthStatus, setApiHealthStatus] = useState("checking");
@@ -143,6 +145,11 @@ export function ConnectorDebugPage() {
     todoist: { scenario: "success", fixture: "default", delayMs: "80", fixtures: FALLBACK_FIXTURES.todoist, running: false },
   }));
   const [jobs, setJobs] = useState({});
+  const performanceDebug = getPerformanceDebugViewModel({
+    system: state?.system,
+    runtimeSummary,
+    draftAvgFps: Number(performanceDraft.avgFps || 0),
+  });
 
   useEffect(() => {
     client.setApiKey(apiKey);
@@ -176,13 +183,14 @@ export function ConnectorDebugPage() {
           client.getState(),
           client.getScreenContext(),
         ]);
-        const [healthResult, calendarFixtures, todoistFixtures, runtimeResult, actionLogResult, transitionsResult] = await Promise.all([
+        const [healthResult, calendarFixtures, todoistFixtures, runtimeResult, actionLogResult, transitionsResult, performanceResult] = await Promise.all([
           client.health().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
           loadFixtures("calendar"),
           loadFixtures("todoist"),
           client.getRuntimeSummary().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
           client.getRuntimeActionLog(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
           client.getRuntimeStateTransitions(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
+          client.getRuntimePerformanceSamples(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
         ]);
 
         if (!alive) {
@@ -196,6 +204,7 @@ export function ConnectorDebugPage() {
         setRuntimeSummary(runtimeResult.ok ? runtimeResult.value : null);
         setActionLog(actionLogResult.value?.items ?? []);
         setStateTransitions(transitionsResult.value?.items ?? []);
+        setPerformanceSamples(performanceResult.value?.items ?? []);
         setAdminStatus(runtimeResult.ok ? "available" : "required");
         setControls((current) => ({
           ...current,
@@ -332,14 +341,16 @@ export function ConnectorDebugPage() {
   }
 
   async function refreshRuntimePanels() {
-    const [runtimeResult, actionLogResult, transitionsResult] = await Promise.all([
+    const [runtimeResult, actionLogResult, transitionsResult, performanceResult] = await Promise.all([
       client.getRuntimeSummary().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
       client.getRuntimeActionLog(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
       client.getRuntimeStateTransitions(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
+      client.getRuntimePerformanceSamples(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
     ]);
     setRuntimeSummary(runtimeResult.ok ? runtimeResult.value : null);
     setActionLog(actionLogResult.value?.items ?? []);
     setStateTransitions(transitionsResult.value?.items ?? []);
+    setPerformanceSamples(performanceResult.value?.items ?? []);
     setAdminStatus(runtimeResult.ok ? "available" : "required");
   }
 
@@ -536,6 +547,32 @@ export function ConnectorDebugPage() {
           <button type="button" className="debug-button debug-button--ghost" onClick={reportPerformanceSample}>
             Report sample
           </button>
+          <div className="debug-meta-grid debug-meta-grid--inline">
+            <div>
+              <span>Current tier</span>
+              <strong>{performanceDebug.tier}</strong>
+            </div>
+            <div>
+              <span>Suggested</span>
+              <strong>{performanceDebug.suggestedTier}</strong>
+            </div>
+            <div>
+              <span>Latency</span>
+              <strong>{performanceDebug.interactionLatencyMs ?? "n/a"}ms</strong>
+            </div>
+            <div>
+              <span>Memory</span>
+              <strong>{performanceDebug.memoryUsageMb ?? "n/a"} MB</strong>
+            </div>
+            <div>
+              <span>Budget</span>
+              <strong>{performanceDebug.budgetLabel}</strong>
+            </div>
+            <div>
+              <span>Reason</span>
+              <strong>{performanceDebug.lastDegradeReason ?? "none"}</strong>
+            </div>
+          </div>
         </section>
 
         <section className="debug-manual-focus">
@@ -656,6 +693,10 @@ export function ConnectorDebugPage() {
           <article className="debug-panel">
             <span className="debug-kicker">CreativeCare</span>
             <pre>{prettyJson(state?.creativeCare ?? {})}</pre>
+          </article>
+          <article className="debug-panel">
+            <span className="debug-kicker">PerformanceSamples</span>
+            <pre>{prettyJson(performanceSamples)}</pre>
           </article>
           <article className="debug-panel">
             <span className="debug-kicker">ActionTimeline</span>

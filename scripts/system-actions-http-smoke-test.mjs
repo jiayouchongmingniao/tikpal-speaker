@@ -147,7 +147,7 @@ try {
       baseUrl,
       {
         type: "runtime_report_performance",
-        payload: { avgFps: 22, reason: "fps" },
+        payload: { avgFps: 22, interactionLatencyMs: 44, memoryUsageMb: 128, activeMode: "flow", reason: "fps" },
         source: "api",
         requestId: "runtime_report_perf",
       },
@@ -163,6 +163,16 @@ try {
     assert.equal(runtimeSummaryResponse.json.performanceTier, "safe");
     assert.equal(runtimeSummaryResponse.json.avgFps, 22);
     assert.equal(runtimeSummaryResponse.json.lastDegradeReason, "fps");
+
+    const samplesResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/performance-samples?limit=3`, {
+      headers: authHeaders,
+    });
+    assert.equal(samplesResponse.status, 200);
+    assert.equal(samplesResponse.json.items[0].avgFps, 22);
+    assert.equal(samplesResponse.json.items[0].tier, "safe");
+    assert.equal(samplesResponse.json.items[0].activeMode, "flow");
+    assert.equal(samplesResponse.json.items[0].interactionLatencyMs, 44);
+    assert.equal(samplesResponse.json.items[0].memoryUsageMb, 128);
   });
 
   await test("ota check, apply, and rollback expose a verifiable update lifecycle", async () => {
