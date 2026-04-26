@@ -47,10 +47,18 @@ try {
   fs.symlinkSync(path.join(releaseRoot, "0.1.0"), currentPath, "dir");
 
   test("filesystem OTA manager checks, applies, and rolls back release manifests", () => {
+    const restartCalls = [];
     const otaManager = createFileSystemOtaManager({
       releaseRoot,
       currentPath,
       previousPath,
+      restartCommand(context) {
+        restartCalls.push(context);
+        return {
+          ok: true,
+          service: "tikpal-speaker",
+        };
+      },
     });
     const store = createSystemStateStore({ otaManager });
 
@@ -62,6 +70,8 @@ try {
     assert.equal(applied.system.version, "0.1.2");
     assert.equal(applied.system.ota.currentVersion, "0.1.2");
     assert.equal(applied.system.ota.previousVersion, "0.1.0");
+    assert.equal(applied.system.ota.lastOperation.restart.ok, true);
+    assert.equal(applied.system.ota.lastOperation.restart.service, "tikpal-speaker");
     assert.equal(applied.system.ota.lastOperation.health.ok, true);
     assert.equal(fs.readlinkSync(currentPath), path.join(releaseRoot, "0.1.2"));
     assert.equal(fs.readlinkSync(previousPath), path.join(releaseRoot, "0.1.0"));
@@ -69,8 +79,13 @@ try {
     const rolledBack = store.runAction("ota_rollback", {}, "admin_client");
     assert.equal(rolledBack.system.version, "0.1.0");
     assert.equal(rolledBack.system.ota.currentVersion, "0.1.0");
+    assert.equal(rolledBack.system.ota.lastOperation.restart.ok, true);
     assert.equal(fs.readlinkSync(currentPath), path.join(releaseRoot, "0.1.0"));
     assert.equal(fs.readlinkSync(previousPath), path.join(releaseRoot, "0.1.2"));
+    assert.deepEqual(
+      restartCalls.map((call) => call.operation),
+      ["apply", "rollback"],
+    );
   });
 
   test("filesystem OTA manager rejects unhealthy releases", () => {
@@ -119,6 +134,37 @@ try {
     assert.equal(snapshot.system.ota.previousVersion, "0.1.0");
     assert.equal(snapshot.system.ota.canRollback, true);
     assert.equal(fs.readlinkSync(currentPath), path.join(releaseRoot, "0.1.2"));
+    assert.equal(fs.readlinkSync(previousPath), path.join(releaseRoot, "0.1.0"));
+  });
+
+  test("filesystem OTA manager restores release pointers when restart fails", () => {
+    const otaManager = createFileSystemOtaManager({
+      releaseRoot,
+      currentPath,
+      previousPath,
+      restartCommand() {
+        const error = new Error("restart failed");
+        error.code = "OTA_RESTART_FAILED";
+        error.restart = {
+          ok: false,
+          service: "tikpal-speaker",
+        };
+        throw error;
+      },
+    });
+    const store = createSystemStateStore({ otaManager });
+    store.runAction("ota_check", { targetVersion: "0.1.2" }, "admin_client");
+
+    assert.throws(
+      () => store.runAction("ota_apply", {}, "admin_client"),
+      (error) => error.code === "OTA_RESTART_FAILED",
+    );
+
+    const snapshot = store.getSnapshot();
+    assert.equal(snapshot.system.otaStatus, "error");
+    assert.equal(snapshot.system.ota.lastErrorCode, "OTA_RESTART_FAILED");
+    assert.equal(snapshot.system.ota.lastOperation.restart.ok, false);
+    assert.equal(fs.readlinkSync(currentPath), path.join(releaseRoot, "0.1.0"));
     assert.equal(fs.readlinkSync(previousPath), path.join(releaseRoot, "0.1.0"));
   });
 } finally {

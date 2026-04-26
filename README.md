@@ -235,6 +235,14 @@ Real connector adapter notes:
 - Calendar config can use `TIKPAL_CALENDAR_API_BASE`, `TIKPAL_CALENDAR_TIMEOUT_MS`, `TIKPAL_CALENDAR_ID`, `TIKPAL_CALENDAR_TOKEN_URL`, `TIKPAL_CALENDAR_CLIENT_ID`, and `TIKPAL_CALENDAR_CLIENT_SECRET`.
 - Todoist config can use `TIKPAL_TODOIST_API_BASE`, `TIKPAL_TODOIST_TIMEOUT_MS`, `TIKPAL_TODOIST_TOKEN_URL`, `TIKPAL_TODOIST_CLIENT_ID`, and `TIKPAL_TODOIST_CLIENT_SECRET`.
 
+OTA release notes:
+
+- Enable filesystem OTA with `TIKPAL_OTA_RELEASE_ROOT=/opt/tikpal/app/releases`.
+- Override symlink paths with `TIKPAL_OTA_CURRENT_PATH` and `TIKPAL_OTA_PREVIOUS_PATH`.
+- Each release directory must include a `manifest.json`; optional `health.json` with `{ "ok": false }` rejects the release.
+- Set `TIKPAL_OTA_RESTART_COMMAND` to run a service restart after switching `current` and before health validation. The command receives `TIKPAL_OTA_OPERATION`, `TIKPAL_OTA_RELEASE_PATH`, `TIKPAL_OTA_CURRENT_VERSION`, and `TIKPAL_OTA_TARGET_VERSION`.
+- Restart or health failures restore release pointers and surface `OTA_RESTART_FAILED` / `OTA_HEALTH_CHECK_FAILED` in `system.ota.lastOperation`.
+
 ## Architecture
 
 ```text
@@ -252,4 +260,4 @@ Move from mock-backed integrations to real device integrations:
 1. Wire real Calendar/Todoist credentials into `server/connectorAdapters.js` through a service-owned secret store or runtime injection while keeping fixtures for tests.
 2. Point the browser bridge at a moOde-compatible HTTP control surface with `?playerApiBase=...` or `window.__TIKPAL_PLAYER_API_BASE__`; point the System API at the same device with `TIKPAL_PLAYER_API_BASE=...` so portable playback actions update real device state while preserving the existing `playback` shape.
 3. Validate the frontend performance sampler on Raspberry Pi 4 and tune `normal / reduced / safe` thresholds with real FPS traces using `npm run performance:trace`.
-4. Turn OTA apply/rollback from the current state-machine skeleton into release-directory, restart, health-check, and rollback behavior.
+4. Validate OTA apply/rollback on the target service using `TIKPAL_OTA_RESTART_COMMAND` and release `health.json` checks.
