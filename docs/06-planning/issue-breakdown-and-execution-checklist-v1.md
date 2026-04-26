@@ -960,8 +960,8 @@
 - Batch B：已完成。`Overview / Listen / Flow` 主闭环、卡片进入 focus、返回 Overview、FlowCard 与 FlowPage 分离已落地。
 - Batch C：已完成。`ScreenPage`、本地番茄钟、`GlobalOverlay`、触摸/触摸板/遥控器式键盘导航已落地。
 - Batch D：已完成。`capabilities`、controller sessions、pairing codes、`viewer / controller / operator / admin` 权限分层、portable 最小控制闭环已落地。
-- Batch E：部分完成。`ScreenContext service`、映射器、portable Screen 控制、connector adapter contract、fixture Calendar/Todoist adapters、真实 Calendar/Todoist adapter 骨架、stale/error/last-good 行为已落地；真实 OAuth/token refresh/secret store 仍待实现。
-- Batch F：部分完成。Action/runtime logs、runtime summary、performance telemetry action、前端 FPS/latency/memory 采样、Flow Canvas 性能档位降级、OTA status/check/apply/rollback state skeleton 已落地；真机阈值调优与真实 OTA release/restart/health-check/rollback 仍待实现。
+- Batch E：工程闭环已完成，真实账号联调待现场配置。`ScreenContext service`、映射器、portable Screen 控制、connector adapter contract、fixture Calendar/Todoist adapters、真实 Calendar/Todoist adapter、OAuth code exchange、token refresh、secret store、sync retry、stale/error/last-good 行为已落地；下一步是拿真实 Calendar/Todoist credentials 做端到端验证。
+- Batch F：工程闭环已完成，真机校准待现场数据。Action/runtime logs、runtime summary、performance telemetry action、前端 FPS/latency/memory 采样、Flow Canvas 性能档位降级、performance trace 汇总、OTA status/check/apply/rollback、release 目录切换、restart hook、health check、失败恢复已落地；下一步是用树莓派 4 trace 校准阈值，并在目标服务上实测 OTA restart/rollback。
 - Phase 1 持久化准备：已新增本地 JSON 持久化层，覆盖 SystemState、controller sessions、pairing codes、connector credential metadata，并由 `npm run test:persistence` 验证重启恢复。
 
 ---
@@ -972,9 +972,9 @@
 
 最小启动顺序：
 
-1. 真实 Calendar/Todoist 接入：在 `server/connectorAdapters.js` 已有 adapter 骨架上接服务端 secret store、OAuth/token refresh 和真实 API 拉取；继续保留 fixture adapter 作为测试通道。
-2. 真实播放器桥接：用 moOde-backed implementation 替换 mock player bridge，保持现有 playback/action contract。
-3. 真机性能调优：前端已上报 FPS/latency/memory 并驱动 `normal / reduced / safe` 渲染降级；下一步用树莓派 4 实测数据校准阈值。
-4. 真实 OTA：将当前 state skeleton 扩展为 release 目录、服务重启、健康检查、失败回滚。
+1. 真实 Calendar/Todoist 账号联调：配置 provider OAuth/token endpoint、真实账号凭据和 API base，验证 `connect -> refresh -> sync -> ScreenContext`。
+2. 真实播放器联调：配置浏览器 `playerApiBase` 和服务端 `TIKPAL_PLAYER_API_BASE`，验证 moOde-compatible `/status` 与 `/actions` 映射到现有 playback/action contract。
+3. 真机性能调优：导出 `/api/v1/system/runtime/performance-samples`，用 `npm run performance:trace -- ./performance-samples.json` 汇总树莓派 4 实测数据并校准阈值。
+4. 真实 OTA 验收：配置 release 目录、`TIKPAL_OTA_RESTART_COMMAND`、release `health.json`，验证 apply、restart、health check、rollback 和失败恢复。
 
 这会最快把项目从“可运行系统原型”推进到“可上真实设备联调的版本”。

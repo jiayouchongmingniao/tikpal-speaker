@@ -140,7 +140,7 @@ Suggested control flow for `tikpal.ai`:
 
 Mutation endpoints support `X-Tikpal-Key` or `Authorization: Bearer <key>` when `TIKPAL_API_KEY` is configured.
 
-## System API And Batch E Debugging
+## System API And Runtime Debugging
 
 Run the system API locally:
 
@@ -167,7 +167,7 @@ Key endpoints:
 - `GET /api/v1/system/integrations/{connector}/sync-jobs/{jobId}`
 - `GET /api/v1/system/runtime/performance-samples`
 
-Open the Batch E debug surface in the browser:
+Open the runtime debug surface in the browser:
 
 - `http://localhost:4173/flow/?surface=debug`
 - `http://localhost:4173/flow/debug`
@@ -210,18 +210,19 @@ curl -s -X POST http://localhost:8787/api/v1/system/actions \
   -d '{"type":"voice_capture_submit","payload":{"transcript":"I feel scattered but one idea is ready.","moodLabel":"scattered","moodIntensity":0.7},"source":"debug_surface"}'
 ```
 
-Current Batch E scope:
+Current runtime scope:
 
 - `ScreenContext service` exists and is consumed by `ScreenPage`
 - connector adapter contract exists; the default fixture adapters preserve local `calendar` and `todoist` mock sync
-- real Calendar/Todoist adapter skeletons map provider payloads into the same ScreenContext-safe connector patch shape
+- real Calendar/Todoist adapters map provider payloads into the same ScreenContext-safe connector patch shape
+- connector OAuth code exchange, token refresh, secret storage, sync retries, and last-good snapshots are available for real account validation
 - sync lifecycle covers `syncing -> ok/stale/error`, including adapter failures that preserve last-good connector snapshots
 - fixture-based sample scenarios are available for `calendar` and `todoist`
 - Creative Care debug sampling is available for portable voice-capture flows
 - local persistence keeps restart recovery testable without changing the public API response shape
 - frontend performance sampling reports FPS/latency/memory into `runtime_report_performance`
 - Flow Canvas consumes `normal / reduced / safe` budgets for pixel ratio, wave density, particle count, and frame skipping
-- HTTP smoke tests cover action responses, connector sync, stale/error behavior, and fixture application
+- HTTP smoke tests cover action responses, connector sync, stale/error behavior, fixture application, playback adapter actions, and OTA lifecycle
 
 Real connector adapter notes:
 
@@ -253,11 +254,11 @@ src/
   theme.js
 ```
 
-## Next step
+## Next Step
 
-Move from mock-backed integrations to real device integrations:
+Move from engineering scaffolds to target-device validation:
 
-1. Wire real Calendar/Todoist credentials into `server/connectorAdapters.js` through a service-owned secret store or runtime injection while keeping fixtures for tests.
+1. Configure real Calendar/Todoist OAuth/token endpoints and validate `connect -> refresh -> sync -> ScreenContext`.
 2. Point the browser bridge at a moOde-compatible HTTP control surface with `?playerApiBase=...` or `window.__TIKPAL_PLAYER_API_BASE__`; point the System API at the same device with `TIKPAL_PLAYER_API_BASE=...` so portable playback actions update real device state while preserving the existing `playback` shape.
 3. Validate the frontend performance sampler on Raspberry Pi 4 and tune `normal / reduced / safe` thresholds with real FPS traces using `npm run performance:trace`.
 4. Validate OTA apply/rollback on the target service using `TIKPAL_OTA_RESTART_COMMAND` and release `health.json` checks.
