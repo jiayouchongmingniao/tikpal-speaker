@@ -75,6 +75,7 @@ const MOCK_QUEUE = [
     nextTrackTitle: "Low Light Corridor",
   },
 ];
+const PERSISTENCE_VERSION = 1;
 
 function nowIso() {
   return new Date().toISOString();
@@ -500,14 +501,155 @@ function toFlowSnapshot(state) {
   };
 }
 
-export function createSystemStateStore() {
-  let state = createInitialState();
+function toMapFromEntries(entries = [], keyName = "id") {
+  const map = new Map();
+  for (const entry of entries) {
+    const key = entry?.[keyName];
+    if (key) {
+      map.set(key, entry);
+    }
+  }
+  return map;
+}
+
+function mergePersistedState(defaultState, persistedState) {
+  if (!persistedState || typeof persistedState !== "object") {
+    return defaultState;
+  }
+
+  return {
+    ...defaultState,
+    ...persistedState,
+    transition: normalizeTransition(persistedState.transition ?? defaultState.transition),
+    overlay: {
+      ...defaultState.overlay,
+      ...(persistedState.overlay ?? {}),
+    },
+    playback: {
+      ...defaultState.playback,
+      ...(persistedState.playback ?? {}),
+    },
+    flow: {
+      ...defaultState.flow,
+      ...(persistedState.flow ?? {}),
+    },
+    screen: {
+      ...defaultState.screen,
+      ...(persistedState.screen ?? {}),
+      todaySummary: {
+        ...defaultState.screen.todaySummary,
+        ...(persistedState.screen?.todaySummary ?? {}),
+      },
+      sync: {
+        ...defaultState.screen.sync,
+        ...(persistedState.screen?.sync ?? {}),
+      },
+    },
+    creativeCare: {
+      ...defaultState.creativeCare,
+      ...(persistedState.creativeCare ?? {}),
+      metadata: {
+        ...defaultState.creativeCare.metadata,
+        ...(persistedState.creativeCare?.metadata ?? {}),
+      },
+    },
+    integrations: {
+      calendar: mergeConnectorState(defaultState.integrations.calendar, persistedState.integrations?.calendar),
+      todoist: mergeConnectorState(defaultState.integrations.todoist, persistedState.integrations?.todoist),
+    },
+    controller: {
+      ...defaultState.controller,
+      ...(persistedState.controller ?? {}),
+    },
+    system: {
+      ...defaultState.system,
+      ...(persistedState.system ?? {}),
+      ota: {
+        ...defaultState.system.ota,
+        ...(persistedState.system?.ota ?? {}),
+      },
+      performance: {
+        ...defaultState.system.performance,
+        ...(persistedState.system?.performance ?? {}),
+      },
+    },
+  };
+}
+
+function createSafeCredentialRecord(name, payload = {}, credentialRef, now = nowIso()) {
+  return {
+    provider: name,
+    accountLabel: payload.accountLabel ?? `${name}.local`,
+    credentialRef,
+    tokenExpiresAt: payload.tokenExpiresAt ?? null,
+    metadata: payload.metadata ?? {},
+    createdAt: payload.createdAt ?? now,
+    updatedAt: now,
+  };
+}
+
+function createSecretRecord(payload = {}) {
+  return {
+    accessToken: payload.accessToken ?? null,
+    refreshToken: payload.refreshToken ?? null,
+    tokenExpiresAt: payload.tokenExpiresAt ?? null,
+    metadata: payload.secretMetadata ?? {},
+  };
+}
+
+export function createSystemStateStore({ persistence = null, secretStore = null } = {}) {
+  const persisted = persistence?.read?.() ?? null;
+  let state = mergePersistedState(createInitialState(), persisted?.state);
   const sessions = new Map();
   const sessionIdsByToken = new Map();
   const pairingCodes = new Map();
   const connectorCredentials = new Map();
   const actionLogs = [];
   const stateTransitionLogs = [];
+
+  for (const session of persisted?.sessions ?? []) {
+    if (!session?.id || !session?.token) {
+      continue;
+    }
+
+    sessions.set(session.id, session);
+    sessionIdsByToken.set(session.token, session.id);
+  }
+
+  for (const [code, pairing] of toMapFromEntries(persisted?.pairingCodes, "code")) {
+    pairingCodes.set(code, pairing);
+  }
+
+  for (const [name, credential] of toMapFromEntries(persisted?.connectorCredentials, "provider")) {
+    if (CONNECTOR_NAMES.includes(name)) {
+      connectorCredentials.set(name, credential);
+    }
+  }
+
+  syncControllerCount();
+
+  function createPersistenceSnapshot() {
+    return {
+      version: PERSISTENCE_VERSION,
+      savedAt: nowIso(),
+      state,
+      sessions: Array.from(sessions.values()),
+      pairingCodes: Array.from(pairingCodes.values()),
+      connectorCredentials: Array.from(connectorCredentials.values()).map((credential) => ({
+        provider: credential.provider,
+        accountLabel: credential.accountLabel,
+        credentialRef: credential.credentialRef,
+        tokenExpiresAt: credential.tokenExpiresAt ?? null,
+        metadata: credential.metadata ?? {},
+        createdAt: credential.createdAt,
+        updatedAt: credential.updatedAt,
+      })),
+    };
+  }
+
+  function persistNow() {
+    persistence?.write?.(createPersistenceSnapshot());
+  }
 
   function appendLog(buffer, entry) {
     buffer.push(entry);
@@ -589,6 +731,7 @@ export function createSystemStateStore() {
       sessionIdsByToken.delete(session.token);
     }
     syncControllerCount();
+    persistNow();
     return true;
   }
 
@@ -607,10 +750,15 @@ export function createSystemStateStore() {
   }
 
   function cleanupExpiredPairingCodes() {
+    let removed = false;
     for (const [code, pairing] of pairingCodes.entries()) {
       if ((pairing.expiresAt && new Date(pairing.expiresAt).getTime() <= Date.now()) || pairing.claimedAt) {
         pairingCodes.delete(code);
+        removed = true;
       }
+    }
+    if (removed) {
+      persistNow();
     }
   }
 
@@ -624,6 +772,7 @@ export function createSystemStateStore() {
         transition: normalizedTransition,
         screen: normalizedScreen,
       };
+      persistNow();
     }
 
     return state;
@@ -641,6 +790,7 @@ export function createSystemStateStore() {
       lastUpdatedAt: nowIso(),
     };
     recordStateTransition(source, reasonAction, previousState, state);
+    persistNow();
     return state;
   }
 
@@ -811,6 +961,25 @@ export function createSystemStateStore() {
     return connectorCredentials.has(name);
   }
 
+  function getIntegrationCredential(name) {
+    const credential = connectorCredentials.get(name);
+    if (!credential) {
+      return null;
+    }
+
+    const secret = secretStore?.get?.(name) ?? {};
+    return {
+      ...structuredClone(credential),
+      accessToken: secret.accessToken ?? null,
+      refreshToken: secret.refreshToken ?? null,
+      tokenExpiresAt: secret.tokenExpiresAt ?? credential.tokenExpiresAt ?? null,
+      metadata: {
+        ...(credential.metadata ?? {}),
+        ...(secret.metadata ?? {}),
+      },
+    };
+  }
+
   function bindIntegration(name, payload = {}, source = "admin_client") {
     if (!CONNECTOR_NAMES.includes(name)) {
       throw createRejectedError("INVALID_CONNECTOR", `Unsupported connector: ${name}`);
@@ -818,16 +987,21 @@ export function createSystemStateStore() {
 
     const authUpdatedAt = nowIso();
     const credentialRef = `local:${name}:${payload.accountLabel ?? "default"}`;
-    connectorCredentials.set(name, {
-      provider: name,
-      accountLabel: payload.accountLabel ?? `${name}.local`,
-      accessToken: payload.accessToken ?? null,
-      refreshToken: payload.refreshToken ?? null,
-      tokenExpiresAt: payload.tokenExpiresAt ?? null,
-      metadata: payload.metadata ?? {},
-      createdAt: connectorCredentials.get(name)?.createdAt ?? authUpdatedAt,
-      updatedAt: authUpdatedAt,
-    });
+    connectorCredentials.set(
+      name,
+      createSafeCredentialRecord(
+        name,
+        {
+          ...payload,
+          createdAt: connectorCredentials.get(name)?.createdAt,
+        },
+        credentialRef,
+        authUpdatedAt,
+      ),
+    );
+    if (payload.accessToken || payload.refreshToken || payload.secretMetadata) {
+      secretStore?.set?.(name, createSecretRecord(payload));
+    }
 
     return patchIntegration(
       name,
@@ -850,6 +1024,8 @@ export function createSystemStateStore() {
     }
 
     connectorCredentials.delete(name);
+    secretStore?.delete?.(name);
+    persistNow();
     return patchIntegration(
       name,
       {
@@ -1569,6 +1745,7 @@ export function createSystemStateStore() {
     sessions.set(id, session);
     sessionIdsByToken.set(session.token, id);
     updateState(state, source);
+    persistNow();
     return sanitizeSession(session, { includeToken: true });
   }
 
@@ -1591,6 +1768,7 @@ export function createSystemStateStore() {
       claimedAt: null,
     };
     pairingCodes.set(code, pairing);
+    persistNow();
     return structuredClone(pairing);
   }
 
@@ -1603,6 +1781,7 @@ export function createSystemStateStore() {
 
     pairing.claimedAt = nowIso();
     pairingCodes.delete(code);
+    persistNow();
     return createSession(
       {
         deviceId: payload.deviceId,
@@ -1637,6 +1816,7 @@ export function createSystemStateStore() {
 
     if (touch) {
       session.lastSeenAt = nowIso();
+      persistNow();
     }
 
     return sanitizeSession(session);
@@ -1691,6 +1871,7 @@ export function createSystemStateStore() {
     patchIntegration,
     getIntegrationStatuses,
     hasIntegrationCredential,
+    getIntegrationCredential,
     bindIntegration,
     revokeIntegration,
     runAction,

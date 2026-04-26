@@ -1,14 +1,15 @@
 # tikpal-speaker
 
-Flow Mode prototype for a 32:9 speaker display UI.
+Ambient OS prototype for a 32:9 speaker display UI.
 
 ## Current scope
 
 - React + Vite frontend
-- 4 Flow Mode states: `focus`, `flow`, `relax`, `sleep`
-- Full-screen ambient background and canvas-based main visual
-- Minimal state title, side info panel, and transient control overlay
-- Player bridge abstraction with mock data ready to swap for moOde integration
+- Unified `Overview / Listen / Flow / Screen` shell
+- System API with action dispatch, capabilities, controller sessions, pairing codes, runtime logs, ScreenContext, OTA status, and mock connector sync
+- Portable controller surface for mode, playback, Flow, Screen, and Creative Care voice-capture control
+- Creative Care state from user-submitted voice capture only; no biometric or hidden sensor claims
+- Local JSON persistence for SystemState, controller sessions, pairing codes, and safe connector credential metadata
 
 ## Run locally
 
@@ -29,16 +30,34 @@ npm run build
 
 ## Smoke Test
 
-Run the Batch C system-state smoke checks:
+Run the core system-state smoke checks:
 
 ```bash
 npm run test:smoke
+```
+
+Run ScreenContext consumer checks:
+
+```bash
+npm run test:screen-context
+```
+
+Run connector adapter contract checks:
+
+```bash
+npm run test:connectors
 ```
 
 Run HTTP-level smoke checks for `/api/v1/system/actions`:
 
 ```bash
 npm run test:http-smoke
+```
+
+Run restart/persistence recovery checks:
+
+```bash
+npm run test:persistence
 ```
 
 ## Run As Services
@@ -110,6 +129,11 @@ Run the system API locally:
 npm run dev:api
 ```
 
+By default the API persists runtime state to `.tikpal/system-state.json` and connector secrets to
+`.tikpal/connector-secrets.json`. Override them with `TIKPAL_STATE_FILE=/path/to/system-state.json`
+and `TIKPAL_SECRET_FILE=/path/to/connector-secrets.json`, or disable state persistence with
+`TIKPAL_DISABLE_PERSISTENCE=1`.
+
 Key endpoints:
 
 - `GET /api/v1/system/state`
@@ -167,10 +191,23 @@ curl -s -X POST http://localhost:8787/api/v1/system/actions \
 Current Batch E scope:
 
 - `ScreenContext service` exists and is consumed by `ScreenPage`
-- connector mock sync lifecycle covers `syncing -> ok/stale/error`
+- connector adapter contract exists; the default fixture adapters preserve local `calendar` and `todoist` mock sync
+- real Calendar/Todoist adapter skeletons map provider payloads into the same ScreenContext-safe connector patch shape
+- sync lifecycle covers `syncing -> ok/stale/error`, including adapter failures that preserve last-good connector snapshots
 - fixture-based sample scenarios are available for `calendar` and `todoist`
 - Creative Care debug sampling is available for portable voice-capture flows
+- local persistence keeps restart recovery testable without changing the public API response shape
 - HTTP smoke tests cover action responses, connector sync, stale/error behavior, and fixture application
+
+Real connector adapter notes:
+
+- `server/connectorAdapters.js` is the integration boundary for Calendar/Todoist providers.
+- Fixture adapters are the default so local development and tests do not require external accounts.
+- Real adapters accept runtime credentials or a future service-owned secret store. Persisted connector metadata intentionally excludes raw access and refresh tokens.
+- Connector `connect` stores raw provider tokens in the local secret store, while `SystemState` and runtime logs only expose safe metadata and `credentialRef`.
+- Enable real sync with `TIKPAL_CONNECTOR_MODE=real`, or per provider with `TIKPAL_CALENDAR_CONNECTOR_MODE=real` / `TIKPAL_TODOIST_CONNECTOR_MODE=real`.
+- Calendar config can use `TIKPAL_CALENDAR_API_BASE`, `TIKPAL_CALENDAR_TIMEOUT_MS`, and `TIKPAL_CALENDAR_ID`.
+- Todoist config can use `TIKPAL_TODOIST_API_BASE` and `TIKPAL_TODOIST_TIMEOUT_MS`.
 
 ## Architecture
 
@@ -184,4 +221,9 @@ src/
 
 ## Next step
 
-Replace `src/bridge/playerBridge.js` with a moOde-backed implementation that preserves the same subscription and control API.
+Move from mock-backed integrations to real device integrations:
+
+1. Wire real Calendar/Todoist credentials into `server/connectorAdapters.js` through a service-owned secret store or runtime injection while keeping fixtures for tests.
+2. Replace `src/bridge/playerBridge.js` with a moOde-backed implementation that preserves the same subscription and control API.
+3. Add frontend performance sampling so `normal / reduced / safe` can drive real rendering degradation on Raspberry Pi 4.
+4. Turn OTA apply/rollback from the current state-machine skeleton into release-directory, restart, health-check, and rollback behavior.

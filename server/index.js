@@ -1,5 +1,8 @@
 import http from "node:http";
 import { fileURLToPath } from "node:url";
+import { createConnectorAdapterRegistry } from "./connectorAdapters.js";
+import { createJsonFilePersistence } from "./localPersistence.js";
+import { createJsonFileSecretStore } from "./localSecretStore.js";
 import { createMockConnectorSyncService } from "./mockConnectorSyncService.js";
 import { flowOpenApiDocument, systemOpenApiDocument } from "./openapi.js";
 import { createScreenContext } from "./screenContextService.js";
@@ -255,9 +258,28 @@ function createSystemApiDescriptor() {
   };
 }
 
+function createDefaultSystemStateStore() {
+  if (process.env.TIKPAL_DISABLE_PERSISTENCE === "1") {
+    return createSystemStateStore({
+      secretStore: createJsonFileSecretStore(),
+    });
+  }
+
+  return createSystemStateStore({
+    persistence: createJsonFilePersistence(),
+    secretStore: createJsonFileSecretStore(),
+  });
+}
+
+function createDefaultConnectorSyncService(store) {
+  return createMockConnectorSyncService(store, {
+    adapterRegistry: createConnectorAdapterRegistry({}, { store }),
+  });
+}
+
 export function createAppServer({
-  store = createSystemStateStore(),
-  connectorSyncService = createMockConnectorSyncService(store),
+  store = createDefaultSystemStateStore(),
+  connectorSyncService = createDefaultConnectorSyncService(store),
   apiKey = process.env.TIKPAL_API_KEY ?? "",
   allowedOrigins = new Set(
     (process.env.TIKPAL_ALLOWED_ORIGINS ??

@@ -2,6 +2,7 @@ node_modules/
 .DS_Store
 dist/
 coverage/
+.tikpal/
 .env
 npm-debug.log*
 yarn-debug.log*

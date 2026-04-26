@@ -952,17 +952,29 @@
 
 ---
 
-## 11. 当前建议
+## 11. 当前实现状态（2026-04-26）
 
-如果你下一步要真正开始做，我建议直接按 `Batch A` 开始。
+当前代码已经不是“从 Batch A 开始”的空白状态，而是一个可运行的 ambient OS 系统原型。
+
+- Batch A：已完成。`SystemState`、ActionDispatcher、转场锁、`/api/v1/system/state`、`/api/v1/system/actions`、`SystemShell` 已落地，并由 `npm run test:smoke` 和 `npm run test:http-smoke` 覆盖。
+- Batch B：已完成。`Overview / Listen / Flow` 主闭环、卡片进入 focus、返回 Overview、FlowCard 与 FlowPage 分离已落地。
+- Batch C：已完成。`ScreenPage`、本地番茄钟、`GlobalOverlay`、触摸/触摸板/遥控器式键盘导航已落地。
+- Batch D：已完成。`capabilities`、controller sessions、pairing codes、`viewer / controller / operator / admin` 权限分层、portable 最小控制闭环已落地。
+- Batch E：部分完成。`ScreenContext service`、映射器、portable Screen 控制、connector adapter contract、fixture Calendar/Todoist adapters、真实 Calendar/Todoist adapter 骨架、stale/error/last-good 行为已落地；真实 OAuth/token refresh/secret store 仍待实现。
+- Batch F：部分完成。Action/runtime logs、runtime summary、performance telemetry action、OTA status/check/apply/rollback state skeleton 已落地；真实性能采样与真实 OTA release/restart/health-check/rollback 仍待实现。
+- Phase 1 持久化准备：已新增本地 JSON 持久化层，覆盖 SystemState、controller sessions、pairing codes、connector credential metadata，并由 `npm run test:persistence` 验证重启恢复。
+
+---
+
+## 12. 当前建议
+
+下一步建议进入真实设备/真实数据接入，而不是继续补静态页面细节。
 
 最小启动顺序：
 
-1. ISSUE-001
-2. ISSUE-002
-3. ISSUE-004
-4. ISSUE-005
-5. ISSUE-006
-6. ISSUE-007
+1. 真实 Calendar/Todoist 接入：在 `server/connectorAdapters.js` 已有 adapter 骨架上接服务端 secret store、OAuth/token refresh 和真实 API 拉取；继续保留 fixture adapter 作为测试通道。
+2. 真实播放器桥接：用 moOde-backed implementation 替换 mock player bridge，保持现有 playback/action contract。
+3. 真机性能采样：前端上报 FPS/latency/memory，驱动 `normal / reduced / safe` 渲染降级。
+4. 真实 OTA：将当前 state skeleton 扩展为 release 目录、服务重启、健康检查、失败回滚。
 
-这会最快把项目从“单模式原型”推进到“ambient OS 系统原型”。
+这会最快把项目从“可运行系统原型”推进到“可上真实设备联调的版本”。

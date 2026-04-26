@@ -1,58 +1,14 @@
-import { getConnectorFixture, listConnectorFixtures } from "./mockConnectorFixtures.js";
+import { createConnectorAdapterRegistry } from "./connectorAdapters.js";
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function createSuccessPatch(name, fixture = "default") {
-  const fixturePayload = getConnectorFixture(name, fixture);
-  if (!fixturePayload) {
-    const error = new Error(`Unknown fixture: ${fixture}`);
-    error.code = "INVALID_FIXTURE";
-    throw error;
-  }
-
-  return {
-    connected: true,
-    status: "ok",
-    lastSyncAt: nowIso(),
-    lastErrorCode: null,
-    lastErrorMessage: null,
-    ...fixturePayload,
-  };
-}
-
-function createScenarioPatch(name, scenario, fixture) {
-  if (scenario === "error") {
-    return {
-      connected: true,
-      status: "error",
-      lastErrorCode: `${name.toUpperCase()}_SYNC_FAILED`,
-      lastErrorMessage: `${name} mock sync failed`,
-    };
-  }
-
-  if (scenario === "stale") {
-    return {
-      connected: true,
-      status: "stale",
-      lastErrorCode: `${name.toUpperCase()}_STALE`,
-      lastErrorMessage: `${name} data is stale`,
-    };
-  }
-
-  return createSuccessPatch(name, fixture);
-}
-
-export function createMockConnectorSyncService(store) {
+export function createMockConnectorSyncService(store, { adapterRegistry = createConnectorAdapterRegistry() } = {}) {
   const jobs = new Map();
 
   function runSync(name, { scenario = "success", fixture = "default", delayMs = 80 } = {}) {
-    if (!["calendar", "todoist"].includes(name)) {
-      const error = new Error(`Unsupported connector: ${name}`);
-      error.code = "INVALID_CONNECTOR";
-      throw error;
-    }
+    adapterRegistry.get(name);
 
     const jobId = `${name}_sync_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
     const startedAt = nowIso();
@@ -69,18 +25,39 @@ export function createMockConnectorSyncService(store) {
       "mock_sync_worker",
     );
 
-    const timeoutId = setTimeout(() => {
-      const patch = createScenarioPatch(name, scenario, fixture);
-      store.patchIntegration(name, patch, "mock_sync_worker");
-      jobs.set(jobId, {
-        id: jobId,
-        connector: name,
-        scenario,
-        fixture,
-        startedAt,
-        finishedAt: nowIso(),
-        status: patch.status,
-      });
+    const timeoutId = setTimeout(async () => {
+      try {
+        const patch = await adapterRegistry.sync(name, { scenario, fixture });
+        store.patchIntegration(name, patch, "mock_sync_worker");
+        jobs.set(jobId, {
+          id: jobId,
+          connector: name,
+          scenario,
+          fixture,
+          startedAt,
+          finishedAt: nowIso(),
+          status: patch.status,
+        });
+      } catch (error) {
+        const code = error?.code ?? "CONNECTOR_SYNC_FAILED";
+        const patch = {
+          connected: true,
+          status: "error",
+          lastErrorCode: code,
+          lastErrorMessage: error instanceof Error ? error.message : String(error),
+        };
+        store.patchIntegration(name, patch, "mock_sync_worker");
+        jobs.set(jobId, {
+          id: jobId,
+          connector: name,
+          scenario,
+          fixture,
+          startedAt,
+          finishedAt: nowIso(),
+          status: "error",
+          errorCode: code,
+        });
+      }
     }, normalizedDelayMs);
 
     jobs.set(jobId, {
@@ -118,7 +95,7 @@ export function createMockConnectorSyncService(store) {
     runSync,
     getJob,
     listFixtures(name) {
-      return listConnectorFixtures(name);
+      return adapterRegistry.listFixtures(name);
     },
   };
 }
