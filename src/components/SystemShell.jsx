@@ -6,9 +6,18 @@ import { OverviewPage } from "./OverviewPage";
 import { ScreenPage } from "./ScreenPage";
 import { usePerformanceTelemetry } from "../hooks/usePerformanceTelemetry";
 import { useSystemController } from "../hooks/useSystemController";
+import {
+  BLANK_TAP_HIDE_OVERLAY,
+  BLANK_TAP_SHOW_OVERLAY,
+  getBlankTapOverlayAction,
+  getChromeTrackpadPinchIntent,
+  getSafariGesturePinchIntent,
+  RETURN_OVERVIEW,
+} from "../interactions/systemShellInput";
 import { getOtaStatusHint } from "../viewmodels/screenContextConsumers";
 
 const OVERVIEW_MODES = ["listen", "flow", "screen"];
+const OVERLAY_HIDE_MS = 10000;
 
 function getModeSlotClass(mode) {
   if (mode === "listen") {
@@ -177,7 +186,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
     clearOverlayTimer();
     overlayTimerRef.current = window.setTimeout(() => {
       controller.hideControls();
-    }, 3200);
+    }, OVERLAY_HIDE_MS);
   }
 
   function revealOverlay(reason = "user") {
@@ -187,6 +196,25 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
 
     controller.showControls(reason);
     scheduleOverlayHide();
+  }
+
+  function handleBlankTap() {
+    const action = getBlankTapOverlayAction({
+      isFocusMode,
+      overlayVisible: state.overlay.visible,
+      transitionStatus,
+    });
+
+    if (action === BLANK_TAP_HIDE_OVERLAY) {
+      reportInputDebug("blank tap hide overlay");
+      clearOverlayTimer();
+      controller.hideControls();
+      return;
+    }
+
+    if (action === BLANK_TAP_SHOW_OVERLAY) {
+      revealOverlay("blank-tap");
+    }
   }
 
   useEffect(
@@ -419,10 +447,15 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
 
       if (event.ctrlKey) {
         event.preventDefault();
-        gesture.pinch += event.deltaY;
+        const pinchIntent = getChromeTrackpadPinchIntent({
+          activeMode: state.activeMode,
+          accumulatedDeltaY: gesture.pinch,
+          deltaY: event.deltaY,
+        });
+        gesture.pinch = pinchIntent.nextDeltaY;
         scheduleTrackpadGestureReset();
 
-        if (gesture.pinch <= -80 && state.activeMode !== "overview") {
+        if (pinchIntent.intent === RETURN_OVERVIEW) {
           resetTrackpadGesture();
           handleTrackpadPinch();
         }
@@ -467,8 +500,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       event.preventDefault();
       reportInputDebug(`gesturechange scale:${Number(event.scale ?? 1).toFixed(2)}`);
 
-      const scaleDelta = Number(event.scale ?? 1) - 1;
-      if (scaleDelta < -0.03) {
+      if (getSafariGesturePinchIntent({ activeMode: state.activeMode, scale: event.scale }) === RETURN_OVERVIEW) {
         handleTrackpadPinch();
       }
     }
@@ -542,10 +574,10 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       return;
     }
 
-    const shouldReveal = !pointerTapRef.current.interactive && !pointerTapRef.current.moved;
+    const shouldHandleBlankTap = !pointerTapRef.current.interactive && !pointerTapRef.current.moved;
     pointerTapRef.current.active = false;
-    if (shouldReveal) {
-      revealOverlay("blank-tap");
+    if (shouldHandleBlankTap) {
+      handleBlankTap();
     }
   }
 
@@ -642,7 +674,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
     const didTap = touch && !singleTouchTapRef.current.moved;
     singleTouchTapRef.current.active = false;
     if (didTap) {
-      revealOverlay("blank-tap");
+      handleBlankTap();
     }
   }
 
@@ -732,6 +764,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
           onResetPomodoro={controller.resetPomodoro}
           onCompleteTask={controller.completeCurrentTask}
           onInteract={scheduleOverlayHide}
+          onKeepOpen={clearOverlayTimer}
         />
       ) : null}
 

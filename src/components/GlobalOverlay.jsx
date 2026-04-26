@@ -132,6 +132,7 @@ export function GlobalOverlay({
   onResetPomodoro,
   onCompleteTask,
   onInteract,
+  onKeepOpen,
 }) {
   const statusHint = getOverlayStatusHint(state, screenContext);
 
@@ -141,6 +142,9 @@ export function GlobalOverlay({
       className={`global-overlay ${visible ? "is-visible" : ""}`}
       aria-hidden={!visible}
       onPointerDown={onInteract}
+      onPointerEnter={onKeepOpen}
+      onPointerMove={onKeepOpen}
+      onPointerLeave={onInteract}
     >
       <div className="global-overlay__panel">
         <div className="global-overlay__section">

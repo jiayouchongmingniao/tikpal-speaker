@@ -492,6 +492,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
   const [capabilities, setCapabilities] = useState(null);
   const bootstrappedRef = useRef(false);
   const preferOverviewUntilActionRef = useRef(initialMode === "overview");
+  const pendingInitialModeRef = useRef(initialMode !== "overview" ? initialMode : null);
   const stateRef = useRef(state);
 
   useEffect(() => {
@@ -514,6 +515,26 @@ export function useSystemController({ initialMode = "overview", initialFlowState
         }
 
         setState((current) => {
+          if (pendingInitialModeRef.current) {
+            if (nextState.activeMode === pendingInitialModeRef.current) {
+              pendingInitialModeRef.current = null;
+              return nextState;
+            }
+
+            return {
+              ...nextState,
+              activeMode: pendingInitialModeRef.current,
+              focusedPanel: pendingInitialModeRef.current,
+              transition: {
+                ...(nextState.transition ?? {}),
+                status: "idle",
+                from: pendingInitialModeRef.current,
+                to: pendingInitialModeRef.current,
+                lockedUntil: 0,
+              },
+            };
+          }
+
           if (preferOverviewUntilActionRef.current) {
             return {
               ...nextState,
@@ -549,7 +570,19 @@ export function useSystemController({ initialMode = "overview", initialFlowState
 
     bootstrappedRef.current = true;
 
-    systemApi.sendAction("set_mode", { mode: initialMode }, "speaker-ui-bootstrap").catch(() => {});
+    if (initialMode !== "overview") {
+      systemApi
+        .sendAction("set_mode", { mode: initialMode }, "speaker-ui-bootstrap")
+        .then((response) => {
+          pendingInitialModeRef.current = null;
+          const nextState = response?.state ?? response;
+          if (nextState?.activeMode) {
+            setState(nextState);
+            setScreenContext(deriveScreenContext(nextState));
+          }
+        })
+        .catch(() => {});
+    }
 
     if (initialFlowState && initialMode === "flow") {
       systemApi.sendAction("set_flow_state", { state: initialFlowState }, "speaker-ui-bootstrap").catch(() => {});
@@ -602,6 +635,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
   }, [state.transition]);
 
   async function dispatch(type, payload = {}, source = "speaker-ui") {
+    pendingInitialModeRef.current = null;
     preferOverviewUntilActionRef.current = false;
     const optimisticState = applyLocalAction(stateRef.current, type, payload, source);
     setState(optimisticState);

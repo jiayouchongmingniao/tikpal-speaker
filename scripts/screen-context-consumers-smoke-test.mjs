@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { getInitialModeFromLocation, getSurfaceFromLocation } from "../src/routing.js";
 import { getCreativeCareViewModel, getFlowCareCopy } from "../src/viewmodels/creativeCare.js";
 import {
   getOverviewScreenCardViewModel,
@@ -98,6 +99,24 @@ test("screen page view model prefers ScreenContext over raw screen state", () =>
   assert.equal(viewModel.remainingEvents, 4);
   assert.equal(viewModel.syncStatus, "stale");
   assert.equal(viewModel.isPaused, true);
+});
+
+test("initial route parser supports four top-level mode entrances", () => {
+  assert.equal(getInitialModeFromLocation({ pathname: "/overview/", search: "" }), "overview");
+  assert.equal(getInitialModeFromLocation({ pathname: "/flow/", search: "" }), "flow");
+  assert.equal(getInitialModeFromLocation({ pathname: "/listen/", search: "" }), "listen");
+  assert.equal(getInitialModeFromLocation({ pathname: "/screen/", search: "" }), "screen");
+  assert.equal(getInitialModeFromLocation({ pathname: "/", search: "?mode=screen" }), "screen");
+  assert.equal(getInitialModeFromLocation({ pathname: "/portable/", search: "" }), "overview");
+});
+
+test("surface parser keeps debug and portable outside normal mode routing", () => {
+  assert.equal(getSurfaceFromLocation({ pathname: "/debug/", search: "" }), "debug");
+  assert.equal(getSurfaceFromLocation({ pathname: "/flow/debug", search: "" }), "debug");
+  assert.equal(getSurfaceFromLocation({ pathname: "/", search: "?surface=debug" }), "debug");
+  assert.equal(getSurfaceFromLocation({ pathname: "/portable/", search: "" }), "portable");
+  assert.equal(getSurfaceFromLocation({ pathname: "/", search: "?surface=portable" }), "portable");
+  assert.equal(getSurfaceFromLocation({ pathname: "/screen/", search: "" }), "main");
 });
 
 test("screen page view model falls back to raw state when ScreenContext is missing", () => {
