@@ -1,5 +1,7 @@
 const MODE_ORDER = ["listen", "flow", "screen"];
 const FLOW_ORDER = ["focus", "flow", "relax", "sleep"];
+const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
+const CREATIVE_CARE_MODES = ["focus", "flow", "unwind", "sleep"];
 const MODE_TRANSITION_MS = 280;
 const FLOW_TRANSITION_MS = 220;
 const ROLE_ORDER = ["viewer", "controller", "operator", "admin"];
@@ -33,6 +35,10 @@ const ACTION_ROLE_REQUIREMENTS = {
   screen_reset_pomodoro: "controller",
   screen_complete_current_task: "controller",
   screen_set_focus_item: "controller",
+  voice_capture_submit: "controller",
+  voice_mood_set: "controller",
+  voice_care_mode_set: "controller",
+  voice_reflection_clear: "controller",
   runtime_set_performance_tier: "operator",
   runtime_report_performance: "operator",
   ota_check: "admin",
@@ -98,6 +104,78 @@ function getQueueTrack(index) {
   return MOCK_QUEUE[(index + MOCK_QUEUE.length) % MOCK_QUEUE.length];
 }
 
+function getDefaultCreativeCare() {
+  return {
+    latestTranscript: "",
+    moodLabel: "clear",
+    moodIntensity: 0.45,
+    inspirationSummary: "Ready for a fresh creative session.",
+    suggestedFlowState: "flow",
+    currentCareMode: "flow",
+    insightSentence: "Start with one clear thought, then let the session find its shape.",
+    updatedAt: null,
+    metadata: {
+      source: "system",
+      captureLength: 0,
+    },
+  };
+}
+
+function normalizeMoodLabel(value, fallback = "clear") {
+  return CREATIVE_CARE_MOODS.includes(value) ? value : fallback;
+}
+
+function normalizeCareMode(value, fallback = "flow") {
+  return CREATIVE_CARE_MODES.includes(value) ? value : fallback;
+}
+
+function deriveCareModeFromMood(moodLabel) {
+  if (moodLabel === "clear" || moodLabel === "energized") {
+    return "flow";
+  }
+
+  if (moodLabel === "scattered" || moodLabel === "stuck") {
+    return "focus";
+  }
+
+  return "unwind";
+}
+
+function deriveFlowStateFromCareMode(careMode) {
+  if (careMode === "sleep") {
+    return "sleep";
+  }
+
+  if (careMode === "unwind") {
+    return "relax";
+  }
+
+  return careMode === "flow" ? "flow" : "focus";
+}
+
+function createInsightSentence(transcript, fallback) {
+  const normalized = String(transcript ?? "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return fallback ?? getDefaultCreativeCare().insightSentence;
+  }
+
+  const [firstSentence] = normalized.split(/(?<=[.!?])\s+/);
+  const sentence = firstSentence || normalized;
+  return sentence.length > 132 ? `${sentence.slice(0, 129).trim()}...` : sentence;
+}
+
+function createInspirationSummary(transcript, moodLabel) {
+  const normalized = String(transcript ?? "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return moodLabel === "tired" || moodLabel === "calm"
+      ? "Keep the session soft and low pressure."
+      : "Choose one idea and give it a small next step.";
+  }
+
+  const clipped = normalized.length > 96 ? `${normalized.slice(0, 93).trim()}...` : normalized;
+  return `Noted: ${clipped}`;
+}
+
 function getAdjacentMode(currentMode, direction = 1) {
   const normalizedMode = currentMode === "overview" ? "listen" : currentMode;
   const currentIndex = MODE_ORDER.indexOf(normalizedMode);
@@ -121,6 +199,9 @@ function summarizeRuntimeState(state) {
     flowState: state.flow?.state ?? null,
     pomodoroState: state.screen?.pomodoroState ?? null,
     screenTask: state.screen?.currentTask ?? null,
+    creativeMood: state.creativeCare?.moodLabel ?? null,
+    creativeCareMode: state.creativeCare?.currentCareMode ?? null,
+    creativeFlowSuggestion: state.creativeCare?.suggestedFlowState ?? null,
     performanceTier: state.system?.performanceTier ?? null,
     avgFps: state.system?.performance?.avgFps ?? null,
     otaStatus: state.system?.otaStatus ?? null,
@@ -159,6 +240,31 @@ function summarizeActionPayload(type, payload = {}) {
     return { title: payload.title ?? null };
   }
 
+  if (type === "voice_capture_submit") {
+    const transcript = String(payload.transcript ?? "");
+    return {
+      moodLabel: payload.moodLabel ?? null,
+      moodIntensity: payload.moodIntensity ?? null,
+      careMode: payload.careMode ?? null,
+      captureLength: transcript.length,
+    };
+  }
+
+  if (type === "voice_mood_set") {
+    return {
+      moodLabel: payload.moodLabel ?? null,
+      moodIntensity: payload.moodIntensity ?? null,
+    };
+  }
+
+  if (type === "voice_care_mode_set") {
+    return { careMode: payload.careMode ?? null };
+  }
+
+  if (type === "voice_reflection_clear") {
+    return { clear: true };
+  }
+
   if (type === "ota_check" || type === "ota_apply") {
     return { targetVersion: payload.targetVersion ?? null };
   }
@@ -191,7 +297,7 @@ function createInitialState() {
     },
     flow: {
       state: "focus",
-      subtitle: "Deep Work",
+      subtitle: "Steady the next thought",
       audioMetrics: {
         volumeNormalized: 0.58,
         lowEnergy: 0.28,
@@ -220,6 +326,7 @@ function createInitialState() {
         stale: false,
       },
     },
+    creativeCare: getDefaultCreativeCare(),
     integrations: {
       calendar: {
         connected: false,
@@ -325,18 +432,18 @@ function normalizeScreenTimer(screen) {
 
 function deriveFlowSubtitle(flowState) {
   if (flowState === "focus") {
-    return "Deep Work";
+    return "Steady the next thought";
   }
 
   if (flowState === "relax") {
-    return "Wind Down";
+    return "Let the edges soften";
   }
 
   if (flowState === "sleep") {
-    return "Night Drift";
+    return "Dim the room inside";
   }
 
-  return "Motion Loop";
+  return "Follow the useful spark";
 }
 
 function mergeConnectorState(currentConnector = {}, patch = {}) {
@@ -599,6 +706,12 @@ export function createSystemStateStore() {
         tasks: true,
         schedule: true,
         pomodoro: true,
+      },
+      creativeCare: {
+        supported: true,
+        moods: CREATIVE_CARE_MOODS,
+        careModes: CREATIVE_CARE_MODES,
+        speechRecognition: "optional",
       },
       integrations: {
         calendar: true,
@@ -1094,6 +1207,133 @@ export function createSystemStateStore() {
                 ...liveState.screen,
                 currentTask: payload.title ?? liveState.screen.currentTask,
                 pomodoroFocusTask: payload.title ?? liveState.screen.currentTask,
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "voice_capture_submit") {
+        const transcript = String(payload.transcript ?? "").replace(/\s+/g, " ").trim();
+        const previousCare = liveState.creativeCare ?? getDefaultCreativeCare();
+        const moodLabel = normalizeMoodLabel(payload.moodLabel, previousCare.moodLabel);
+        if (payload.moodLabel && !CREATIVE_CARE_MOODS.includes(payload.moodLabel)) {
+          throw createRejectedError("INVALID_VOICE_MOOD", `Unsupported mood: ${payload.moodLabel}`);
+        }
+
+        if (payload.careMode && !CREATIVE_CARE_MODES.includes(payload.careMode)) {
+          throw createRejectedError("INVALID_CARE_MODE", `Unsupported care mode: ${payload.careMode}`);
+        }
+
+        const currentCareMode = normalizeCareMode(payload.careMode, deriveCareModeFromMood(moodLabel));
+        const moodIntensity = clamp(Number(payload.moodIntensity ?? previousCare.moodIntensity ?? 0.45), 0, 1);
+        const suggestedFlowState = deriveFlowStateFromCareMode(currentCareMode);
+        const insightSentence = createInsightSentence(transcript, previousCare.insightSentence);
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              creativeCare: {
+                ...previousCare,
+                latestTranscript: transcript,
+                moodLabel,
+                moodIntensity,
+                inspirationSummary: payload.inspirationSummary
+                  ? createInsightSentence(payload.inspirationSummary, previousCare.inspirationSummary)
+                  : createInspirationSummary(transcript, moodLabel),
+                suggestedFlowState,
+                currentCareMode,
+                insightSentence,
+                updatedAt: nowIso(),
+                metadata: {
+                  source: payload.source ?? source,
+                  captureLength: transcript.length,
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "voice_mood_set") {
+        if (!CREATIVE_CARE_MOODS.includes(payload.moodLabel)) {
+          throw createRejectedError("INVALID_VOICE_MOOD", `Unsupported mood: ${payload.moodLabel}`);
+        }
+
+        const previousCare = liveState.creativeCare ?? getDefaultCreativeCare();
+        const moodLabel = payload.moodLabel;
+        const currentCareMode = deriveCareModeFromMood(moodLabel);
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              creativeCare: {
+                ...previousCare,
+                moodLabel,
+                moodIntensity: clamp(Number(payload.moodIntensity ?? previousCare.moodIntensity ?? 0.45), 0, 1),
+                currentCareMode,
+                suggestedFlowState: deriveFlowStateFromCareMode(currentCareMode),
+                updatedAt: nowIso(),
+                metadata: {
+                  ...(previousCare.metadata ?? {}),
+                  source: payload.source ?? source,
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "voice_care_mode_set") {
+        if (!CREATIVE_CARE_MODES.includes(payload.careMode)) {
+          throw createRejectedError("INVALID_CARE_MODE", `Unsupported care mode: ${payload.careMode}`);
+        }
+
+        const previousCare = liveState.creativeCare ?? getDefaultCreativeCare();
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              creativeCare: {
+                ...previousCare,
+                currentCareMode: payload.careMode,
+                suggestedFlowState: deriveFlowStateFromCareMode(payload.careMode),
+                updatedAt: nowIso(),
+                metadata: {
+                  ...(previousCare.metadata ?? {}),
+                  source: payload.source ?? source,
+                },
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "voice_reflection_clear") {
+        const previousCare = liveState.creativeCare ?? getDefaultCreativeCare();
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              creativeCare: {
+                ...getDefaultCreativeCare(),
+                moodLabel: previousCare.moodLabel ?? "clear",
+                moodIntensity: previousCare.moodIntensity ?? 0.45,
+                currentCareMode: previousCare.currentCareMode ?? "flow",
+                suggestedFlowState: previousCare.suggestedFlowState ?? "flow",
+                updatedAt: nowIso(),
+                metadata: {
+                  source,
+                  captureLength: 0,
+                },
               },
             },
             source,

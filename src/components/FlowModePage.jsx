@@ -3,6 +3,7 @@ import { SideInfoPanel } from "./SideInfoPanel";
 import { StateTitle } from "./StateTitle";
 import { VisualEngineCanvas } from "./VisualEngineCanvas";
 import { FLOW_THEME } from "../theme";
+import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
 
 function deriveAppPhase({ activeMode, overlayVisible, flowState, transitionStatus }) {
   if (transitionStatus !== "idle") {
@@ -24,13 +25,16 @@ function deriveAppPhase({ activeMode, overlayVisible, flowState, transitionStatu
   return "immersive";
 }
 
-function createDerivedMetrics(playback, flow) {
+function createDerivedMetrics(playback, flow, creativeCare) {
   const metrics = flow.audioMetrics ?? {};
+  const intensity = Number(creativeCare?.moodIntensity ?? 0.45);
+  const careMode = creativeCare?.currentCareMode ?? "flow";
+  const careLift = careMode === "sleep" ? -0.12 : careMode === "unwind" ? -0.05 : careMode === "focus" ? 0.04 : 0.08;
   return {
     volumeNormalized: playback.volume / 100,
-    lowEnergy: metrics.lowEnergy ?? 0.28,
-    midEnergy: metrics.midEnergy ?? 0.22,
-    highEnergy: metrics.highEnergy ?? 0.18,
+    lowEnergy: Math.max(0.08, Math.min(0.7, (metrics.lowEnergy ?? 0.28) + intensity * 0.08 + careLift)),
+    midEnergy: Math.max(0.06, Math.min(0.6, (metrics.midEnergy ?? 0.22) + intensity * 0.06 + careLift / 2)),
+    highEnergy: Math.max(0.04, Math.min(0.5, (metrics.highEnergy ?? 0.18) + intensity * 0.04)),
     beatConfidence: metrics.beatConfidence ?? 0.12,
     isPlaying: playback.state === "play",
   };
@@ -63,13 +67,15 @@ export function FlowModePage({
   };
   const currentState = systemState.flow.state;
   const theme = FLOW_THEME[currentState];
+  const creativeCare = getCreativeCareViewModel(systemState);
+  const careCopy = getFlowCareCopy(currentState);
   const appPhase = deriveAppPhase({
     activeMode: systemState.activeMode,
     overlayVisible: systemState.overlay.visible,
     flowState: currentState,
     transitionStatus: transition.status,
   });
-  const audioMetrics = createDerivedMetrics(systemState.playback, systemState.flow);
+  const audioMetrics = createDerivedMetrics(systemState.playback, systemState.flow, creativeCare);
   const playerState = {
     playbackState: systemState.playback.state,
     volume: systemState.playback.volume,
@@ -81,7 +87,11 @@ export function FlowModePage({
   const transitionState = toFlowTransitionState(transition, currentState);
 
   return (
-    <main className={`flow-page phase-${appPhase} tone-${theme.uiTone} ${className}`.trim()} role="application" aria-label="Flow mode">
+    <main
+      className={`flow-page phase-${appPhase} tone-${theme.uiTone} care-${creativeCare.currentCareMode} ${className}`.trim()}
+      role="application"
+      aria-label="Flow mode"
+    >
       <AmbientBackground currentState={currentState} transitionState={transitionState} />
       <VisualEngineCanvas
         currentState={currentState}
@@ -90,7 +100,10 @@ export function FlowModePage({
         appPhase={appPhase}
       />
       <section className="flow-page__content">
-        <StateTitle title={theme.label} subtitle={theme.subtitle} appPhase={appPhase} />
+        <div className="flow-care-stack">
+          <StateTitle title={careCopy.label} subtitle={careCopy.subtitle} appPhase={appPhase} />
+          <p className="flow-care-insight">{creativeCare.insightSentence}</p>
+        </div>
         <SideInfoPanel
           playerState={playerState}
           volume={playerState.volume}

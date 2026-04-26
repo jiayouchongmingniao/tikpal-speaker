@@ -1,4 +1,5 @@
 import { getScreenPageViewModel } from "../viewmodels/screenContextConsumers";
+import { getCreativeCareViewModel } from "../viewmodels/creativeCare";
 
 function formatPomodoro(remainingSec) {
   const totalSeconds = Math.max(0, Number(remainingSec ?? 0));
@@ -20,6 +21,7 @@ export function ScreenPage({
   className = "",
 }) {
   const viewModel = getScreenPageViewModel(state, screenContext);
+  const creativeCare = getCreativeCareViewModel(state);
   const { duration, remaining, progressPercent, isRunning, isPaused, focusTitle, boundTask, currentBlockTitle, nextTitle, remainingTasks, remainingEvents, syncStatus, pomodoroState } =
     viewModel;
   const primaryLabel = isRunning ? "Restart timer" : isPaused ? "Resume timer" : "Start timer";
@@ -33,9 +35,9 @@ export function ScreenPage({
       <section className="mode-panel mode-panel--surface mode-panel--screen-surface">
         <div className="screen-layout">
           <div className="screen-hero">
-            <span className="mode-kicker">Screen</span>
-            <h1>{focusTitle}</h1>
-            <p>{currentBlockTitle}</p>
+            <span className="mode-kicker">Session Compass</span>
+            <h1>{creativeCare.intention}</h1>
+            <p>{creativeCare.nextGentleAction}</p>
             <div className="screen-timer">
               <strong>{formatPomodoro(remaining)} left</strong>
               <div className="screen-timer__rail">
@@ -43,7 +45,7 @@ export function ScreenPage({
               </div>
               <span>{pomodoroState}</span>
             </div>
-            <p className="screen-focus-binding">Bound to {boundTask ?? "no task"} · {state.screen.completedPomodoros ?? 0} sessions done</p>
+            <p className="screen-focus-binding">Bound to {boundTask ?? focusTitle ?? "no task"} · {state.screen.completedPomodoros ?? 0} sessions done</p>
             <div className="listen-controls listen-controls--inline">
               <button className="shell-button" onClick={isPaused ? onResumePomodoro : onStartPomodoro} type="button">
                 {primaryLabel}
@@ -64,7 +66,12 @@ export function ScreenPage({
             <div className="screen-sidebar__panel">
               <span className="mode-kicker">Now</span>
               <strong>{currentTime}</strong>
-              <p>{syncStatus === "mock" ? "Local fallback context" : syncStatus === "stale" ? "Context stale" : "Connected context"}</p>
+              <p>{focusTitle} · {syncStatus === "mock" ? "Local fallback context" : syncStatus === "stale" ? "Context stale" : "Connected context"}</p>
+            </div>
+            <div className="screen-sidebar__panel screen-sidebar__panel--care">
+              <span className="mode-kicker">Mood</span>
+              <strong>{creativeCare.moodText}</strong>
+              <p>{creativeCare.flowLabel} · {creativeCare.insightSentence}</p>
             </div>
             <div className="screen-sidebar__panel">
               <span className="mode-kicker">Next</span>

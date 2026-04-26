@@ -19,11 +19,13 @@
 
 ## 一级信息
 
-- 当前状态名：`FOCUS / RELAX / SLEEP / FLOW`
+- 当前 care 状态名：`Focus Care / Deep Flow / Unwind / Sleep Drift`
+- 对外 API 的 Flow 枚举仍保持 `focus / flow / relax / sleep`
 
 ## 二级信息
 
 - 副标题
+- 来自 `SystemState.creativeCare.insightSentence` 的一句 calm insight
 - 极弱播放存在感
 
 ## 三级信息
@@ -38,6 +40,13 @@
 - `relax`：暖、缓、展开
 - `sleep`：极暗、极静、低刺激
 - `flow`：连续、推进、层叠波动
+
+## CreativeCare 关系
+
+- `Flow` 不展示完整 transcript，只展示 `insightSentence`
+- `creativeCare.moodIntensity` 可以轻微影响视觉能量
+- `creativeCare.currentCareMode` 决定 care 语义，但不改变公开 Flow 枚举
+- 禁止展示医疗、治疗、心率、HRV、EEG、睡眠阶段或保证性效果声明
 
 ## 实现原则
 

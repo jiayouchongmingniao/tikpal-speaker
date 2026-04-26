@@ -125,16 +125,29 @@ Key endpoints:
 
 Open the Batch E debug surface in the browser:
 
-- `http://localhost:4173/debug`
-- `http://localhost:4173/?surface=debug`
+- `http://localhost:4173/flow/?surface=debug`
+- `http://localhost:4173/flow/debug`
 
 The debug surface lets you:
 
+- inspect the active System API base URL and health status
+- see whether the current Admin API key is accepted
 - inspect live `ScreenContext`
 - inspect `SystemState.integrations`
+- inspect `SystemState.creativeCare`
+- submit a manual Creative Care voice-capture sample
 - list connector fixtures
 - trigger mock sync jobs with `success`, `stale`, or `error`
 - verify how `ScreenContext` reacts to `calendar` and `todoist` changes
+- verify Creative Care runtime summaries and privacy-safe action logs
+
+For local admin actions, start the API with a key and enter the same value in the debug surface:
+
+```bash
+TIKPAL_API_KEY=dev-admin-key npm run dev:api
+```
+
+The key can also be passed as `?apiKey=dev-admin-key` for local debugging.
 
 Minimal manual verification flow:
 
@@ -145,6 +158,10 @@ curl -s -X POST http://localhost:8787/api/v1/system/integrations/calendar/sync \
   -H 'X-Tikpal-Key: dev-admin-key' \
   -d '{"scenario":"success","fixture":"meeting_heavy","delayMs":50}'
 curl -s http://localhost:8787/api/v1/system/screen/context
+curl -s -X POST http://localhost:8787/api/v1/system/actions \
+  -H 'Content-Type: application/json' \
+  -H 'X-Tikpal-Key: dev-admin-key' \
+  -d '{"type":"voice_capture_submit","payload":{"transcript":"I feel scattered but one idea is ready.","moodLabel":"scattered","moodIntensity":0.7},"source":"debug_surface"}'
 ```
 
 Current Batch E scope:
@@ -152,6 +169,7 @@ Current Batch E scope:
 - `ScreenContext service` exists and is consumed by `ScreenPage`
 - connector mock sync lifecycle covers `syncing -> ok/stale/error`
 - fixture-based sample scenarios are available for `calendar` and `todoist`
+- Creative Care debug sampling is available for portable voice-capture flows
 - HTTP smoke tests cover action responses, connector sync, stale/error behavior, and fixture application
 
 ## Architecture

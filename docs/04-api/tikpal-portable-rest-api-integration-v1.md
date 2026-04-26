@@ -315,8 +315,13 @@ portable 首屏通常只需要：
 - `flow.state`
 - `screen.currentTask`
 - `screen.pomodoroRemainingSec`
+- `creativeCare.moodLabel`
+- `creativeCare.currentCareMode`
+- `creativeCare.insightSentence`
+- `creativeCare.suggestedFlowState`
 - `capabilities.modes`
 - `capabilities.flowStates`
+- `capabilities.creativeCare`
 
 ---
 
@@ -399,7 +404,65 @@ curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
   }'
 ```
 
-### 8.6 开始番茄钟
+### 8.6 提交 Voice Capture
+
+portable 可以把用户主动说出或手动输入的一段 creative context 写入 `SystemState.creativeCare`。这是个 wellness / creative intention 输入，不是医疗或生物传感器输入。
+
+```bash
+curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <controller-session-token>' \
+  -d '{
+    "type": "voice_capture_submit",
+    "payload": {
+      "transcript": "I feel scattered but I have one idea I want to shape.",
+      "moodLabel": "scattered",
+      "moodIntensity": 0.74
+    },
+    "source": "portable_controller"
+  }'
+```
+
+服务端会确定性生成：
+
+- `currentCareMode`
+- `suggestedFlowState`
+- `inspirationSummary`
+- `insightSentence`
+- `metadata.captureLength`
+
+`latestTranscript` 只保存在 `SystemState.creativeCare` 中；runtime action log 只记录 transcript 长度，不记录原文。
+
+### 8.7 设置 mood / care mode
+
+```bash
+curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <controller-session-token>' \
+  -d '{
+    "type": "voice_mood_set",
+    "payload": {
+      "moodLabel": "energized",
+      "moodIntensity": 0.7
+    },
+    "source": "portable_controller"
+  }'
+```
+
+```bash
+curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <controller-session-token>' \
+  -d '{
+    "type": "voice_care_mode_set",
+    "payload": {
+      "careMode": "sleep"
+    },
+    "source": "portable_controller"
+  }'
+```
+
+### 8.8 开始番茄钟
 
 ```bash
 curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
@@ -414,7 +477,7 @@ curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
   }'
 ```
 
-### 8.7 完成当前任务
+### 8.9 完成当前任务
 
 ```bash
 curl -X POST http://<speaker-host>:8787/api/v1/system/actions \

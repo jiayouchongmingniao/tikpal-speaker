@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createSystemServiceClient } from "../bridge/systemServiceClient";
 
-const DEFAULT_PORTABLE_CAPABILITIES = ["mode_switch", "playback", "flow_control", "screen_control"];
+const DEFAULT_PORTABLE_CAPABILITIES = ["mode_switch", "playback", "flow_control", "screen_control", "creative_care"];
 const SESSION_ID_STORAGE_KEY = "tikpal-portable-session-id";
 
 function deriveScreenContext(nextState) {

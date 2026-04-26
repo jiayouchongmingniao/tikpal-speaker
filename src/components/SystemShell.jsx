@@ -197,11 +197,6 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       if (state.overlay.visible) {
         controller.hideControls();
       }
-      return;
-    }
-
-    if (transitionStatus === "idle") {
-      revealOverlay("mode-entry");
     }
   }, [state.activeMode, state.overlay.visible, transitionStatus]);
 

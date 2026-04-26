@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createScreenContext } from "../server/screenContextService.js";
 import { createSystemStateStore } from "../server/systemStateStore.js";
+import { getCreativeCareViewModel, getFlowCareCopy } from "../src/viewmodels/creativeCare.js";
 
 function test(name, fn) {
   try {
@@ -87,6 +88,50 @@ test("screen_complete_current_task advances task and increments completed pomodo
   assert.equal(state.screen.completedPomodoros, previous.screen.completedPomodoros + 1);
   assert.equal(state.screen.pomodoroState, "idle");
   assert.equal(state.screen.pomodoroFocusTask, state.screen.currentTask);
+});
+
+test("voice_capture_submit updates creativeCare and keeps action logs privacy safe", () => {
+  const store = createStore();
+  const transcript = "I feel scattered but I have a small product idea. I want to shape it gently.";
+  const state = store.runAction(
+    "voice_capture_submit",
+    {
+      transcript,
+      moodLabel: "scattered",
+      moodIntensity: 0.8,
+    },
+    "portable_controller",
+  );
+  const [logEntry] = store.getActionLogs(1);
+
+  assert.equal(state.creativeCare.latestTranscript, transcript);
+  assert.equal(state.creativeCare.moodLabel, "scattered");
+  assert.equal(state.creativeCare.currentCareMode, "focus");
+  assert.equal(state.creativeCare.suggestedFlowState, "focus");
+  assert.equal(state.creativeCare.metadata.captureLength, transcript.length);
+  assert.equal(logEntry.payloadSummary.captureLength, transcript.length);
+  assert.equal(JSON.stringify(logEntry).includes(transcript), false);
+});
+
+test("voice mood and explicit care mode update Flow recommendation", () => {
+  const store = createStore();
+  const moodState = store.runAction("voice_mood_set", { moodLabel: "energized", moodIntensity: 0.7 }, "portable_controller");
+  assert.equal(moodState.creativeCare.currentCareMode, "flow");
+  assert.equal(moodState.creativeCare.suggestedFlowState, "flow");
+
+  const sleepState = store.runAction("voice_care_mode_set", { careMode: "sleep" }, "portable_controller");
+  assert.equal(sleepState.creativeCare.currentCareMode, "sleep");
+  assert.equal(sleepState.creativeCare.suggestedFlowState, "sleep");
+});
+
+test("creative care view models fall back safely without voice context", () => {
+  const viewModel = getCreativeCareViewModel({});
+
+  assert.equal(viewModel.moodLabel, "clear");
+  assert.equal(viewModel.currentCareMode, "flow");
+  assert.equal(viewModel.flowLabel, "Deep Flow");
+  assert.equal(viewModel.hasVoiceContext, false);
+  assert.equal(getFlowCareCopy("relax").label, "Unwind");
 });
 
 test("invalid mode is rejected", () => {

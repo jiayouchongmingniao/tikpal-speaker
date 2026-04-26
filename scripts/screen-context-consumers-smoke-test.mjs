@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { getCreativeCareViewModel, getFlowCareCopy } from "../src/viewmodels/creativeCare.js";
 import {
   getOverviewScreenCardViewModel,
   getOverlayScreenViewModel,
@@ -172,6 +173,16 @@ test("overlay ota status hint covers apply, restart, rollback, and error states"
     getOtaStatusHint({ otaStatus: "error", performanceTier: "normal", ota: { lastErrorCode: "HEALTH_CHECK_FAILED" } }),
     "Update failed: HEALTH_CHECK_FAILED",
   );
+});
+
+test("creative care view model provides safe Listen Flow Screen fallbacks", () => {
+  const viewModel = getCreativeCareViewModel(createState());
+
+  assert.equal(viewModel.moodText, "Clear");
+  assert.equal(viewModel.careText, "Flow");
+  assert.equal(viewModel.flowLabel, "Deep Flow");
+  assert.equal(viewModel.soundscape, "Open creative soundscape");
+  assert.equal(getFlowCareCopy("sleep").label, "Sleep Drift");
 });
 
 console.log("ScreenContext consumer smoke tests passed.");

@@ -2,8 +2,8 @@ export const FLOW_ORDER = ["focus", "flow", "relax", "sleep"];
 
 export const FLOW_THEME = {
   focus: {
-    label: "FOCUS",
-    subtitle: "Deep Work",
+    label: "Focus Care",
+    subtitle: "Steady the next thought",
     bgGradient: ["#081421", "#10294A", "#1D3D73"],
     accent: "#5B7CFF",
     glow: "#7C8DFF",
@@ -14,8 +14,8 @@ export const FLOW_THEME = {
     uiTone: "sharp",
   },
   relax: {
-    label: "RELAX",
-    subtitle: "Wind Down",
+    label: "Unwind",
+    subtitle: "Let the edges soften",
     bgGradient: ["#1A1311", "#5A2E24", "#C46D4A"],
     accent: "#FFB38A",
     glow: "#FF8FA8",
@@ -26,8 +26,8 @@ export const FLOW_THEME = {
     uiTone: "soft",
   },
   sleep: {
-    label: "SLEEP",
-    subtitle: "Night Drift",
+    label: "Sleep Drift",
+    subtitle: "Dim the room inside",
     bgGradient: ["#020305", "#050812", "#0B1020"],
     accent: "#6C7A9C",
     glow: "#2C3550",
@@ -38,8 +38,8 @@ export const FLOW_THEME = {
     uiTone: "dim",
   },
   flow: {
-    label: "FLOW",
-    subtitle: "Motion Loop",
+    label: "Deep Flow",
+    subtitle: "Follow the useful spark",
     bgGradient: ["#0C1020", "#392C6D", "#8A4D88"],
     accent: "#8E7CFF",
     glow: "#FF7DB8",

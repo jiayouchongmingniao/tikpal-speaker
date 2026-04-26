@@ -354,10 +354,13 @@ type PerformanceLog = {
 
 ```text
 DebugPanel
+  ├─ ApiHealthStatus
+  ├─ AdminAuthStatus
   ├─ RuntimeSummary
   ├─ StateInspector
   ├─ ActionTimeline
   ├─ ScreenSyncInspector
+  ├─ CreativeCareInspector
   ├─ PerformanceInspector
   └─ OtaInspector
 ```
@@ -365,6 +368,15 @@ DebugPanel
 ---
 
 ## 8. RuntimeSummary
+
+`RuntimeSummary` 属于 admin/debug 信息。Debug Panel 应该先显示 Admin API key 是否已通过验证；如果未通过，普通 `state` 和 `ScreenContext` 仍可读，但 runtime logs、connector sync、OTA、debug action 不应假装可用。
+
+在 Vite `base=/flow/` 的本地开发环境中，推荐调试入口是：
+
+- `/flow/?surface=debug`
+- `/flow/debug`
+
+不要把裸 `/debug` 当成唯一入口；它可能被 Vite base 拦截为 404。
 
 ### 目的
 
@@ -378,6 +390,9 @@ DebugPanel
 - `playback.state`
 - `flow.state`
 - `screen.currentTask`
+- `creativeCare.moodLabel`
+- `creativeCare.currentCareMode`
+- `creativeCare.suggestedFlowState`
 - `performanceTier`
 - `otaStatus`
 - `lastSource`
@@ -387,6 +402,35 @@ DebugPanel
 适合快速回答：
 
 - 现在系统到底处在哪
+
+---
+
+## 8.1 CreativeCareInspector
+
+### 目的
+
+联调 portable voice capture 与主屏 creative wellness 表达。
+
+### 建议显示
+
+- 当前 `moodLabel`
+- 当前 `currentCareMode`
+- 当前 `suggestedFlowState`
+- `insightSentence`
+- `metadata.captureLength`
+- `updatedAt`
+
+### 调试动作
+
+- 提交一段手动 transcript sample
+- 设置 mood / intensity / care mode
+- 清空 reflection
+
+### 隐私要求
+
+- ActionTimeline 只显示 `captureLength`、mood、care mode
+- 不在 action log 中保存完整 transcript
+- 不展示或模拟心率、HRV、EEG、睡眠阶段等传感器字段
 
 ---
 

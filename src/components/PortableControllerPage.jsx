@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { usePortableController } from "../hooks/usePortableController";
+import { CREATIVE_CARE_MOODS, CREATIVE_CARE_MODES, getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
 import { getPortableScreenCardViewModel } from "../viewmodels/screenContextConsumers";
 
 const FLOW_STATES = ["focus", "flow", "relax", "sleep"];
@@ -180,8 +181,57 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
   const playbackState = state?.playback?.state ?? "pause";
   const playbackVolume = state?.playback?.volume ?? 58;
   const flowState = state?.flow?.state ?? "focus";
+  const creativeCare = getCreativeCareViewModel(state);
   const screenCard = getPortableScreenCardViewModel(state, screenContext);
   const pomodoroState = screenCard.pomodoroState;
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [voiceMood, setVoiceMood] = useState(creativeCare.moodLabel);
+  const [voiceIntensity, setVoiceIntensity] = useState(creativeCare.moodIntensity);
+  const [voiceCareMode, setVoiceCareMode] = useState(creativeCare.currentCareMode);
+  const [listening, setListening] = useState(false);
+  const SpeechRecognition = typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
+  const canUseSpeechRecognition = Boolean(SpeechRecognition);
+
+  useEffect(() => {
+    setVoiceMood(creativeCare.moodLabel);
+    setVoiceIntensity(creativeCare.moodIntensity);
+    setVoiceCareMode(creativeCare.currentCareMode);
+  }, [creativeCare.moodLabel, creativeCare.moodIntensity, creativeCare.currentCareMode]);
+
+  function startSpeechRecognition() {
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => setListening(true);
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript ?? "")
+        .join(" ")
+        .trim();
+      if (transcript) {
+        setVoiceTranscript((current) => [current, transcript].filter(Boolean).join(" ").trim());
+      }
+    };
+    recognition.start();
+  }
+
+  async function submitVoiceCapture() {
+    await controller.sendAction("voice_capture_submit", {
+      transcript: voiceTranscript,
+      moodLabel: voiceMood,
+      moodIntensity: voiceIntensity,
+      careMode: voiceCareMode,
+      source: "portable_controller",
+    });
+    setVoiceTranscript("");
+  }
 
   return (
     <section className="portable-control-view">
@@ -299,8 +349,8 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
 
           <article className="portable-card">
             <span className="portable-card__label">Flow</span>
-            <h2>{flowState}</h2>
-            <p>{state?.flow?.subtitle ?? "Motion Loop"}</p>
+            <h2>{getFlowCareCopy(flowState).label}</h2>
+            <p>{creativeCare.insightSentence}</p>
             <div className="portable-mode-row">
               {FLOW_STATES.map((item) => (
                 <button
@@ -310,9 +360,78 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
                   disabled={!hasWriteAccess}
                   onClick={() => controller.sendAction("set_flow_state", { state: item })}
                 >
-                  {item}
+                  {getFlowCareCopy(item).label}
                 </button>
               ))}
+            </div>
+          </article>
+
+          <article className="portable-card portable-card--voice">
+            <span className="portable-card__label">Voice Capture</span>
+            <h2>{creativeCare.moodText} · {creativeCare.careText}</h2>
+            <p>{creativeCare.insightSentence}</p>
+            <textarea
+              className="portable-voice-input"
+              value={voiceTranscript}
+              onChange={(event) => setVoiceTranscript(event.target.value)}
+              placeholder="Say or type what is on your mind."
+              rows={4}
+              disabled={!hasWriteAccess}
+            />
+            <div className="portable-mode-row" aria-label="Mood">
+              {CREATIVE_CARE_MOODS.map((mood) => (
+                <button
+                  key={mood}
+                  type="button"
+                  className={`portable-chip ${voiceMood === mood ? "is-active" : ""}`}
+                  disabled={!hasWriteAccess}
+                  onClick={() => {
+                    setVoiceMood(mood);
+                    controller.sendAction("voice_mood_set", { moodLabel: mood, moodIntensity: voiceIntensity }).catch(() => {});
+                  }}
+                >
+                  {mood}
+                </button>
+              ))}
+            </div>
+            <label className="portable-slider">
+              <span>Intensity {Math.round(voiceIntensity * 100)}%</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={voiceIntensity}
+                disabled={!hasWriteAccess}
+                onChange={(event) => setVoiceIntensity(Number(event.target.value))}
+              />
+            </label>
+            <div className="portable-mode-row" aria-label="Care mode">
+              {CREATIVE_CARE_MODES.map((careMode) => (
+                <button
+                  key={careMode}
+                  type="button"
+                  className={`portable-chip ${voiceCareMode === careMode ? "is-active" : ""}`}
+                  disabled={!hasWriteAccess}
+                  onClick={() => {
+                    setVoiceCareMode(careMode);
+                    controller.sendAction("voice_care_mode_set", { careMode }).catch(() => {});
+                  }}
+                >
+                  {careMode}
+                </button>
+              ))}
+            </div>
+            <div className="portable-control-row">
+              <button type="button" className="portable-button portable-button--ghost" disabled={!hasWriteAccess || !canUseSpeechRecognition || listening} onClick={startSpeechRecognition}>
+                {listening ? "Listening" : "Use microphone"}
+              </button>
+              <button type="button" className="portable-button" disabled={!hasWriteAccess} onClick={submitVoiceCapture}>
+                Submit
+              </button>
+              <button type="button" className="portable-button portable-button--ghost" disabled={!hasWriteAccess} onClick={() => controller.sendAction("voice_reflection_clear")}>
+                Clear
+              </button>
             </div>
           </article>
 

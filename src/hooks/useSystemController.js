@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createSystemServiceClient } from "../bridge/systemServiceClient";
 
 const MODE_ORDER = ["listen", "flow", "screen"];
+const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
+const CREATIVE_CARE_MODES = ["focus", "flow", "unwind", "sleep"];
 const MODE_TRANSITION_MS = 280;
 const FLOW_TRANSITION_MS = 220;
 
@@ -23,18 +25,70 @@ function getAdjacentMode(currentMode, direction = 1) {
 
 function deriveFlowSubtitle(flowState) {
   if (flowState === "focus") {
-    return "Deep Work";
+    return "Steady the next thought";
   }
 
   if (flowState === "relax") {
-    return "Wind Down";
+    return "Let the edges soften";
   }
 
   if (flowState === "sleep") {
-    return "Night Drift";
+    return "Dim the room inside";
   }
 
-  return "Motion Loop";
+  return "Follow the useful spark";
+}
+
+function getDefaultCreativeCare() {
+  return {
+    latestTranscript: "",
+    moodLabel: "clear",
+    moodIntensity: 0.45,
+    inspirationSummary: "Ready for a fresh creative session.",
+    suggestedFlowState: "flow",
+    currentCareMode: "flow",
+    insightSentence: "Start with one clear thought, then let the session find its shape.",
+    updatedAt: null,
+    metadata: {
+      source: "speaker-ui",
+      captureLength: 0,
+    },
+  };
+}
+
+function deriveCareModeFromMood(moodLabel) {
+  if (moodLabel === "clear" || moodLabel === "energized") {
+    return "flow";
+  }
+
+  if (moodLabel === "scattered" || moodLabel === "stuck") {
+    return "focus";
+  }
+
+  return "unwind";
+}
+
+function deriveFlowStateFromCareMode(careMode) {
+  if (careMode === "sleep") {
+    return "sleep";
+  }
+
+  if (careMode === "unwind") {
+    return "relax";
+  }
+
+  return careMode === "flow" ? "flow" : "focus";
+}
+
+function createInsightSentence(transcript, fallback) {
+  const normalized = String(transcript ?? "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return fallback ?? getDefaultCreativeCare().insightSentence;
+  }
+
+  const [firstSentence] = normalized.split(/(?<=[.!?])\s+/);
+  const sentence = firstSentence || normalized;
+  return sentence.length > 132 ? `${sentence.slice(0, 129).trim()}...` : sentence;
 }
 
 function deriveScreenContext(nextState) {
@@ -196,6 +250,87 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
     };
   }
 
+  if (type === "voice_capture_submit") {
+    const previousCare = liveState.creativeCare ?? getDefaultCreativeCare();
+    const transcript = String(payload.transcript ?? "").replace(/\s+/g, " ").trim();
+    const moodLabel = CREATIVE_CARE_MOODS.includes(payload.moodLabel) ? payload.moodLabel : previousCare.moodLabel ?? "clear";
+    const currentCareMode = CREATIVE_CARE_MODES.includes(payload.careMode) ? payload.careMode : deriveCareModeFromMood(moodLabel);
+    const suggestedFlowState = deriveFlowStateFromCareMode(currentCareMode);
+    const insightSentence = createInsightSentence(transcript, previousCare.insightSentence);
+    return {
+      ...liveState,
+      creativeCare: {
+        ...previousCare,
+        latestTranscript: transcript,
+        moodLabel,
+        moodIntensity: clamp(Number(payload.moodIntensity ?? previousCare.moodIntensity ?? 0.45), 0, 1),
+        inspirationSummary: payload.inspirationSummary ?? (transcript ? `Noted: ${insightSentence}` : previousCare.inspirationSummary),
+        suggestedFlowState,
+        currentCareMode,
+        insightSentence,
+        updatedAt: nowIso(),
+        metadata: {
+          source,
+          captureLength: transcript.length,
+        },
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "voice_mood_set") {
+    const previousCare = liveState.creativeCare ?? getDefaultCreativeCare();
+    const moodLabel = CREATIVE_CARE_MOODS.includes(payload.moodLabel) ? payload.moodLabel : previousCare.moodLabel ?? "clear";
+    const currentCareMode = deriveCareModeFromMood(moodLabel);
+    return {
+      ...liveState,
+      creativeCare: {
+        ...previousCare,
+        moodLabel,
+        moodIntensity: clamp(Number(payload.moodIntensity ?? previousCare.moodIntensity ?? 0.45), 0, 1),
+        currentCareMode,
+        suggestedFlowState: deriveFlowStateFromCareMode(currentCareMode),
+        updatedAt: nowIso(),
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "voice_care_mode_set") {
+    const previousCare = liveState.creativeCare ?? getDefaultCreativeCare();
+    const currentCareMode = CREATIVE_CARE_MODES.includes(payload.careMode) ? payload.careMode : previousCare.currentCareMode ?? "flow";
+    return {
+      ...liveState,
+      creativeCare: {
+        ...previousCare,
+        currentCareMode,
+        suggestedFlowState: deriveFlowStateFromCareMode(currentCareMode),
+        updatedAt: nowIso(),
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "voice_reflection_clear") {
+    const previousCare = liveState.creativeCare ?? getDefaultCreativeCare();
+    return {
+      ...liveState,
+      creativeCare: {
+        ...getDefaultCreativeCare(),
+        moodLabel: previousCare.moodLabel,
+        moodIntensity: previousCare.moodIntensity,
+        currentCareMode: previousCare.currentCareMode,
+        suggestedFlowState: previousCare.suggestedFlowState,
+        updatedAt: nowIso(),
+      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
   if (type === "screen_start_pomodoro") {
     const durationSec = clamp(Number(payload.durationSec ?? liveState.screen?.pomodoroDurationSec ?? 1500), 60, 7200);
     return {
@@ -323,7 +458,7 @@ function createFallbackState(initialMode = "overview", initialFlowState = "focus
     },
     flow: {
       state: initialFlowState,
-      subtitle: "Deep Work",
+      subtitle: deriveFlowSubtitle(initialFlowState),
     },
     screen: {
       currentTask: "Write Ambient OS Spec",
@@ -339,6 +474,7 @@ function createFallbackState(initialMode = "overview", initialFlowState = "focus
         remainingEvents: 2,
       },
     },
+    creativeCare: getDefaultCreativeCare(),
     system: {
       version: "0.1.0",
       performanceTier: "normal",
@@ -545,6 +681,18 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     },
     async setScreenFocusItem(title) {
       return dispatch("screen_set_focus_item", { title });
+    },
+    async submitVoiceCapture(payload) {
+      return dispatch("voice_capture_submit", payload);
+    },
+    async setVoiceMood(moodLabel, moodIntensity) {
+      return dispatch("voice_mood_set", { moodLabel, moodIntensity });
+    },
+    async setVoiceCareMode(careMode) {
+      return dispatch("voice_care_mode_set", { careMode });
+    },
+    async clearVoiceReflection() {
+      return dispatch("voice_reflection_clear");
     },
   };
 }

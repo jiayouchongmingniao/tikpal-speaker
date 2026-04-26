@@ -1,3 +1,4 @@
+import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
 import { getOverviewScreenCardViewModel } from "../viewmodels/screenContextConsumers";
 
 function OverviewCard({
@@ -86,6 +87,7 @@ export function OverviewPage({
   className = "",
 }) {
   const screenCard = getOverviewScreenCardViewModel(state, screenContext);
+  const creativeCare = getCreativeCareViewModel(state);
   const isRunning = screenCard.isRunning;
   const isPaused = screenCard.isPaused;
   const transitionStatus = state.transition?.status ?? "idle";
@@ -95,11 +97,11 @@ export function OverviewPage({
       <section className="overview-grid">
         <OverviewCard
           mode="listen"
-          label="Listen"
-          title={state.playback.trackTitle ?? "Nothing playing"}
-          subtitle={state.playback.artist}
-          meta={`${state.playback.source ?? "Unknown source"} · Volume ${state.playback.volume}%`}
-          detail={`Next ${state.playback.nextTrackTitle ?? "Unknown"}`}
+          label="Listen In"
+          title={creativeCare.soundscape}
+          subtitle={creativeCare.insightSentence}
+          meta={`${creativeCare.moodText} · Volume ${state.playback.volume}%`}
+          detail={state.playback.trackTitle ?? "Ambient support"}
           tone="listen"
           transitionStatus={transitionStatus}
           isFocusTarget={focusTarget === "listen"}
@@ -122,10 +124,10 @@ export function OverviewPage({
         <OverviewCard
           mode="flow"
           label="Flow"
-          title={String(state.flow.state ?? "focus").toUpperCase()}
-          subtitle={state.flow.subtitle}
-          meta="Enter the current ambient state"
-          detail={`Beat ${Math.round((state.flow.audioMetrics?.beatConfidence ?? 0.12) * 100)}%`}
+          title={getFlowCareCopy(state.flow.state ?? "focus").label}
+          subtitle={creativeCare.intention}
+          meta={`Suggested ${creativeCare.flowLabel}`}
+          detail={creativeCare.nextGentleAction}
           tone="flow"
           transitionStatus={transitionStatus}
           isFocusTarget={focusTarget === "flow"}
@@ -140,7 +142,7 @@ export function OverviewPage({
                   onClick={() => onSetFlowState(item)}
                   type="button"
                 >
-                  {item}
+                  {getFlowCareCopy(item).label}
                 </button>
               ))}
             </div>

@@ -272,24 +272,30 @@ curl -X POST /api/v1/system/actions \
 ### 步骤
 
 1. 用户在本机进入 `Listen`
-2. 选择播放内容并确认音量
-3. 使用 portable 切到 `Screen`
-4. portable 启动番茄钟
-5. 用户用 portable 再切到 `Flow`
-6. 设备屏幕进入沉浸态
-7. 番茄钟结束后，用户用 portable 切回 `Screen`
-8. 完成当前任务
+2. portable 录入或手动输入一段 voice capture
+3. portable 选择 mood，例如 `scattered`
+4. 系统写入 `SystemState.creativeCare` 并生成 `currentCareMode` / `suggestedFlowState`
+5. `Listen` 显示 Listen In、voice insight、ambient support
+6. 使用 portable 切到 `Screen`
+7. portable 启动番茄钟
+8. 用户用 portable 再切到 `Flow`
+9. `Flow` 使用 `Focus Care / Deep Flow / Unwind / Sleep Drift` 语义显示，并只展示一句 calm insight
+10. 番茄钟结束后，用户用 portable 切回 `Screen`
+11. 完成当前任务
 
 ### 预期结果
 
 - 本机屏幕承担主表现
 - portable 承担主控制
 - 不需要频繁走到设备前操作
+- voice capture 是 personalization 来源，不依赖心率、HRV、EEG 或睡眠阶段 UI
 
 ### 验收点
 
 - `Listen -> Screen -> Flow -> Screen` 路径完整可用
 - 所有动作都有一致的系统状态变化
+- `voice_capture_submit` 更新 `SystemState.creativeCare`
+- runtime action log 不保存完整 transcript
 
 ---
 

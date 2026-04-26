@@ -204,7 +204,7 @@ export function createSystemServiceClient() {
       deviceId = "tikpal-portable-web",
       name = "Tikpal Portable Web",
       role = "controller",
-      capabilities = ["mode_switch", "playback", "flow_control", "screen_control"],
+      capabilities = ["mode_switch", "playback", "flow_control", "screen_control", "creative_care"],
       ttlSec,
     } = {}) {
       const session = await requestJson(`${baseUrl}/controller-sessions`, {
@@ -225,7 +225,7 @@ export function createSystemServiceClient() {
     },
     async createPairingCode({
       role = "controller",
-      capabilities = ["mode_switch", "playback", "flow_control", "screen_control"],
+      capabilities = ["mode_switch", "playback", "flow_control", "screen_control", "creative_care"],
       ttlSec,
     } = {}) {
       return requestJson(`${baseUrl}/pairing-codes`, {
@@ -242,7 +242,7 @@ export function createSystemServiceClient() {
       code,
       deviceId = "tikpal-portable-web",
       name = "Tikpal Portable Web",
-      capabilities = ["mode_switch", "playback", "flow_control", "screen_control"],
+      capabilities = ["mode_switch", "playback", "flow_control", "screen_control", "creative_care"],
       ttlSec,
     }) {
       const session = await requestJson(`${baseUrl}/pairing-codes/claim`, {
@@ -285,7 +285,7 @@ export function createSystemServiceClient() {
       const requestId = `${type}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       return requestJson(`${baseUrl}/actions`, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders({ admin: Boolean(apiKey) }),
         body: JSON.stringify({
           type,
           payload,

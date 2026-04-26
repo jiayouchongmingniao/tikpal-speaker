@@ -229,6 +229,12 @@ function createSystemApiDescriptor() {
       otaApply: "/api/v1/system/ota/apply",
       otaRollback: "/api/v1/system/ota/rollback",
       actions: "/api/v1/system/actions",
+      creativeCareActions: {
+        submitVoiceCapture: "POST /api/v1/system/actions voice_capture_submit",
+        setMood: "POST /api/v1/system/actions voice_mood_set",
+        setCareMode: "POST /api/v1/system/actions voice_care_mode_set",
+        clearReflection: "POST /api/v1/system/actions voice_reflection_clear",
+      },
       integrations: "/api/v1/system/integrations",
       calendarIntegration: "/api/v1/system/integrations/calendar",
       calendarConnect: "/api/v1/system/integrations/calendar/connect",
@@ -866,7 +872,9 @@ export function createAppServer({
         code === "UNKNOWN_ACTION" ||
         code === "PAIRING_CODE_INVALID" ||
         code === "INVALID_CONNECTOR" ||
-        code === "INVALID_FIXTURE"
+        code === "INVALID_FIXTURE" ||
+        code === "INVALID_VOICE_MOOD" ||
+        code === "INVALID_CARE_MODE"
       ) {
         sendActionError(
           response,

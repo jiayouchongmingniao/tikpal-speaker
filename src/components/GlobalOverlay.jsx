@@ -1,3 +1,4 @@
+import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
 import { getOverlayScreenViewModel, getOverlayStatusHint } from "../viewmodels/screenContextConsumers";
 
 function formatPomodoro(remainingSec) {
@@ -56,9 +57,10 @@ function ScreenControls({ state, screenContext, onStartPomodoro, onResumePomodor
 }
 
 function ListenControls({ state, onPrevTrack, onTogglePlay, onNextTrack }) {
+  const creativeCare = getCreativeCareViewModel(state);
   return (
     <div className="global-overlay__section global-overlay__section--mode" role="group" aria-label="Listen controls">
-      <span className="global-overlay__label">Listen</span>
+      <span className="global-overlay__label">Listen In</span>
       <div className="global-overlay__row">
         <button
           type="button"
@@ -85,7 +87,7 @@ function ListenControls({ state, onPrevTrack, onTogglePlay, onNextTrack }) {
           Next
         </button>
       </div>
-      <p className="global-overlay__hint">{state.playback.trackTitle ?? "Nothing playing"}</p>
+      <p className="global-overlay__hint">{creativeCare.soundscape}</p>
     </div>
   );
 }
@@ -103,7 +105,7 @@ function FlowControls({ state, onSetFlowState }) {
             data-overlay-action={`flow-${item}`}
             onClick={() => onSetFlowState(item)}
           >
-            {item}
+            {getFlowCareCopy(item).label}
           </button>
         ))}
       </div>

@@ -73,6 +73,7 @@ try {
     assert.equal(response.json.endpoints.currentSession, "/api/v1/system/controller-sessions/current");
     assert.equal(response.json.endpoints.otaApply, "/api/v1/system/ota/apply");
     assert.equal(response.json.endpoints.otaRollback, "/api/v1/system/ota/rollback");
+    assert.equal(response.json.endpoints.creativeCareActions.submitVoiceCapture, "POST /api/v1/system/actions voice_capture_submit");
   });
 
   await test("applied response includes structured ActionResponse fields", async () => {
@@ -365,6 +366,78 @@ try {
     assert.equal(screenContextResponse.status, 200);
     assert.equal(typeof screenContextResponse.json.now, "string");
     assert.equal(typeof screenContextResponse.json.pomodoro.remainingSec, "number");
+  });
+
+  await test("portable controller can submit creative care voice context", async () => {
+    const createResponse = await requestJson(`${baseUrl}/api/v1/system/controller-sessions`, {
+      method: "POST",
+      headers: {
+        "X-Tikpal-Key": API_KEY,
+      },
+      body: {
+        deviceId: "portable-creative-001",
+        name: "Portable Creative",
+        role: "controller",
+        capabilities: ["creative_care"],
+      },
+    });
+    const authHeader = { Authorization: `Bearer ${createResponse.json.token}` };
+    const transcript = "I am tired and want to close the day with a softer idea.";
+
+    const actionResponse = await postAction(
+      baseUrl,
+      {
+        type: "voice_capture_submit",
+        payload: {
+          transcript,
+          moodLabel: "tired",
+          moodIntensity: 0.65,
+        },
+        source: "portable_controller",
+        requestId: "portable_voice_capture",
+      },
+      authHeader,
+    );
+
+    assert.equal(actionResponse.status, 200);
+    assert.equal(actionResponse.json.ok, true);
+    assert.equal(actionResponse.json.state.creativeCare.latestTranscript, transcript);
+    assert.equal(actionResponse.json.state.creativeCare.currentCareMode, "unwind");
+    assert.equal(actionResponse.json.state.creativeCare.suggestedFlowState, "relax");
+
+    const runtimeSummaryResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/summary`, {
+      headers: { "X-Tikpal-Key": API_KEY },
+    });
+    assert.equal(runtimeSummaryResponse.status, 200);
+    assert.equal(runtimeSummaryResponse.json.creativeMood, "tired");
+    assert.equal(runtimeSummaryResponse.json.creativeCareMode, "unwind");
+    assert.equal(runtimeSummaryResponse.json.creativeFlowSuggestion, "relax");
+
+    const actionLogResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/action-log?limit=1`, {
+      headers: { "X-Tikpal-Key": API_KEY },
+    });
+    assert.equal(actionLogResponse.status, 200);
+    assert.equal(actionLogResponse.json.items[0].payloadSummary.captureLength, transcript.length);
+    assert.equal(JSON.stringify(actionLogResponse.json).includes(transcript), false);
+
+    const capabilitiesResponse = await requestJson(`${baseUrl}/api/v1/system/capabilities`, {
+      headers: authHeader,
+    });
+    assert.equal(capabilitiesResponse.status, 200);
+    assert.deepEqual(capabilitiesResponse.json.creativeCare.moods, ["clear", "scattered", "stuck", "tired", "calm", "energized"]);
+
+    const invalidMoodResponse = await postAction(
+      baseUrl,
+      {
+        type: "voice_mood_set",
+        payload: { moodLabel: "clinical" },
+        source: "portable_controller",
+        requestId: "portable_invalid_mood",
+      },
+      authHeader,
+    );
+    assert.equal(invalidMoodResponse.status, 400);
+    assert.equal(invalidMoodResponse.json.error.code, "INVALID_VOICE_MOOD");
   });
 
   await test("mock connector patches update screen context mapping", async () => {

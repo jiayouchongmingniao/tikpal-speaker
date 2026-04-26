@@ -3,6 +3,8 @@ import { createSystemServiceClient } from "../bridge/systemServiceClient";
 
 const CONNECTORS = ["calendar", "todoist"];
 const SCENARIOS = ["success", "stale", "error"];
+const CREATIVE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
+const CREATIVE_CARE_MODES = ["focus", "flow", "unwind", "sleep"];
 const FALLBACK_FIXTURES = {
   calendar: ["default", "meeting_heavy", "afternoon_focus"],
   todoist: ["default", "writing_day", "triage_day"],
@@ -10,6 +12,27 @@ const FALLBACK_FIXTURES = {
 
 function prettyJson(value) {
   return JSON.stringify(value, null, 2);
+}
+
+function getDebugEntryUrl() {
+  return `${window.location.origin}/flow/?surface=debug`;
+}
+
+function getDebugPathUrl() {
+  return `${window.location.origin}/flow/debug`;
+}
+
+function getAdminKeySource() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("apiKey")) {
+    return "URL query";
+  }
+
+  if (window.localStorage.getItem("tikpal-portable-api-key")) {
+    return "local storage";
+  }
+
+  return "manual entry";
 }
 
 function ConnectorControlCard({ connector, control, onChange, onRunSync, integrationState, latestJob }) {
@@ -95,6 +118,9 @@ export function ConnectorDebugPage() {
   const [runtimeSummary, setRuntimeSummary] = useState(null);
   const [actionLog, setActionLog] = useState([]);
   const [stateTransitions, setStateTransitions] = useState([]);
+  const [adminStatus, setAdminStatus] = useState("checking");
+  const [apiHealth, setApiHealth] = useState(null);
+  const [apiHealthStatus, setApiHealthStatus] = useState("checking");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [manualFocusTitle, setManualFocusTitle] = useState("Manual focus from debug");
@@ -105,6 +131,12 @@ export function ConnectorDebugPage() {
   });
   const [otaDraft, setOtaDraft] = useState({
     targetVersion: "0.1.2",
+  });
+  const [creativeDraft, setCreativeDraft] = useState({
+    transcript: "I feel scattered, but there is one useful idea I want to shape.",
+    moodLabel: "scattered",
+    moodIntensity: "0.7",
+    careMode: "focus",
   });
   const [controls, setControls] = useState(() => ({
     calendar: { scenario: "success", fixture: "default", delayMs: "80", fixtures: FALLBACK_FIXTURES.calendar, running: false },
@@ -144,12 +176,13 @@ export function ConnectorDebugPage() {
           client.getState(),
           client.getScreenContext(),
         ]);
-        const [calendarFixtures, todoistFixtures, nextRuntimeSummary, nextActionLog, nextStateTransitions] = await Promise.all([
+        const [healthResult, calendarFixtures, todoistFixtures, runtimeResult, actionLogResult, transitionsResult] = await Promise.all([
+          client.health().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
           loadFixtures("calendar"),
           loadFixtures("todoist"),
-          client.getRuntimeSummary().catch(() => null),
-          client.getRuntimeActionLog(12).catch(() => ({ items: [] })),
-          client.getRuntimeStateTransitions(12).catch(() => ({ items: [] })),
+          client.getRuntimeSummary().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
+          client.getRuntimeActionLog(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
+          client.getRuntimeStateTransitions(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
         ]);
 
         if (!alive) {
@@ -158,9 +191,12 @@ export function ConnectorDebugPage() {
 
         setState(nextState);
         setScreenContext(nextScreenContext);
-        setRuntimeSummary(nextRuntimeSummary);
-        setActionLog(nextActionLog?.items ?? []);
-        setStateTransitions(nextStateTransitions?.items ?? []);
+        setApiHealth(healthResult.ok ? healthResult.value : null);
+        setApiHealthStatus(healthResult.ok ? "ok" : "error");
+        setRuntimeSummary(runtimeResult.ok ? runtimeResult.value : null);
+        setActionLog(actionLogResult.value?.items ?? []);
+        setStateTransitions(transitionsResult.value?.items ?? []);
+        setAdminStatus(runtimeResult.ok ? "available" : "required");
         setControls((current) => ({
           ...current,
           calendar: {
@@ -196,6 +232,28 @@ export function ConnectorDebugPage() {
       window.clearInterval(intervalId);
     };
   }, [client]);
+
+  function clearAdminKey() {
+    client.setApiKey("");
+    setApiKey("");
+    setAdminStatus("required");
+    setRuntimeSummary(null);
+    setActionLog([]);
+    setStateTransitions([]);
+  }
+
+  async function recheckApiHealth() {
+    setApiHealthStatus("checking");
+    try {
+      const nextHealth = await client.health();
+      setApiHealth(nextHealth);
+      setApiHealthStatus("ok");
+    } catch (nextError) {
+      setApiHealth(null);
+      setApiHealthStatus("error");
+      setError(nextError.message);
+    }
+  }
 
   function updateControl(connector, patch) {
     setControls((current) => ({
@@ -274,14 +332,15 @@ export function ConnectorDebugPage() {
   }
 
   async function refreshRuntimePanels() {
-    const [nextRuntimeSummary, nextActionLog, nextStateTransitions] = await Promise.all([
-      client.getRuntimeSummary().catch(() => null),
-      client.getRuntimeActionLog(12).catch(() => ({ items: [] })),
-      client.getRuntimeStateTransitions(12).catch(() => ({ items: [] })),
+    const [runtimeResult, actionLogResult, transitionsResult] = await Promise.all([
+      client.getRuntimeSummary().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
+      client.getRuntimeActionLog(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
+      client.getRuntimeStateTransitions(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
     ]);
-    setRuntimeSummary(nextRuntimeSummary);
-    setActionLog(nextActionLog?.items ?? []);
-    setStateTransitions(nextStateTransitions?.items ?? []);
+    setRuntimeSummary(runtimeResult.ok ? runtimeResult.value : null);
+    setActionLog(actionLogResult.value?.items ?? []);
+    setStateTransitions(transitionsResult.value?.items ?? []);
+    setAdminStatus(runtimeResult.ok ? "available" : "required");
   }
 
   async function applyPerformanceTier() {
@@ -340,6 +399,56 @@ export function ConnectorDebugPage() {
     }
   }
 
+  async function submitCreativeCareSample() {
+    setError("");
+
+    try {
+      await client.sendAction(
+        "voice_capture_submit",
+        {
+          transcript: creativeDraft.transcript,
+          moodLabel: creativeDraft.moodLabel,
+          moodIntensity: Number(creativeDraft.moodIntensity || 0),
+          careMode: creativeDraft.careMode,
+          source: "debug_surface",
+        },
+        "debug_surface",
+      );
+      const [nextState, nextRuntimeSummary, nextActionLog, nextStateTransitions] = await Promise.all([
+        client.getState(),
+        client.getRuntimeSummary().catch(() => null),
+        client.getRuntimeActionLog(12).catch(() => ({ items: [] })),
+        client.getRuntimeStateTransitions(12).catch(() => ({ items: [] })),
+      ]);
+      setState(nextState);
+      setRuntimeSummary(nextRuntimeSummary);
+      setActionLog(nextActionLog?.items ?? []);
+      setStateTransitions(nextStateTransitions?.items ?? []);
+    } catch (nextError) {
+      setError(nextError.message);
+    }
+  }
+
+  async function clearCreativeCareSample() {
+    setError("");
+
+    try {
+      await client.sendAction("voice_reflection_clear", {}, "debug_surface");
+      const [nextState, nextRuntimeSummary, nextActionLog, nextStateTransitions] = await Promise.all([
+        client.getState(),
+        client.getRuntimeSummary().catch(() => null),
+        client.getRuntimeActionLog(12).catch(() => ({ items: [] })),
+        client.getRuntimeStateTransitions(12).catch(() => ({ items: [] })),
+      ]);
+      setState(nextState);
+      setRuntimeSummary(nextRuntimeSummary);
+      setActionLog(nextActionLog?.items ?? []);
+      setStateTransitions(nextStateTransitions?.items ?? []);
+    } catch (nextError) {
+      setError(nextError.message);
+    }
+  }
+
   return (
     <main className="debug-page">
       <section className="debug-shell">
@@ -354,6 +463,40 @@ export function ConnectorDebugPage() {
             <input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="dev-admin-key" />
           </label>
         </header>
+
+        <section className="debug-auth-strip">
+          <div className={`debug-status debug-status--${apiHealthStatus}`}>
+            <strong>{apiHealthStatus === "ok" ? "API connected" : apiHealthStatus === "checking" ? "Checking API" : "API offline"}</strong>
+            <span>{client.baseUrl} · {apiHealth?.service ?? "system api"}</span>
+          </div>
+          <div className={`debug-status debug-status--${adminStatus === "available" ? "ok" : adminStatus}`}>
+            <strong>{adminStatus === "available" ? "Admin connected" : adminStatus === "checking" ? "Checking admin" : "Admin key needed"}</strong>
+            <span>
+              {adminStatus === "available"
+                ? "Runtime logs, connector sync, OTA, and debug actions are enabled."
+                : "Read-only state still loads, but runtime logs and write actions need TIKPAL_API_KEY."}
+            </span>
+          </div>
+          <div className="debug-status">
+            <strong>{apiKey ? "Key present" : "No key stored"}</strong>
+            <span>{apiKey ? `Source: ${getAdminKeySource()}` : "Start API with TIKPAL_API_KEY, then enter it here."}</span>
+          </div>
+          <div className="debug-status">
+            <strong>Debug URL</strong>
+            <span>{getDebugEntryUrl()} · Alt {getDebugPathUrl()}</span>
+          </div>
+          <div className="debug-auth-actions">
+            <button type="button" className="debug-button debug-button--ghost" onClick={recheckApiHealth}>
+              Recheck API
+            </button>
+            <button type="button" className="debug-button debug-button--ghost" onClick={refreshRuntimePanels}>
+              Recheck admin
+            </button>
+            <button type="button" className="debug-button debug-button--ghost" onClick={clearAdminKey}>
+              Clear key
+            </button>
+          </div>
+        </section>
 
         {error ? <p className="debug-error">{error}</p> : null}
         {notice ? <p className="debug-notice">{notice}</p> : null}
@@ -411,6 +554,78 @@ export function ConnectorDebugPage() {
           </button>
         </section>
 
+        <section className="debug-card debug-card--wide">
+          <div className="debug-card__header">
+            <div>
+              <span className="debug-kicker">Creative Care</span>
+              <h2>Voice capture state</h2>
+            </div>
+            <div className="debug-status debug-status--ok">
+              <strong>{state?.creativeCare?.moodLabel ?? "clear"}</strong>
+              <span>{state?.creativeCare?.currentCareMode ?? "flow"} · {state?.creativeCare?.suggestedFlowState ?? "flow"}</span>
+            </div>
+          </div>
+          <div className="debug-form-grid debug-form-grid--creative">
+            <label className="debug-field debug-field--span-2">
+              <span>Transcript sample</span>
+              <textarea
+                value={creativeDraft.transcript}
+                onChange={(event) => setCreativeDraft((current) => ({ ...current, transcript: event.target.value }))}
+                rows={3}
+              />
+            </label>
+            <label className="debug-field">
+              <span>Mood</span>
+              <select value={creativeDraft.moodLabel} onChange={(event) => setCreativeDraft((current) => ({ ...current, moodLabel: event.target.value }))}>
+                {CREATIVE_MOODS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="debug-field">
+              <span>Intensity</span>
+              <input
+                value={creativeDraft.moodIntensity}
+                onChange={(event) => setCreativeDraft((current) => ({ ...current, moodIntensity: event.target.value }))}
+              />
+            </label>
+            <label className="debug-field">
+              <span>Care mode</span>
+              <select value={creativeDraft.careMode} onChange={(event) => setCreativeDraft((current) => ({ ...current, careMode: event.target.value }))}>
+                {CREATIVE_CARE_MODES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="debug-actions">
+            <button type="button" className="debug-button" onClick={submitCreativeCareSample}>
+              Submit voice sample
+            </button>
+            <button type="button" className="debug-button debug-button--ghost" onClick={clearCreativeCareSample}>
+              Clear reflection
+            </button>
+          </div>
+          <div className="debug-meta-grid">
+            <div>
+              <span>Insight</span>
+              <strong>{state?.creativeCare?.insightSentence ?? "none"}</strong>
+            </div>
+            <div>
+              <span>Capture length</span>
+              <strong>{state?.creativeCare?.metadata?.captureLength ?? 0}</strong>
+            </div>
+            <div>
+              <span>Updated</span>
+              <strong>{state?.creativeCare?.updatedAt ? new Date(state.creativeCare.updatedAt).toLocaleString() : "never"}</strong>
+            </div>
+          </div>
+        </section>
+
         <section className="debug-grid">
           {CONNECTORS.map((connector) => (
             <ConnectorControlCard
@@ -437,6 +652,10 @@ export function ConnectorDebugPage() {
           <article className="debug-panel">
             <span className="debug-kicker">Integrations State</span>
             <pre>{prettyJson(state?.integrations ?? {})}</pre>
+          </article>
+          <article className="debug-panel">
+            <span className="debug-kicker">CreativeCare</span>
+            <pre>{prettyJson(state?.creativeCare ?? {})}</pre>
           </article>
           <article className="debug-panel">
             <span className="debug-kicker">ActionTimeline</span>

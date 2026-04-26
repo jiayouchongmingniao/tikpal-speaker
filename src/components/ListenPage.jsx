@@ -1,3 +1,5 @@
+import { getCreativeCareViewModel } from "../viewmodels/creativeCare";
+
 function formatProgress(progress) {
   const normalized = Math.max(0, Math.min(1, Number(progress ?? 0)));
   const totalSeconds = Math.round(normalized * 222);
@@ -8,6 +10,7 @@ function formatProgress(progress) {
 
 export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSetVolume, className = "" }) {
   const progressPercent = Math.round(Math.max(0, Math.min(1, Number(state.playback.progress ?? 0))) * 100);
+  const creativeCare = getCreativeCareViewModel(state);
 
   return (
     <main className={`mode-page mode-page--listen ${className}`.trim()} role="application" aria-label="Listen mode">
@@ -15,10 +18,10 @@ export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSe
         <div className="listen-layout">
           <div className="listen-cover" aria-hidden="true" />
           <div className="listen-copy">
-            <span className="mode-kicker">Listen</span>
-            <h1>{state.playback.trackTitle ?? "Nothing playing"}</h1>
-            <p>{state.playback.artist ?? "Unknown artist"}</p>
-            <strong>{state.playback.album ?? state.playback.source ?? "Unknown source"}</strong>
+            <span className="mode-kicker">Listen In</span>
+            <h1>{creativeCare.soundscape}</h1>
+            <p>{creativeCare.insightSentence}</p>
+            <strong>{state.playback.trackTitle ?? "Ambient support"} · {state.playback.source ?? "Tikpal"}</strong>
             <div className="listen-progress">
               <div className="listen-progress__rail">
                 <div className="listen-progress__fill" style={{ width: `${progressPercent}%` }} />
@@ -29,6 +32,11 @@ export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSe
               </div>
             </div>
           </div>
+          <aside className="creative-care-panel">
+            <span className="mode-kicker">Voice Insight</span>
+            <strong>{creativeCare.moodText} · {creativeCare.careText}</strong>
+            <p>{creativeCare.intention}</p>
+          </aside>
         </div>
 
         <div className="listen-controls listen-controls--inline">
@@ -55,16 +63,16 @@ export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSe
 
         <div className="mode-meta-strip" role="list" aria-label="Listen details">
           <div className="mode-metric" role="listitem">
-            <span>Status</span>
-            <strong>{state.playback.state}</strong>
+            <span>Mood</span>
+            <strong>{creativeCare.moodText}</strong>
           </div>
           <div className="mode-metric" role="listitem">
-            <span>Source</span>
-            <strong>{state.playback.source}</strong>
+            <span>Care</span>
+            <strong>{creativeCare.flowLabel}</strong>
           </div>
           <div className="mode-metric" role="listitem">
-            <span>Format</span>
-            <strong>{state.playback.format}</strong>
+            <span>Sound</span>
+            <strong>{creativeCare.soundscape}</strong>
           </div>
           <div className="mode-metric" role="listitem">
             <span>Next</span>
