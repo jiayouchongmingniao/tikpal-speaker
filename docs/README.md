@@ -54,6 +54,7 @@
 ### 07 Scenarios
 
 - [Screen / Flow / Listen / portable 端到端用户场景脚本 v1](./07-scenarios/end-to-end-user-scenarios-v1.md)
+- [目标设备联调与验收记录 v1](./07-scenarios/target-device-validation-runbook-v1.md)
 
 ## 使用建议
 
