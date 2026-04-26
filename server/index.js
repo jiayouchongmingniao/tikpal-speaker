@@ -6,6 +6,7 @@ import { createJsonFileSecretStore } from "./localSecretStore.js";
 import { createMockConnectorSyncService } from "./mockConnectorSyncService.js";
 import { createFileSystemOtaManager } from "./otaReleaseManager.js";
 import { flowOpenApiDocument, systemOpenApiDocument } from "./openapi.js";
+import { createHttpPlayerAdapter } from "./playerAdapter.js";
 import { createScreenContext } from "./screenContextService.js";
 import { createSystemStateStore } from "./systemStateStore.js";
 
@@ -282,10 +283,19 @@ function createDefaultConnectorSyncService(store) {
   });
 }
 
+function createDefaultPlayerAdapter() {
+  if (!process.env.TIKPAL_PLAYER_API_BASE) {
+    return null;
+  }
+
+  return createHttpPlayerAdapter();
+}
+
 export function createAppServer({
   store = createDefaultSystemStateStore(),
   connectorSyncService = createDefaultConnectorSyncService(store),
   connectorTokenExchange = exchangeConnectorAuthorizationCode,
+  playerAdapter = createDefaultPlayerAdapter(),
   apiKey = process.env.TIKPAL_API_KEY ?? "",
   allowedOrigins = new Set(
     (process.env.TIKPAL_ALLOWED_ORIGINS ??
@@ -295,6 +305,22 @@ export function createAppServer({
       .filter(Boolean),
   ),
 } = {}) {
+  async function enrichPlaybackAction(type, payload = {}) {
+    if (!playerAdapter || !["toggle_play", "set_volume", "next_track", "prev_track"].includes(type)) {
+      return payload;
+    }
+
+    try {
+      const playerState = await playerAdapter.runAction(type, payload, store.getSnapshot().playback);
+      return {
+        ...payload,
+        playerState,
+      };
+    } catch {
+      return payload;
+    }
+  }
+
   return http.createServer(async (request, response) => {
     setCorsHeaders(request, response, allowedOrigins);
     let actionBody = null;
@@ -714,7 +740,8 @@ export function createAppServer({
           return;
         }
         const previousState = structuredClone(store.getSnapshot());
-        const snapshot = store.runAction(body.type, body.payload ?? {}, body.source ?? "remote-client");
+        const enrichedPayload = await enrichPlaybackAction(body.type, body.payload ?? {});
+        const snapshot = store.runAction(body.type, enrichedPayload, body.source ?? "remote-client");
         sendActionResult(response, previousState, snapshot, body);
         return;
       }

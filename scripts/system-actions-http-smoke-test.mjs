@@ -53,11 +53,47 @@ function sleep(ms) {
 }
 
 const store = createSystemStateStore();
+const playerActions = [];
 const server = await startServer({
   port: 0,
   host: "127.0.0.1",
   store,
   apiKey: API_KEY,
+  playerAdapter: {
+    async runAction(type, payload) {
+      playerActions.push({ type, payload });
+      if (type === "toggle_play") {
+        return {
+          state: "pause",
+          volume: 58,
+          trackTitle: "Device track",
+          artist: "moOde Artist",
+          source: "moOde",
+          progress: 0.33,
+        };
+      }
+
+      if (type === "set_volume") {
+        return {
+          state: "pause",
+          volume: payload.volume,
+          trackTitle: "Device track",
+          artist: "moOde Artist",
+          source: "moOde",
+          progress: 0.33,
+        };
+      }
+
+      return {
+        state: "play",
+        volume: 58,
+        trackTitle: "Next device track",
+        artist: "moOde Artist",
+        source: "moOde",
+        progress: 0,
+      };
+    },
+  },
   connectorTokenExchange: async (connector, body) => {
     assert.equal(connector, "todoist");
     assert.equal(body.authorizationCode, "oauth-code-123");
@@ -401,6 +437,43 @@ try {
     assert.equal(screenContextResponse.status, 200);
     assert.equal(typeof screenContextResponse.json.now, "string");
     assert.equal(typeof screenContextResponse.json.pomodoro.remainingSec, "number");
+  });
+
+  await test("playback actions can use a device player adapter while preserving SystemState shape", async () => {
+    const authHeaders = { "X-Tikpal-Key": API_KEY };
+
+    const toggleResponse = await postAction(
+      baseUrl,
+      {
+        type: "toggle_play",
+        payload: {},
+        source: "portable_controller",
+        requestId: "player_toggle",
+      },
+      authHeaders,
+    );
+    assert.equal(toggleResponse.status, 200);
+    assert.equal(toggleResponse.json.state.playback.state, "pause");
+    assert.equal(toggleResponse.json.state.playback.trackTitle, "Device track");
+    assert.equal(toggleResponse.json.state.playback.source, "moOde");
+
+    const volumeResponse = await postAction(
+      baseUrl,
+      {
+        type: "set_volume",
+        payload: {
+          volume: 72,
+        },
+        source: "portable_controller",
+        requestId: "player_volume",
+      },
+      authHeaders,
+    );
+    assert.equal(volumeResponse.status, 200);
+    assert.equal(volumeResponse.json.state.playback.volume, 72);
+    assert.equal(volumeResponse.json.state.flow.audioMetrics.volumeNormalized, 0.72);
+    assert.equal(playerActions.some((action) => action.type === "toggle_play"), true);
+    assert.equal(playerActions.some((action) => action.type === "set_volume" && action.payload.volume === 72), true);
   });
 
   await test("portable controller can submit creative care voice context", async () => {

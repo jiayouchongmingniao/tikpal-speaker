@@ -52,6 +52,7 @@ Run player bridge contract checks:
 
 ```bash
 npm run test:player
+npm run test:player-server
 ```
 
 Run HTTP-level smoke checks for `/api/v1/system/actions`:
@@ -243,6 +244,6 @@ src/
 Move from mock-backed integrations to real device integrations:
 
 1. Wire real Calendar/Todoist credentials into `server/connectorAdapters.js` through a service-owned secret store or runtime injection while keeping fixtures for tests.
-2. Point `src/bridge/playerBridge.js` at a moOde-compatible HTTP control surface with `?playerApiBase=...` or `window.__TIKPAL_PLAYER_API_BASE__`; it preserves the same subscription and control API and falls back to the local mock when no player API is configured.
+2. Point the browser bridge at a moOde-compatible HTTP control surface with `?playerApiBase=...` or `window.__TIKPAL_PLAYER_API_BASE__`; point the System API at the same device with `TIKPAL_PLAYER_API_BASE=...` so portable playback actions update real device state while preserving the existing `playback` shape.
 3. Validate the frontend performance sampler on Raspberry Pi 4 and tune `normal / reduced / safe` thresholds with real FPS traces.
 4. Turn OTA apply/rollback from the current state-machine skeleton into release-directory, restart, health-check, and rollback behavior.

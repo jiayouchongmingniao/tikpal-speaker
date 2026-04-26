@@ -111,6 +111,23 @@ function getQueueTrack(index) {
   return MOCK_QUEUE[(index + MOCK_QUEUE.length) % MOCK_QUEUE.length];
 }
 
+function mergePlayerState(playback, playerState = {}) {
+  if (!playerState || typeof playerState !== "object") {
+    return playback;
+  }
+
+  return {
+    ...playback,
+    state: playerState.state ?? playerState.playbackState ?? playback.state,
+    volume: playerState.volume ?? playback.volume,
+    trackTitle: playerState.trackTitle ?? playerState.title ?? playback.trackTitle,
+    artist: playerState.artist ?? playback.artist,
+    source: playerState.source ?? playback.source,
+    progress: playerState.progress ?? playback.progress,
+    nextTrackTitle: playerState.nextTrackTitle ?? playback.nextTrackTitle,
+  };
+}
+
 function getDefaultCreativeCare() {
   return {
     latestTranscript: "",
@@ -1297,15 +1314,18 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       }
 
       if (type === "toggle_play") {
-        const nextPlaybackState = liveState.playback.state === "play" ? "pause" : "play";
+        const nextPlayback = payload.playerState
+          ? mergePlayerState(liveState.playback, payload.playerState)
+          : {
+              ...liveState.playback,
+              state: liveState.playback.state === "play" ? "pause" : "play",
+            };
+        const nextPlaybackState = nextPlayback.state;
         return finalize(
           updateState(
             {
               ...liveState,
-              playback: {
-                ...liveState.playback,
-                state: nextPlaybackState,
-              },
+              playback: nextPlayback,
               flow: {
                 ...liveState.flow,
                 audioMetrics: {
@@ -1323,16 +1343,23 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       if (type === "prev_track" || type === "next_track") {
         const step = type === "next_track" ? 1 : -1;
         const nextIndex = (Number(liveState.playback.currentTrackIndex ?? 0) + step + MOCK_QUEUE.length) % MOCK_QUEUE.length;
+        const nextPlayback = payload.playerState
+          ? {
+              ...mergePlayerState(liveState.playback, payload.playerState),
+              currentTrackIndex: liveState.playback.currentTrackIndex,
+              queueLength: liveState.playback.queueLength,
+            }
+          : {
+              ...liveState.playback,
+              currentTrackIndex: nextIndex,
+              queueLength: MOCK_QUEUE.length,
+              ...getQueueTrack(nextIndex),
+            };
         return finalize(
           updateState(
             {
               ...liveState,
-              playback: {
-                ...liveState.playback,
-                currentTrackIndex: nextIndex,
-                queueLength: MOCK_QUEUE.length,
-                ...getQueueTrack(nextIndex),
-              },
+              playback: nextPlayback,
             },
             source,
             type,
@@ -1342,19 +1369,23 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
 
       if (type === "set_volume") {
         const volume = clamp(Number(payload.volume ?? liveState.playback.volume), 0, 100);
+        const nextPlayback = mergePlayerState(
+          {
+            ...liveState.playback,
+            volume,
+          },
+          payload.playerState,
+        );
         return finalize(
           updateState(
             {
               ...liveState,
-              playback: {
-                ...liveState.playback,
-                volume,
-              },
+              playback: nextPlayback,
               flow: {
                 ...liveState.flow,
                 audioMetrics: {
                   ...liveState.flow.audioMetrics,
-                  volumeNormalized: volume / 100,
+                  volumeNormalized: nextPlayback.volume / 100,
                 },
               },
             },

@@ -13,6 +13,7 @@
     "test:http-smoke": "node scripts/system-actions-http-smoke-test.mjs",
     "test:ota": "node scripts/ota-release-manager-smoke-test.mjs",
     "test:player": "node scripts/player-bridge-smoke-test.mjs",
+    "test:player-server": "node scripts/server-player-adapter-smoke-test.mjs",
     "test:performance": "node scripts/performance-viewmodels-smoke-test.mjs",
     "test:persistence": "node scripts/system-persistence-smoke-test.mjs",
     "test:smoke": "node scripts/system-state-smoke-test.mjs",
