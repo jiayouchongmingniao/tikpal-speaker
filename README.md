@@ -215,7 +215,7 @@ Real connector adapter notes:
 - `server/connectorAdapters.js` is the integration boundary for Calendar/Todoist providers.
 - Fixture adapters are the default so local development and tests do not require external accounts.
 - Real adapters accept runtime credentials or a future service-owned secret store. Persisted connector metadata intentionally excludes raw access and refresh tokens.
-- Connector `connect` stores raw provider tokens in the local secret store, while `SystemState` and runtime logs only expose safe metadata and `credentialRef`.
+- Connector `connect` stores raw provider tokens in the local secret store, while `SystemState` and runtime logs only expose safe metadata and `credentialRef`. It can accept service-owned tokens directly or exchange an `authorizationCode` / `code` through the configured provider token endpoint.
 - Expired provider tokens are refreshed during real sync when a refresh token and token endpoint are configured. Refreshed access tokens are written back to the local secret store, not to public `SystemState`.
 - Sync jobs accept `maxAttempts` and `retryDelayMs` for transient provider failures, and job reads expose `attempts`, `adapterMode`, `lastErrorCode`, and `nextRetryAt`.
 - Enable real sync with `TIKPAL_CONNECTOR_MODE=real`, or per provider with `TIKPAL_CALENDAR_CONNECTOR_MODE=real` / `TIKPAL_TODOIST_CONNECTOR_MODE=real`.

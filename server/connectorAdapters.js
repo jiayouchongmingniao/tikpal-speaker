@@ -21,7 +21,7 @@ function normalizeBaseUrl(value) {
   return String(value ?? "").replace(/\/+$/, "");
 }
 
-function getDefaultRealConnectorConfig(name, env = process.env) {
+export function getDefaultRealConnectorConfig(name, env = process.env) {
   const upperName = name.toUpperCase();
   const baseUrl =
     env[`TIKPAL_${upperName}_API_BASE`] ||
@@ -36,6 +36,72 @@ function getDefaultRealConnectorConfig(name, env = process.env) {
     clientId: env[`TIKPAL_${upperName}_CLIENT_ID`] || env.TIKPAL_CONNECTOR_CLIENT_ID || null,
     clientSecret: env[`TIKPAL_${upperName}_CLIENT_SECRET`] || env.TIKPAL_CONNECTOR_CLIENT_SECRET || null,
   };
+}
+
+export async function exchangeConnectorAuthorizationCode(
+  name,
+  { authorizationCode, code, redirectUri, codeVerifier, accountLabel } = {},
+  { config = getDefaultRealConnectorConfig(name), fetchImpl = fetch } = {},
+) {
+  assertKnownConnector(name);
+  const authCode = authorizationCode ?? code;
+  if (!authCode) {
+    throw createConnectorError(`${name.toUpperCase()}_AUTH_CODE_MISSING`, `${name} authorization code is required`);
+  }
+
+  if (!config.tokenUrl) {
+    throw createConnectorError(`${name.toUpperCase()}_TOKEN_EXCHANGE_UNCONFIGURED`, `${name} token exchange URL is not configured`);
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    code: authCode,
+  });
+  if (redirectUri) {
+    body.set("redirect_uri", redirectUri);
+  }
+  if (codeVerifier) {
+    body.set("code_verifier", codeVerifier);
+  }
+  if (config.clientId) {
+    body.set("client_id", config.clientId);
+  }
+  if (config.clientSecret) {
+    body.set("client_secret", config.clientSecret);
+  }
+
+  try {
+    const payload = await requestJsonWithTimeout(config.tokenUrl, {
+      fetchImpl,
+      timeoutMs: config.timeoutMs,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+    const accessToken = payload.access_token ?? payload.accessToken;
+    if (!accessToken) {
+      throw createConnectorError(`${name.toUpperCase()}_TOKEN_EXCHANGE_FAILED`, `${name} token exchange did not return an access token`);
+    }
+
+    return {
+      accountLabel: accountLabel ?? payload.accountLabel ?? payload.email ?? `${name}.local`,
+      accessToken,
+      refreshToken: payload.refresh_token ?? payload.refreshToken ?? null,
+      tokenExpiresAt: payload.expires_in ? new Date(Date.now() + Number(payload.expires_in) * 1000).toISOString() : payload.tokenExpiresAt ?? null,
+      metadata: {
+        authMethod: "authorization_code",
+        tokenType: payload.token_type ?? payload.tokenType ?? null,
+      },
+    };
+  } catch (error) {
+    if (error?.code) {
+      throw error;
+    }
+
+    throw createConnectorError(`${name.toUpperCase()}_TOKEN_EXCHANGE_FAILED`, error instanceof Error ? error.message : String(error));
+  }
 }
 
 async function requestJsonWithTimeout(

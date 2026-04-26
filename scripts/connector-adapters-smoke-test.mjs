@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createConnectorAdapterRegistry, createRealConnectorAdapter } from "../server/connectorAdapters.js";
+import {
+  createConnectorAdapterRegistry,
+  createRealConnectorAdapter,
+  exchangeConnectorAuthorizationCode,
+} from "../server/connectorAdapters.js";
 import { createJsonFileSecretStore } from "../server/localSecretStore.js";
 import { createMockConnectorSyncService } from "../server/mockConnectorSyncService.js";
 import { createScreenContext } from "../server/screenContextService.js";
@@ -363,6 +367,53 @@ await test("real adapter registry can read runtime secrets from the store", asyn
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+await test("authorization code exchange maps OAuth token responses into safe connector credentials", async () => {
+  const exchanged = await exchangeConnectorAuthorizationCode(
+    "todoist",
+    {
+      authorizationCode: "todoist-auth-code",
+      redirectUri: "https://tikpal.ai/oauth/todoist/callback",
+      codeVerifier: "pkce-verifier",
+    },
+    {
+      config: {
+        tokenUrl: "https://oauth.todoist.test/token",
+        clientId: "todoist-client",
+        clientSecret: "todoist-secret",
+        timeoutMs: 100,
+      },
+      fetchImpl: async (url, options) => {
+        assert.equal(String(url), "https://oauth.todoist.test/token");
+        assert.equal(options.method, "POST");
+        assert.equal(options.body.get("grant_type"), "authorization_code");
+        assert.equal(options.body.get("code"), "todoist-auth-code");
+        assert.equal(options.body.get("redirect_uri"), "https://tikpal.ai/oauth/todoist/callback");
+        assert.equal(options.body.get("code_verifier"), "pkce-verifier");
+        assert.equal(options.body.get("client_id"), "todoist-client");
+        assert.equal(options.body.get("client_secret"), "todoist-secret");
+        return {
+          ok: true,
+          async json() {
+            return {
+              access_token: "oauth-access-token",
+              refresh_token: "oauth-refresh-token",
+              expires_in: 3600,
+              token_type: "Bearer",
+              email: "todoist.oauth@example.com",
+            };
+          },
+        };
+      },
+    },
+  );
+
+  assert.equal(exchanged.accountLabel, "todoist.oauth@example.com");
+  assert.equal(exchanged.accessToken, "oauth-access-token");
+  assert.equal(exchanged.refreshToken, "oauth-refresh-token");
+  assert.equal(exchanged.metadata.authMethod, "authorization_code");
+  assert.equal(exchanged.metadata.tokenType, "Bearer");
 });
 
 await test("real adapter refreshes expired tokens and persists the new secret before sync", async () => {

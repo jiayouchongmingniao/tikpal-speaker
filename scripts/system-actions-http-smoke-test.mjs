@@ -58,6 +58,17 @@ const server = await startServer({
   host: "127.0.0.1",
   store,
   apiKey: API_KEY,
+  connectorTokenExchange: async (connector, body) => {
+    assert.equal(connector, "todoist");
+    assert.equal(body.authorizationCode, "oauth-code-123");
+    assert.equal(body.redirectUri, "https://tikpal.ai/oauth/todoist/callback");
+    return {
+      accountLabel: "todoist.oauth@example.com",
+      accessToken: "oauth-access-token",
+      refreshToken: "oauth-refresh-token",
+      tokenExpiresAt: "2999-01-01T00:00:00.000Z",
+    };
+  },
 });
 
 const address = server.address();
@@ -275,6 +286,20 @@ try {
     assert.equal(listResponse.status, 200);
     assert.equal(listResponse.json.items.calendar.connected, true);
     assert.equal(listResponse.json.items.calendar.credentialRef, "local:calendar:calendar.user@example.com");
+
+    const oauthConnectResponse = await requestJson(`${baseUrl}/api/v1/system/integrations/todoist/connect`, {
+      method: "POST",
+      headers: authHeaders,
+      body: {
+        authorizationCode: "oauth-code-123",
+        redirectUri: "https://tikpal.ai/oauth/todoist/callback",
+      },
+    });
+    assert.equal(oauthConnectResponse.status, 200);
+    assert.equal(oauthConnectResponse.json.integrations.todoist.connected, true);
+    assert.equal(oauthConnectResponse.json.integrations.todoist.accountLabel, "todoist.oauth@example.com");
+    assert.equal(oauthConnectResponse.json.integrations.todoist.credentialRef, "local:todoist:todoist.oauth@example.com");
+    assert.equal(JSON.stringify(oauthConnectResponse.json).includes("oauth-access-token"), false);
 
     const refreshResponse = await requestJson(`${baseUrl}/api/v1/system/integrations/calendar/refresh`, {
       method: "POST",

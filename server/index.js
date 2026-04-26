@@ -1,6 +1,6 @@
 import http from "node:http";
 import { fileURLToPath } from "node:url";
-import { createConnectorAdapterRegistry } from "./connectorAdapters.js";
+import { createConnectorAdapterRegistry, exchangeConnectorAuthorizationCode } from "./connectorAdapters.js";
 import { createJsonFilePersistence } from "./localPersistence.js";
 import { createJsonFileSecretStore } from "./localSecretStore.js";
 import { createMockConnectorSyncService } from "./mockConnectorSyncService.js";
@@ -285,6 +285,7 @@ function createDefaultConnectorSyncService(store) {
 export function createAppServer({
   store = createDefaultSystemStateStore(),
   connectorSyncService = createDefaultConnectorSyncService(store),
+  connectorTokenExchange = exchangeConnectorAuthorizationCode,
   apiKey = process.env.TIKPAL_API_KEY ?? "",
   allowedOrigins = new Set(
     (process.env.TIKPAL_ALLOWED_ORIGINS ??
@@ -507,7 +508,11 @@ export function createAppServer({
         }
 
         const body = await parseBody(request);
-        sendJson(response, 200, store.bindIntegration(segments[4], body, "admin_client"));
+        const tokenPayload =
+          !body.accessToken && (body.authorizationCode || body.code)
+            ? await connectorTokenExchange(segments[4], body)
+            : body;
+        sendJson(response, 200, store.bindIntegration(segments[4], tokenPayload, "admin_client"));
         return;
       }
 
@@ -912,6 +917,8 @@ export function createAppServer({
         code === "PAIRING_CODE_INVALID" ||
         code === "INVALID_CONNECTOR" ||
         code === "INVALID_FIXTURE" ||
+        code?.startsWith("CALENDAR_") ||
+        code?.startsWith("TODOIST_") ||
         code === "INVALID_VOICE_MOOD" ||
         code === "INVALID_CARE_MODE"
       ) {
