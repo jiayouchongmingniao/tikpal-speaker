@@ -73,6 +73,12 @@ Summarize a Raspberry Pi performance trace exported from `/api/v1/system/runtime
 npm run performance:trace -- ./performance-samples.json
 ```
 
+Capture a target-device validation report:
+
+```bash
+npm run validation:capture -- --api-base http://localhost:8787/api/v1/system --api-key dev-admin-key --out validation-capture.md
+```
+
 Run restart/persistence recovery checks:
 
 ```bash

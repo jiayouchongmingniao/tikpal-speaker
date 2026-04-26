@@ -42,6 +42,12 @@ npm run test:ota
 npm run test:performance
 ```
 
+可选：生成一份目标设备验收快照，作为本轮记录附件：
+
+```bash
+npm run validation:capture -- --api-base http://localhost:8787/api/v1/system --api-key dev-admin-key --out validation-capture.md
+```
+
 通过标准：
 
 - 所有命令退出码为 `0`
@@ -56,6 +62,12 @@ npm run test:performance
 | smoke |  |  |
 | http-smoke |  |  |
 | services |  |  |
+
+验收快照：
+
+| 文件 | 记录 |
+| --- | --- |
+| `validation-capture.md` |  |
 
 ---
 
