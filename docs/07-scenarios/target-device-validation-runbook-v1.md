@@ -40,12 +40,26 @@ npm run test:player
 npm run test:player-server
 npm run test:ota
 npm run test:performance
+npm run test:persistence
+npm run validation:preflight
 ```
 
 可选：生成一份目标设备验收快照，作为本轮记录附件：
 
 ```bash
 npm run validation:capture -- --api-base http://localhost:8787/api/v1/system --api-key dev-admin-key --out validation-capture.md
+```
+
+如果需要在本机生成一份 OTA / portable 控制闭环辅助报告，可运行：
+
+```bash
+npm run validation:device -- --out validation-device.md
+```
+
+如果现场有播放器 HTTP 控制面，可在 capture 中加入播放器证据：
+
+```bash
+npm run validation:capture -- --api-base http://localhost:8787/api/v1/system --api-key dev-admin-key --player-api-base http://localhost:9001/player --exercise-portable --out validation-capture.md
 ```
 
 通过标准：

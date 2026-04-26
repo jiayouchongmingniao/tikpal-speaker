@@ -158,6 +158,20 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       return;
     }
 
+    try {
+      const event = {
+        at: new Date().toISOString(),
+        mode: stateRef.current.activeMode,
+        transition: stateRef.current.transition?.status ?? "idle",
+        message,
+      };
+      const previous = JSON.parse(window.localStorage.getItem("tikpal-input-debug-events") ?? "[]");
+      const next = [event, ...(Array.isArray(previous) ? previous : [])].slice(0, 24);
+      window.localStorage.setItem("tikpal-input-debug-events", JSON.stringify(next));
+    } catch {
+      // Local storage is best-effort debug evidence only.
+    }
+
     setInputDebug(message);
   }
 

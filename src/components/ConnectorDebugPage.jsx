@@ -36,8 +36,66 @@ function getAdminKeySource() {
   return "manual entry";
 }
 
-function ConnectorControlCard({ connector, control, onChange, onRunSync, integrationState, latestJob }) {
+function getPlayerApiBase() {
+  const params = new URLSearchParams(window.location.search);
+  return (params.get("playerApiBase") || window.__TIKPAL_PLAYER_API_BASE__ || "").replace(/\/+$/, "");
+}
+
+function getPlayerApiSource() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("playerApiBase")) {
+    return "URL query";
+  }
+
+  if (window.__TIKPAL_PLAYER_API_BASE__) {
+    return "window global";
+  }
+
+  return "not configured";
+}
+
+async function requestPlayerJson(playerApiBase, path, { method = "GET", body } = {}) {
+  if (!playerApiBase) {
+    throw new Error("playerApiBase is not configured");
+  }
+
+  const response = await fetch(`${playerApiBase}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Player request failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function readInputDebugEvents() {
+  try {
+    const events = JSON.parse(window.localStorage.getItem("tikpal-input-debug-events") ?? "[]");
+    return Array.isArray(events) ? events : [];
+  } catch {
+    return [];
+  }
+}
+
+function ConnectorControlCard({
+  connector,
+  control,
+  onChange,
+  onRunSync,
+  onConnect,
+  onRefresh,
+  onDisconnect,
+  integrationState,
+  latestJob,
+}) {
   const fixtures = control.fixtures ?? [];
+  const isBound = Boolean(integrationState?.credentialRef);
 
   return (
     <article className="debug-card">
@@ -48,7 +106,7 @@ function ConnectorControlCard({ connector, control, onChange, onRunSync, integra
         </div>
         <div className={`debug-status debug-status--${integrationState?.status ?? "idle"}`}>
           <strong>{integrationState?.status ?? "idle"}</strong>
-          <span>{integrationState?.accountLabel ?? "no account label"}</span>
+          <span>{integrationState?.accountLabel ?? "no account label"} · {isBound ? "bound" : "unbound"}</span>
         </div>
       </div>
 
@@ -89,7 +147,57 @@ function ConnectorControlCard({ connector, control, onChange, onRunSync, integra
 
       <div className="debug-actions">
         <button type="button" className="debug-button" onClick={() => onRunSync(connector)} disabled={control.running}>
-          {control.running ? "Running..." : "Run sync"}
+          {control.running ? "Running..." : "Run fixture sync"}
+        </button>
+        <button type="button" className="debug-button debug-button--ghost" onClick={() => onRefresh(connector)} disabled={control.running || !isBound}>
+          Refresh real
+        </button>
+        <button type="button" className="debug-button debug-button--ghost" onClick={() => onDisconnect(connector)} disabled={!isBound}>
+          Disconnect
+        </button>
+      </div>
+
+      <div className="debug-form-grid">
+        <label className="debug-field">
+          <span>Account label</span>
+          <input
+            value={control.accountLabel}
+            onChange={(event) => onChange(connector, { accountLabel: event.target.value })}
+            placeholder={`${connector}@example.com`}
+          />
+        </label>
+        <label className="debug-field">
+          <span>Authorization code</span>
+          <input
+            type="password"
+            value={control.authorizationCode}
+            onChange={(event) => onChange(connector, { authorizationCode: event.target.value })}
+            placeholder="OAuth code"
+          />
+        </label>
+        <label className="debug-field">
+          <span>Access token</span>
+          <input
+            type="password"
+            value={control.accessToken}
+            onChange={(event) => onChange(connector, { accessToken: event.target.value })}
+            placeholder="Direct token"
+          />
+        </label>
+        <label className="debug-field">
+          <span>Refresh token</span>
+          <input
+            type="password"
+            value={control.refreshToken}
+            onChange={(event) => onChange(connector, { refreshToken: event.target.value })}
+            placeholder="Optional"
+          />
+        </label>
+      </div>
+
+      <div className="debug-actions">
+        <button type="button" className="debug-button" onClick={() => onConnect(connector)} disabled={control.running}>
+          Connect real provider
         </button>
       </div>
 
@@ -105,6 +213,18 @@ function ConnectorControlCard({ connector, control, onChange, onRunSync, integra
         <div>
           <span>Latest job</span>
           <strong>{latestJob?.status ?? "none"}</strong>
+        </div>
+        <div>
+          <span>Last good</span>
+          <strong>{integrationState?.lastSyncAt ? "available" : "none"}</strong>
+        </div>
+        <div>
+          <span>Credential</span>
+          <strong>{integrationState?.credentialRef ?? "none"}</strong>
+        </div>
+        <div>
+          <span>Adapter mode</span>
+          <strong>{fixtures.length ? "fixture-capable" : "real/no fixtures"}</strong>
         </div>
       </div>
     </article>
@@ -141,10 +261,36 @@ export function ConnectorDebugPage() {
     careMode: "focus",
   });
   const [controls, setControls] = useState(() => ({
-    calendar: { scenario: "success", fixture: "default", delayMs: "80", fixtures: FALLBACK_FIXTURES.calendar, running: false },
-    todoist: { scenario: "success", fixture: "default", delayMs: "80", fixtures: FALLBACK_FIXTURES.todoist, running: false },
+    calendar: {
+      scenario: "success",
+      fixture: "default",
+      delayMs: "80",
+      fixtures: FALLBACK_FIXTURES.calendar,
+      accountLabel: "",
+      authorizationCode: "",
+      accessToken: "",
+      refreshToken: "",
+      running: false,
+    },
+    todoist: {
+      scenario: "success",
+      fixture: "default",
+      delayMs: "80",
+      fixtures: FALLBACK_FIXTURES.todoist,
+      accountLabel: "",
+      authorizationCode: "",
+      accessToken: "",
+      refreshToken: "",
+      running: false,
+    },
   }));
   const [jobs, setJobs] = useState({});
+  const [playerDraft, setPlayerDraft] = useState({
+    apiBase: getPlayerApiBase(),
+    volume: "72",
+  });
+  const [playerEvidence, setPlayerEvidence] = useState({});
+  const [inputEvents, setInputEvents] = useState(() => readInputDebugEvents());
   const performanceDebug = getPerformanceDebugViewModel({
     system: state?.system,
     runtimeSummary,
@@ -154,6 +300,13 @@ export function ConnectorDebugPage() {
   useEffect(() => {
     client.setApiKey(apiKey);
   }, [apiKey, client]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setInputEvents(readInputDebugEvents());
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -318,6 +471,129 @@ export function ConnectorDebugPage() {
     }
   }
 
+  async function refreshStatePanels() {
+    const [nextState, nextScreenContext, nextRuntimeSummary, nextActionLog, nextStateTransitions] = await Promise.all([
+      client.getState(),
+      client.getScreenContext(),
+      client.getRuntimeSummary().catch(() => null),
+      client.getRuntimeActionLog(12).catch(() => ({ items: [] })),
+      client.getRuntimeStateTransitions(12).catch(() => ({ items: [] })),
+    ]);
+    setState(nextState);
+    setScreenContext(nextScreenContext);
+    setRuntimeSummary(nextRuntimeSummary);
+    setActionLog(nextActionLog?.items ?? []);
+    setStateTransitions(nextStateTransitions?.items ?? []);
+  }
+
+  async function connectRealProvider(connector) {
+    const control = controls[connector];
+    updateControl(connector, { running: true });
+    setError("");
+
+    try {
+      const payload = {
+        accountLabel: control.accountLabel || `${connector}.real`,
+        ...(control.authorizationCode ? { authorizationCode: control.authorizationCode } : {}),
+        ...(control.accessToken ? { accessToken: control.accessToken } : {}),
+        ...(control.refreshToken ? { refreshToken: control.refreshToken } : {}),
+      };
+      await client.connectIntegration(connector, payload);
+      updateControl(connector, {
+        authorizationCode: "",
+        accessToken: "",
+        refreshToken: "",
+      });
+      await refreshStatePanels();
+      setNotice(`${connector} credential bound. Secrets were submitted to the API and cleared from the form.`);
+    } catch (nextError) {
+      setError(nextError.message);
+    } finally {
+      updateControl(connector, { running: false });
+    }
+  }
+
+  async function refreshRealProvider(connector) {
+    updateControl(connector, { running: true });
+    setError("");
+
+    try {
+      const job = await client.refreshIntegration(connector, { maxAttempts: 3, retryDelayMs: 500 });
+      setJobs((current) => ({ ...current, [connector]: job }));
+      window.setTimeout(async () => {
+        try {
+          const nextJob = await client.getConnectorSyncJob(connector, job.id);
+          setJobs((current) => ({ ...current, [connector]: nextJob }));
+          await refreshStatePanels();
+        } catch {
+          // Keep the accepted job if follow-up polling fails.
+        } finally {
+          updateControl(connector, { running: false });
+        }
+      }, 700);
+    } catch (nextError) {
+      updateControl(connector, { running: false });
+      setError(nextError.message);
+    }
+  }
+
+  async function disconnectRealProvider(connector) {
+    setError("");
+
+    try {
+      await client.disconnectIntegration(connector);
+      await refreshStatePanels();
+    } catch (nextError) {
+      setError(nextError.message);
+    }
+  }
+
+  async function testPlayerStatus() {
+    setError("");
+
+    try {
+      const status = await requestPlayerJson(playerDraft.apiBase, "/status");
+      setPlayerEvidence((current) => ({
+        ...current,
+        status,
+        source: getPlayerApiSource(),
+      }));
+    } catch (nextError) {
+      setError(nextError.message);
+      setPlayerEvidence((current) => ({
+        ...current,
+        statusError: nextError.message,
+      }));
+    }
+  }
+
+  async function runPlayerAction(action) {
+    setError("");
+
+    try {
+      const remote = await requestPlayerJson(playerDraft.apiBase, "/actions", {
+        method: "POST",
+        body: action === "set_volume" ? { action, volume: Number(playerDraft.volume || 0) } : { action },
+      });
+      const nextState = await client.getState();
+      setState(nextState);
+      setPlayerEvidence((current) => ({
+        ...current,
+        [action]: {
+          remote,
+          playback: nextState.playback,
+        },
+      }));
+      await refreshRuntimePanels();
+    } catch (nextError) {
+      setError(nextError.message);
+      setPlayerEvidence((current) => ({
+        ...current,
+        [`${action}Error`]: nextError.message,
+      }));
+    }
+  }
+
   async function applyManualFocus() {
     setError("");
 
@@ -465,9 +741,9 @@ export function ConnectorDebugPage() {
       <section className="debug-shell">
         <header className="debug-hero">
           <div>
-            <span className="debug-kicker">Batch E</span>
-            <h1>Connector debug surface</h1>
-            <p>Run mock Calendar and Todoist sync jobs, switch fixtures, and watch ScreenContext change in place.</p>
+            <span className="debug-kicker">Validation</span>
+            <h1>Device readiness surface</h1>
+            <p>Bind real providers, exercise player and OTA paths, and capture debug evidence without exposing provider secrets.</p>
           </div>
           <label className="debug-field debug-field--hero">
             <span>Admin API key</span>
@@ -594,6 +870,68 @@ export function ConnectorDebugPage() {
         <section className="debug-card debug-card--wide">
           <div className="debug-card__header">
             <div>
+              <span className="debug-kicker">Player</span>
+              <h2>Real player evidence</h2>
+            </div>
+            <div className="debug-status">
+              <strong>{playerDraft.apiBase ? "configured" : "not configured"}</strong>
+              <span>{getPlayerApiSource()}</span>
+            </div>
+          </div>
+          <div className="debug-form-grid">
+            <label className="debug-field debug-field--span-2">
+              <span>playerApiBase</span>
+              <input
+                value={playerDraft.apiBase}
+                onChange={(event) => setPlayerDraft((current) => ({ ...current, apiBase: event.target.value.replace(/\/+$/, "") }))}
+                placeholder="http://localhost:9001/player"
+              />
+            </label>
+            <label className="debug-field">
+              <span>Volume test</span>
+              <input
+                value={playerDraft.volume}
+                onChange={(event) => setPlayerDraft((current) => ({ ...current, volume: event.target.value }))}
+                inputMode="numeric"
+              />
+            </label>
+          </div>
+          <div className="debug-actions">
+            <button type="button" className="debug-button" onClick={testPlayerStatus}>
+              GET status
+            </button>
+            <button type="button" className="debug-button debug-button--ghost" onClick={() => runPlayerAction("toggle_play")}>
+              toggle_play
+            </button>
+            <button type="button" className="debug-button debug-button--ghost" onClick={() => runPlayerAction("set_volume")}>
+              set_volume
+            </button>
+            <button type="button" className="debug-button debug-button--ghost" onClick={() => runPlayerAction("next_track")}>
+              next_track
+            </button>
+            <button type="button" className="debug-button debug-button--ghost" onClick={() => runPlayerAction("prev_track")}>
+              prev_track
+            </button>
+          </div>
+          <div className="debug-meta-grid">
+            <div>
+              <span>System playback</span>
+              <strong>{state?.playback?.trackTitle ?? "n/a"} / {state?.playback?.state ?? "n/a"}</strong>
+            </div>
+            <div>
+              <span>Source</span>
+              <strong>{state?.playback?.source ?? "n/a"}</strong>
+            </div>
+            <div>
+              <span>Last remote status</span>
+              <strong>{playerEvidence.status?.trackTitle ?? playerEvidence.status?.title ?? playerEvidence.statusError ?? "none"}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="debug-card debug-card--wide">
+          <div className="debug-card__header">
+            <div>
               <span className="debug-kicker">Creative Care</span>
               <h2>Voice capture state</h2>
             </div>
@@ -671,6 +1009,9 @@ export function ConnectorDebugPage() {
               control={controls[connector]}
               onChange={updateControl}
               onRunSync={runSync}
+              onConnect={connectRealProvider}
+              onRefresh={refreshRealProvider}
+              onDisconnect={disconnectRealProvider}
               integrationState={state?.integrations?.[connector]}
               latestJob={jobs[connector]}
             />
@@ -697,6 +1038,14 @@ export function ConnectorDebugPage() {
           <article className="debug-panel">
             <span className="debug-kicker">PerformanceSamples</span>
             <pre>{prettyJson(performanceSamples)}</pre>
+          </article>
+          <article className="debug-panel">
+            <span className="debug-kicker">PlayerEvidence</span>
+            <pre>{prettyJson(playerEvidence)}</pre>
+          </article>
+          <article className="debug-panel">
+            <span className="debug-kicker">InputEvents</span>
+            <pre>{prettyJson(inputEvents)}</pre>
           </article>
           <article className="debug-panel">
             <span className="debug-kicker">ActionTimeline</span>
