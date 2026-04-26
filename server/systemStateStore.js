@@ -594,12 +594,15 @@ function createSafeCredentialRecord(name, payload = {}, credentialRef, now = now
   };
 }
 
-function createSecretRecord(payload = {}) {
+function createSecretRecord(payload = {}, previous = {}) {
   return {
-    accessToken: payload.accessToken ?? null,
-    refreshToken: payload.refreshToken ?? null,
-    tokenExpiresAt: payload.tokenExpiresAt ?? null,
-    metadata: payload.secretMetadata ?? {},
+    accessToken: payload.accessToken ?? previous.accessToken ?? null,
+    refreshToken: payload.refreshToken ?? previous.refreshToken ?? null,
+    tokenExpiresAt: payload.tokenExpiresAt ?? previous.tokenExpiresAt ?? null,
+    metadata: {
+      ...(previous.metadata ?? {}),
+      ...(payload.secretMetadata ?? payload.metadata ?? {}),
+    },
   };
 }
 
@@ -1035,7 +1038,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       ),
     );
     if (payload.accessToken || payload.refreshToken || payload.secretMetadata) {
-      secretStore?.set?.(name, createSecretRecord(payload));
+      secretStore?.set?.(name, createSecretRecord(payload, secretStore?.get?.(name) ?? {}));
     }
 
     return patchIntegration(
@@ -1069,6 +1072,54 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
         accountLabel: null,
         credentialRef: null,
         authUpdatedAt: nowIso(),
+        lastErrorCode: null,
+        lastErrorMessage: null,
+      },
+      source,
+    );
+  }
+
+  function updateIntegrationCredential(name, payload = {}, source = "system") {
+    if (!CONNECTOR_NAMES.includes(name)) {
+      throw createRejectedError("INVALID_CONNECTOR", `Unsupported connector: ${name}`);
+    }
+
+    const existing = connectorCredentials.get(name);
+    if (!existing) {
+      throw createRejectedError(`${name.toUpperCase()}_CREDENTIAL_MISSING`, `${name} connector is not bound`);
+    }
+
+    const updatedAt = nowIso();
+    const previousSecret = secretStore?.get?.(name) ?? {};
+    connectorCredentials.set(
+      name,
+      createSafeCredentialRecord(
+        name,
+        {
+          ...existing,
+          ...payload,
+          metadata: {
+            ...(existing.metadata ?? {}),
+            ...(payload.metadata ?? {}),
+          },
+          createdAt: existing.createdAt,
+        },
+        existing.credentialRef,
+        updatedAt,
+      ),
+    );
+
+    if (payload.accessToken || payload.refreshToken || payload.tokenExpiresAt || payload.secretMetadata || payload.metadata) {
+      secretStore?.set?.(name, createSecretRecord(payload, previousSecret));
+    }
+
+    return patchIntegration(
+      name,
+      {
+        connected: true,
+        credentialRef: existing.credentialRef,
+        accountLabel: payload.accountLabel ?? existing.accountLabel,
+        authUpdatedAt: updatedAt,
         lastErrorCode: null,
         lastErrorMessage: null,
       },
@@ -1978,6 +2029,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
     hasIntegrationCredential,
     getIntegrationCredential,
     bindIntegration,
+    updateIntegrationCredential,
     revokeIntegration,
     runAction,
     runFlowAction,

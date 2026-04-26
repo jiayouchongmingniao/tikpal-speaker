@@ -312,4 +312,81 @@ await test("real adapter registry can read runtime secrets from the store", asyn
   }
 });
 
+await test("real adapter refreshes expired tokens and persists the new secret before sync", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tikpal-connectors-refresh-"));
+  try {
+    const secretPath = path.join(tempDir, "secrets.json");
+    const store = createSystemStateStore({
+      secretStore: createJsonFileSecretStore(secretPath),
+    });
+    store.bindIntegration(
+      "calendar",
+      {
+        accountLabel: "calendar.refresh@example.com",
+        accessToken: "expired-calendar-token",
+        refreshToken: "calendar-refresh-token",
+        tokenExpiresAt: "2000-01-01T00:00:00.000Z",
+      },
+      "admin_client",
+    );
+
+    const registry = createConnectorAdapterRegistry(
+      {},
+      {
+        store,
+        env: {
+          TIKPAL_CALENDAR_CONNECTOR_MODE: "real",
+          TIKPAL_CALENDAR_API_BASE: "https://calendar.refresh.test",
+          TIKPAL_CALENDAR_TOKEN_URL: "https://oauth.refresh.test/token",
+          TIKPAL_CALENDAR_CLIENT_ID: "calendar-client",
+          TIKPAL_CALENDAR_CLIENT_SECRET: "calendar-secret",
+          TIKPAL_CALENDAR_TIMEOUT_MS: "100",
+        },
+        fetchImpl: async (url, options) => {
+          if (String(url) === "https://oauth.refresh.test/token") {
+            assert.equal(options.method, "POST");
+            assert.equal(options.body.get("refresh_token"), "calendar-refresh-token");
+            assert.equal(options.body.get("client_id"), "calendar-client");
+            assert.equal(options.body.get("client_secret"), "calendar-secret");
+            return {
+              ok: true,
+              async json() {
+                return {
+                  access_token: "fresh-calendar-token",
+                  expires_in: 3600,
+                };
+              },
+            };
+          }
+
+          assert.equal(options.headers.Authorization, "Bearer fresh-calendar-token");
+          return {
+            ok: true,
+            async json() {
+              return {
+                items: [
+                  {
+                    id: "cal_refresh_current",
+                    summary: "Refreshed calendar focus",
+                  },
+                ],
+              };
+            },
+          };
+        },
+      },
+    );
+
+    const patch = await registry.sync("calendar");
+    assert.equal(patch.status, "ok");
+    assert.equal(patch.currentEvent.title, "Refreshed calendar focus");
+    assert.equal(store.getIntegrationCredential("calendar").accessToken, "fresh-calendar-token");
+    assert.equal(store.getSnapshot().integrations.calendar.credentialRef, "local:calendar:calendar.refresh@example.com");
+    assert.equal(JSON.stringify(store.getSnapshot()).includes("fresh-calendar-token"), false);
+    assert.equal(fs.readFileSync(secretPath, "utf8").includes("fresh-calendar-token"), true);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 console.log("Connector adapter smoke tests passed.");

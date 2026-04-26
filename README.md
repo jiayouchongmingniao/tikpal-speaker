@@ -216,9 +216,10 @@ Real connector adapter notes:
 - Fixture adapters are the default so local development and tests do not require external accounts.
 - Real adapters accept runtime credentials or a future service-owned secret store. Persisted connector metadata intentionally excludes raw access and refresh tokens.
 - Connector `connect` stores raw provider tokens in the local secret store, while `SystemState` and runtime logs only expose safe metadata and `credentialRef`.
+- Expired provider tokens are refreshed during real sync when a refresh token and token endpoint are configured. Refreshed access tokens are written back to the local secret store, not to public `SystemState`.
 - Enable real sync with `TIKPAL_CONNECTOR_MODE=real`, or per provider with `TIKPAL_CALENDAR_CONNECTOR_MODE=real` / `TIKPAL_TODOIST_CONNECTOR_MODE=real`.
-- Calendar config can use `TIKPAL_CALENDAR_API_BASE`, `TIKPAL_CALENDAR_TIMEOUT_MS`, and `TIKPAL_CALENDAR_ID`.
-- Todoist config can use `TIKPAL_TODOIST_API_BASE` and `TIKPAL_TODOIST_TIMEOUT_MS`.
+- Calendar config can use `TIKPAL_CALENDAR_API_BASE`, `TIKPAL_CALENDAR_TIMEOUT_MS`, `TIKPAL_CALENDAR_ID`, `TIKPAL_CALENDAR_TOKEN_URL`, `TIKPAL_CALENDAR_CLIENT_ID`, and `TIKPAL_CALENDAR_CLIENT_SECRET`.
+- Todoist config can use `TIKPAL_TODOIST_API_BASE`, `TIKPAL_TODOIST_TIMEOUT_MS`, `TIKPAL_TODOIST_TOKEN_URL`, `TIKPAL_TODOIST_CLIENT_ID`, and `TIKPAL_TODOIST_CLIENT_SECRET`.
 
 ## Architecture
 

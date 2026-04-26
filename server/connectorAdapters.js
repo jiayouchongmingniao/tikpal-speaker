@@ -31,16 +31,25 @@ function getDefaultRealConnectorConfig(name, env = process.env) {
     baseUrl: normalizeBaseUrl(baseUrl),
     timeoutMs: Number(env[`TIKPAL_${upperName}_TIMEOUT_MS`] ?? DEFAULT_TIMEOUT_MS),
     calendarId: env.TIKPAL_CALENDAR_ID || "primary",
+    refreshSkewMs: Number(env[`TIKPAL_${upperName}_REFRESH_SKEW_MS`] ?? 60_000),
+    tokenUrl: env[`TIKPAL_${upperName}_TOKEN_URL`] || env.TIKPAL_CONNECTOR_TOKEN_URL || null,
+    clientId: env[`TIKPAL_${upperName}_CLIENT_ID`] || env.TIKPAL_CONNECTOR_CLIENT_ID || null,
+    clientSecret: env[`TIKPAL_${upperName}_CLIENT_SECRET`] || env.TIKPAL_CONNECTOR_CLIENT_SECRET || null,
   };
 }
 
-async function requestJsonWithTimeout(url, { fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT_MS, headers = {} } = {}) {
+async function requestJsonWithTimeout(
+  url,
+  { fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT_MS, method = "GET", headers = {}, body = undefined } = {},
+) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs ?? DEFAULT_TIMEOUT_MS)));
 
   try {
     const response = await fetchImpl(url, {
+      method,
       headers,
+      body,
       signal: controller.signal,
     });
 
@@ -68,6 +77,11 @@ function hasRefreshPath(credentials = {}) {
   return Boolean(credentials.refreshToken || credentials.metadata?.refreshToken || credentials.metadata?.refreshUrl);
 }
 
+function isTokenExpired(credentials = {}, refreshSkewMs = 0) {
+  const expiresAtMs = credentials.tokenExpiresAt ? new Date(credentials.tokenExpiresAt).getTime() : null;
+  return Boolean(expiresAtMs && expiresAtMs <= Date.now() + Number(refreshSkewMs ?? 0));
+}
+
 function assertUsableCredentials(name, credentials = {}) {
   if (!credentials?.credentialRef) {
     throw createConnectorError(`${name.toUpperCase()}_CREDENTIAL_MISSING`, `${name} connector is not bound`);
@@ -76,6 +90,78 @@ function assertUsableCredentials(name, credentials = {}) {
   const expiresAtMs = credentials.tokenExpiresAt ? new Date(credentials.tokenExpiresAt).getTime() : null;
   if (expiresAtMs && expiresAtMs <= Date.now() && !hasRefreshPath(credentials)) {
     throw createConnectorError(`${name.toUpperCase()}_TOKEN_EXPIRED`, `${name} token is expired and no refresh path is configured`);
+  }
+}
+
+async function refreshConnectorCredentials(name, credentials = {}, { store = null, config = {}, fetchImpl = fetch } = {}) {
+  const refreshToken = credentials.refreshToken || credentials.metadata?.refreshToken;
+  const tokenUrl = credentials.metadata?.refreshUrl || config.tokenUrl;
+  if (!refreshToken) {
+    throw createConnectorError(`${name.toUpperCase()}_TOKEN_EXPIRED`, `${name} token is expired and no refresh token is available`);
+  }
+
+  if (!tokenUrl) {
+    throw createConnectorError(`${name.toUpperCase()}_TOKEN_REFRESH_UNCONFIGURED`, `${name} token refresh URL is not configured`);
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  });
+  if (config.clientId) {
+    body.set("client_id", config.clientId);
+  }
+  if (config.clientSecret) {
+    body.set("client_secret", config.clientSecret);
+  }
+
+  try {
+    const payload = await requestJsonWithTimeout(tokenUrl, {
+      fetchImpl,
+      timeoutMs: config.timeoutMs,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+    const accessToken = payload.access_token ?? payload.accessToken;
+    if (!accessToken) {
+      throw createConnectorError(`${name.toUpperCase()}_TOKEN_REFRESH_FAILED`, `${name} token refresh did not return an access token`);
+    }
+
+    const tokenExpiresAt = payload.expires_in
+      ? new Date(Date.now() + Number(payload.expires_in) * 1000).toISOString()
+      : payload.tokenExpiresAt ?? credentials.tokenExpiresAt ?? null;
+    const refreshed = {
+      ...credentials,
+      accessToken,
+      refreshToken: payload.refresh_token ?? payload.refreshToken ?? refreshToken,
+      tokenExpiresAt,
+      metadata: {
+        ...(credentials.metadata ?? {}),
+        refreshedAt: nowIso(),
+      },
+    };
+
+    store?.updateIntegrationCredential?.(
+      name,
+      {
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+        tokenExpiresAt: refreshed.tokenExpiresAt,
+        metadata: refreshed.metadata,
+      },
+      "connector_token_refresh",
+    );
+
+    return store?.getIntegrationCredential?.(name) ?? refreshed;
+  } catch (error) {
+    if (error?.code) {
+      throw error;
+    }
+
+    throw createConnectorError(`${name.toUpperCase()}_TOKEN_REFRESH_FAILED`, error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -212,8 +298,15 @@ export function createRealConnectorAdapter(name, { store = null, credentials = n
       return [];
     },
     async sync() {
-      const connectorCredentials = getIntegrationCredentials(store, name, credentials);
+      let connectorCredentials = getIntegrationCredentials(store, name, credentials);
       assertUsableCredentials(name, connectorCredentials);
+      if (isTokenExpired(connectorCredentials, adapterConfig.refreshSkewMs)) {
+        connectorCredentials = await refreshConnectorCredentials(name, connectorCredentials, {
+          store,
+          config: adapterConfig,
+          fetchImpl,
+        });
+      }
       const accessToken = getAccessToken(connectorCredentials);
       if (!accessToken) {
         throw createConnectorError(`${name.toUpperCase()}_TOKEN_UNAVAILABLE`, `${name} access token is unavailable`);
@@ -262,7 +355,7 @@ export function createConnectorAdapterRegistry(overrides = {}, { store = null, e
       name,
       overrides[name] ??
         (shouldUseRealAdapter(name, env)
-          ? createRealConnectorAdapter(name, { store, fetchImpl })
+          ? createRealConnectorAdapter(name, { store, config: getDefaultRealConnectorConfig(name, env), fetchImpl })
           : createFixtureConnectorAdapter(name)),
     ]),
   );
