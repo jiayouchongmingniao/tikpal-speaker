@@ -189,19 +189,35 @@ try {
     );
     assert.equal(setTierResponse.status, 200);
     assert.equal(setTierResponse.json.state.system.performanceTier, "reduced");
+    assert.equal(setTierResponse.json.state.system.performance.tierDecisionReason, "manual_set_tier");
 
-    const reportResponse = await postAction(
+    const firstReportResponse = await postAction(
       baseUrl,
       {
         type: "runtime_report_performance",
         payload: { avgFps: 22, interactionLatencyMs: 44, memoryUsageMb: 128, activeMode: "flow", reason: "fps" },
         source: "api",
-        requestId: "runtime_report_perf",
+        requestId: "runtime_report_perf_1",
       },
       authHeaders,
     );
-    assert.equal(reportResponse.status, 200);
-    assert.equal(reportResponse.json.state.system.performanceTier, "safe");
+    assert.equal(firstReportResponse.status, 200);
+    assert.equal(firstReportResponse.json.state.system.performanceTier, "reduced");
+    assert.equal(firstReportResponse.json.state.system.performance.tierDecisionReason, "pending_degrade_1/2");
+
+    const secondReportResponse = await postAction(
+      baseUrl,
+      {
+        type: "runtime_report_performance",
+        payload: { avgFps: 22, interactionLatencyMs: 46, memoryUsageMb: 130, activeMode: "flow", reason: "fps" },
+        source: "api",
+        requestId: "runtime_report_perf_2",
+      },
+      authHeaders,
+    );
+    assert.equal(secondReportResponse.status, 200);
+    assert.equal(secondReportResponse.json.state.system.performanceTier, "safe");
+    assert.equal(secondReportResponse.json.state.system.performance.tierDecisionReason, "degrade_fps_below_24_x2");
 
     const runtimeSummaryResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/summary`, {
       headers: authHeaders,
@@ -210,6 +226,14 @@ try {
     assert.equal(runtimeSummaryResponse.json.performanceTier, "safe");
     assert.equal(runtimeSummaryResponse.json.avgFps, 22);
     assert.equal(runtimeSummaryResponse.json.lastDegradeReason, "fps");
+    assert.equal(typeof runtimeSummaryResponse.json.tierCooldownRemainingMs, "number");
+
+    const runtimeProfileResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/profile`, {
+      headers: authHeaders,
+    });
+    assert.equal(runtimeProfileResponse.status, 200);
+    assert.equal(runtimeProfileResponse.json.activeTier, "safe");
+    assert.equal(typeof runtimeProfileResponse.json.activeBudget, "object");
 
     const samplesResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/performance-samples?limit=3`, {
       headers: authHeaders,
@@ -217,9 +241,10 @@ try {
     assert.equal(samplesResponse.status, 200);
     assert.equal(samplesResponse.json.items[0].avgFps, 22);
     assert.equal(samplesResponse.json.items[0].tier, "safe");
+    assert.equal(samplesResponse.json.items[0].tierDecisionReason, "degrade_fps_below_24_x2");
     assert.equal(samplesResponse.json.items[0].activeMode, "flow");
-    assert.equal(samplesResponse.json.items[0].interactionLatencyMs, 44);
-    assert.equal(samplesResponse.json.items[0].memoryUsageMb, 128);
+    assert.equal(samplesResponse.json.items[0].interactionLatencyMs, 46);
+    assert.equal(samplesResponse.json.items[0].memoryUsageMb, 130);
   });
 
   await test("ota check, apply, and rollback expose a verifiable update lifecycle", async () => {

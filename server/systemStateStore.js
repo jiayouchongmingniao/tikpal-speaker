@@ -83,6 +83,91 @@ const OTA_OPERATIONAL_ERROR_CODES = new Set([
   "OTA_RESTART_FAILED",
   "OTA_HEALTH_CHECK_FAILED",
 ]);
+const PERFORMANCE_TIERS = ["normal", "reduced", "safe"];
+const PERFORMANCE_POLICY = {
+  degradeWindows: 2,
+  upgradeWindows: 6,
+  cooldownMs: 30_000,
+  degradeThresholds: {
+    normal: 30,
+    reduced: 24,
+  },
+  upgradeThresholds: {
+    safe: 30,
+    reduced: 34,
+  },
+};
+const BASE_RENDER_BUDGETS = {
+  normal: {
+    pixelRatioCap: 2,
+    waveStep: 18,
+    maxWaveLayers: 3,
+    particleMultiplier: 1,
+    frameIntervalMs: 16,
+  },
+  reduced: {
+    pixelRatioCap: 1.5,
+    waveStep: 24,
+    maxWaveLayers: 2,
+    particleMultiplier: 0.55,
+    frameIntervalMs: 33,
+  },
+  safe: {
+    pixelRatioCap: 1,
+    waveStep: 32,
+    maxWaveLayers: 1,
+    particleMultiplier: 0.2,
+    frameIntervalMs: 42,
+  },
+};
+const RPI_RENDER_PROFILE_BUDGET_OVERRIDES = {
+  balanced: {
+    normal: {
+      pixelRatioCap: 1.5,
+      waveStep: 22,
+      maxWaveLayers: 2,
+      particleMultiplier: 0.45,
+      frameIntervalMs: 33,
+    },
+    reduced: {
+      pixelRatioCap: 1.25,
+      waveStep: 28,
+      maxWaveLayers: 1,
+      particleMultiplier: 0.22,
+      frameIntervalMs: 42,
+    },
+    safe: {
+      pixelRatioCap: 1,
+      waveStep: 36,
+      maxWaveLayers: 1,
+      particleMultiplier: 0.08,
+      frameIntervalMs: 42,
+    },
+  },
+  stable: {
+    normal: {
+      pixelRatioCap: 1.25,
+      waveStep: 28,
+      maxWaveLayers: 1,
+      particleMultiplier: 0.2,
+      frameIntervalMs: 42,
+    },
+    reduced: {
+      pixelRatioCap: 1,
+      waveStep: 34,
+      maxWaveLayers: 1,
+      particleMultiplier: 0.08,
+      frameIntervalMs: 42,
+    },
+    safe: {
+      pixelRatioCap: 1,
+      waveStep: 42,
+      maxWaveLayers: 1,
+      particleMultiplier: 0,
+      frameIntervalMs: 42,
+    },
+  },
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -90,6 +175,213 @@ function nowIso() {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizePerformanceTier(tier = "normal") {
+  return PERFORMANCE_TIERS.includes(tier) ? tier : "normal";
+}
+
+function normalizeRenderProfile(profile = "off") {
+  return profile === "balanced" || profile === "stable" ? profile : "off";
+}
+
+function createPerformancePolicySnapshot() {
+  return {
+    degradeWindows: PERFORMANCE_POLICY.degradeWindows,
+    upgradeWindows: PERFORMANCE_POLICY.upgradeWindows,
+    cooldownMs: PERFORMANCE_POLICY.cooldownMs,
+    degradeThresholds: { ...PERFORMANCE_POLICY.degradeThresholds },
+    upgradeThresholds: { ...PERFORMANCE_POLICY.upgradeThresholds },
+  };
+}
+
+function getRenderBudgetForTier(tier = "normal", renderProfile = "off") {
+  const normalizedTier = normalizePerformanceTier(tier);
+  const normalizedProfile = normalizeRenderProfile(renderProfile);
+  const base = BASE_RENDER_BUDGETS[normalizedTier];
+  if (normalizedProfile === "off") {
+    return base;
+  }
+  return {
+    ...base,
+    ...(RPI_RENDER_PROFILE_BUDGET_OVERRIDES[normalizedProfile]?.[normalizedTier] ?? {}),
+  };
+}
+
+function getRuntimeProfileConfig(renderProfile = "off", activeTier = "normal") {
+  const normalizedProfile = normalizeRenderProfile(renderProfile);
+  const tiers = {};
+  for (const tier of PERFORMANCE_TIERS) {
+    tiers[tier] = getRenderBudgetForTier(tier, normalizedProfile);
+  }
+  return {
+    renderProfile: normalizedProfile,
+    activeTier: normalizePerformanceTier(activeTier),
+    activeBudget: tiers[normalizePerformanceTier(activeTier)],
+    tiers,
+    tierPolicy: createPerformancePolicySnapshot(),
+  };
+}
+
+function createInitialPerformanceState() {
+  return {
+    avgFps: 60,
+    temperatureC: null,
+    interactionLatencyMs: null,
+    memoryUsageMb: null,
+    lastDegradeReason: null,
+    tierDecisionReason: "boot_default",
+    tierCooldownUntil: null,
+    tierCooldownRemainingMs: 0,
+    performanceTierUpdatedAt: nowIso(),
+    belowThresholdCount: 0,
+    aboveThresholdCount: 0,
+    updatedAt: nowIso(),
+  };
+}
+
+function deriveTierDecision({ avgFps, payloadTier, liveState, policy, nowMs }) {
+  const currentTier = normalizePerformanceTier(liveState.system.performanceTier);
+  const performanceState = liveState.system.performance ?? {};
+  const cooldownUntil = Number(performanceState.tierCooldownUntil ?? 0) || 0;
+  const cooldownRemainingMs = Math.max(0, cooldownUntil - nowMs);
+  const nextFromPayload = normalizePerformanceTier(payloadTier);
+  const hasPayloadTier = payloadTier && PERFORMANCE_TIERS.includes(payloadTier);
+  let nextTier = currentTier;
+  let decisionReason = "hold";
+  let belowThresholdCount = Number(performanceState.belowThresholdCount ?? 0) || 0;
+  let aboveThresholdCount = Number(performanceState.aboveThresholdCount ?? 0) || 0;
+  let tierUpdatedAt = performanceState.performanceTierUpdatedAt ?? null;
+  let tierCooldownUntil = performanceState.tierCooldownUntil ?? null;
+
+  if (hasPayloadTier && nextFromPayload !== currentTier) {
+    nextTier = nextFromPayload;
+    decisionReason = "payload_tier_override";
+    belowThresholdCount = 0;
+    aboveThresholdCount = 0;
+    tierUpdatedAt = nowIso();
+    tierCooldownUntil = nowMs + policy.cooldownMs;
+    return {
+      nextTier,
+      tierChanged: true,
+      decisionReason,
+      belowThresholdCount,
+      aboveThresholdCount,
+      tierCooldownUntil,
+      tierCooldownRemainingMs: policy.cooldownMs,
+      performanceTierUpdatedAt: tierUpdatedAt,
+    };
+  }
+
+  if (!Number.isFinite(avgFps)) {
+    return {
+      nextTier,
+      tierChanged: false,
+      decisionReason: "hold_no_fps_sample",
+      belowThresholdCount: 0,
+      aboveThresholdCount: 0,
+      tierCooldownUntil,
+      tierCooldownRemainingMs: cooldownRemainingMs,
+      performanceTierUpdatedAt: tierUpdatedAt,
+    };
+  }
+
+  const degradeThreshold = policy.degradeThresholds[currentTier];
+  const upgradeThreshold = policy.upgradeThresholds[currentTier];
+  const degradeCandidate = currentTier === "normal" ? "reduced" : currentTier === "reduced" ? "safe" : "safe";
+  const upgradeCandidate = currentTier === "safe" ? "reduced" : currentTier === "reduced" ? "normal" : "normal";
+
+  if (degradeThreshold !== undefined && avgFps < degradeThreshold) {
+    belowThresholdCount += 1;
+    aboveThresholdCount = 0;
+    if (belowThresholdCount >= policy.degradeWindows) {
+      nextTier = degradeCandidate;
+      decisionReason = `degrade_fps_below_${degradeThreshold}_x${policy.degradeWindows}`;
+      belowThresholdCount = 0;
+      tierUpdatedAt = nowIso();
+      tierCooldownUntil = nowMs + policy.cooldownMs;
+      return {
+        nextTier,
+        tierChanged: true,
+        decisionReason,
+        belowThresholdCount,
+        aboveThresholdCount,
+        tierCooldownUntil,
+        tierCooldownRemainingMs: policy.cooldownMs,
+        performanceTierUpdatedAt: tierUpdatedAt,
+      };
+    }
+
+    return {
+      nextTier,
+      tierChanged: false,
+      decisionReason: `pending_degrade_${belowThresholdCount}/${policy.degradeWindows}`,
+      belowThresholdCount,
+      aboveThresholdCount,
+      tierCooldownUntil,
+      tierCooldownRemainingMs: cooldownRemainingMs,
+      performanceTierUpdatedAt: tierUpdatedAt,
+    };
+  }
+
+  belowThresholdCount = 0;
+
+  if (upgradeThreshold !== undefined && avgFps >= upgradeThreshold) {
+    aboveThresholdCount += 1;
+    if (cooldownRemainingMs > 0) {
+      return {
+        nextTier,
+        tierChanged: false,
+        decisionReason: "hold_upgrade_cooldown",
+        belowThresholdCount,
+        aboveThresholdCount,
+        tierCooldownUntil,
+        tierCooldownRemainingMs: cooldownRemainingMs,
+        performanceTierUpdatedAt: tierUpdatedAt,
+      };
+    }
+
+    if (aboveThresholdCount >= policy.upgradeWindows) {
+      nextTier = upgradeCandidate;
+      decisionReason = `upgrade_fps_above_${upgradeThreshold}_x${policy.upgradeWindows}`;
+      aboveThresholdCount = 0;
+      tierUpdatedAt = nowIso();
+      tierCooldownUntil = nowMs + policy.cooldownMs;
+      return {
+        nextTier,
+        tierChanged: true,
+        decisionReason,
+        belowThresholdCount,
+        aboveThresholdCount,
+        tierCooldownUntil,
+        tierCooldownRemainingMs: policy.cooldownMs,
+        performanceTierUpdatedAt: tierUpdatedAt,
+      };
+    }
+
+    return {
+      nextTier,
+      tierChanged: false,
+      decisionReason: `pending_upgrade_${aboveThresholdCount}/${policy.upgradeWindows}`,
+      belowThresholdCount,
+      aboveThresholdCount,
+      tierCooldownUntil,
+      tierCooldownRemainingMs: 0,
+      performanceTierUpdatedAt: tierUpdatedAt,
+    };
+  }
+
+  aboveThresholdCount = 0;
+  return {
+    nextTier,
+    tierChanged: false,
+    decisionReason: "hold_within_band",
+    belowThresholdCount,
+    aboveThresholdCount,
+    tierCooldownUntil,
+    tierCooldownRemainingMs: cooldownRemainingMs,
+    performanceTierUpdatedAt: tierUpdatedAt,
+  };
 }
 
 function createSessionToken() {
@@ -228,6 +520,7 @@ function summarizeRuntimeState(state) {
     creativeCareMode: state.creativeCare?.currentCareMode ?? null,
     creativeFlowSuggestion: state.creativeCare?.suggestedFlowState ?? null,
     performanceTier: state.system?.performanceTier ?? null,
+    renderProfile: state.system?.renderProfile ?? "off",
     avgFps: state.system?.performance?.avgFps ?? null,
     otaStatus: state.system?.otaStatus ?? null,
     lastSource: state.lastSource ?? null,
@@ -298,6 +591,7 @@ function summarizeActionPayload(type, payload = {}) {
 }
 
 function createInitialState() {
+  const renderProfile = normalizeRenderProfile(process.env.RPI_RENDER_PROFILE ?? "off");
   return {
     activeMode: "overview",
     focusedPanel: null,
@@ -387,6 +681,7 @@ function createInitialState() {
       version: process.env.npm_package_version ?? "0.1.0",
       otaStatus: "idle",
       performanceTier: "normal",
+      renderProfile,
       ota: {
         currentVersion: process.env.npm_package_version ?? "0.1.0",
         previousVersion: null,
@@ -405,14 +700,7 @@ function createInitialState() {
         lastErrorCode: null,
         lastOperation: null,
       },
-      performance: {
-        avgFps: 60,
-        temperatureC: null,
-        interactionLatencyMs: null,
-        memoryUsageMb: null,
-        lastDegradeReason: null,
-        updatedAt: nowIso(),
-      },
+      performance: createInitialPerformanceState(),
     },
     lastSource: "system",
     lastUpdatedAt: nowIso(),
@@ -588,6 +876,8 @@ function mergePersistedState(defaultState, persistedState) {
     system: {
       ...defaultState.system,
       ...(persistedState.system ?? {}),
+      performanceTier: normalizePerformanceTier(persistedState.system?.performanceTier ?? defaultState.system.performanceTier),
+      renderProfile: normalizeRenderProfile(persistedState.system?.renderProfile ?? defaultState.system.renderProfile ?? "off"),
       ota: {
         ...defaultState.system.ota,
         ...(persistedState.system?.ota ?? {}),
@@ -723,6 +1013,10 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       timestamp: nowIso(),
       avgFps: sample.avgFps ?? null,
       tier: sample.tier ?? null,
+      tierChanged: Boolean(sample.tierChanged),
+      tierDecisionReason: sample.tierDecisionReason ?? null,
+      tierCooldownUntil: sample.tierCooldownUntil ?? null,
+      tierCooldownRemainingMs: sample.tierCooldownRemainingMs ?? null,
       activeMode: sample.activeMode ?? null,
       temperatureC: sample.temperatureC ?? null,
       interactionLatencyMs: sample.interactionLatencyMs ?? null,
@@ -929,6 +1223,8 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       },
       performance: {
         tier: state.system.performanceTier,
+        renderProfile: state.system.renderProfile ?? "off",
+        policy: createPerformancePolicySnapshot(),
       },
       auth: {
         roles: ROLE_ORDER,
@@ -1677,7 +1973,18 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       }
 
       if (type === "runtime_set_performance_tier") {
-        const nextTier = ["normal", "reduced", "safe"].includes(payload.tier) ? payload.tier : liveState.system.performanceTier;
+        const nextTier = PERFORMANCE_TIERS.includes(payload.tier)
+          ? payload.tier
+          : normalizePerformanceTier(liveState.system.performanceTier);
+        const nowMs = Date.now();
+        const tierChanged = nextTier !== normalizePerformanceTier(liveState.system.performanceTier);
+        const tierCooldownUntil = tierChanged
+          ? nowMs + PERFORMANCE_POLICY.cooldownMs
+          : liveState.system.performance?.tierCooldownUntil ?? null;
+        const performanceTierUpdatedAt = tierChanged
+          ? nowIso()
+          : liveState.system.performance?.performanceTierUpdatedAt ?? null;
+        const tierDecisionReason = tierChanged ? "manual_set_tier" : "manual_set_tier_noop";
         return finalize(
           updateState(
             {
@@ -1688,6 +1995,12 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
                 performance: {
                   ...liveState.system.performance,
                   lastDegradeReason: payload.reason ?? "manual",
+                  tierDecisionReason,
+                  tierCooldownUntil,
+                  tierCooldownRemainingMs: Math.max(0, Number(tierCooldownUntil ?? 0) - nowMs),
+                  performanceTierUpdatedAt,
+                  belowThresholdCount: 0,
+                  aboveThresholdCount: 0,
                   updatedAt: nowIso(),
                 },
               },
@@ -1700,19 +2013,28 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
 
       if (type === "runtime_report_performance") {
         const avgFps = payload.avgFps ?? liveState.system.performance?.avgFps ?? null;
-        const nextTier =
-          payload.tier ??
-          (typeof avgFps === "number"
-            ? avgFps < 24
-              ? "safe"
-              : avgFps < 30
-                ? "reduced"
-                : "normal"
-            : liveState.system.performanceTier);
+        const numericAvgFps =
+          avgFps === null || avgFps === undefined || avgFps === ""
+            ? Number.NaN
+            : Number(avgFps);
+        const nowMs = Date.now();
+        const decision = deriveTierDecision({
+          avgFps: numericAvgFps,
+          payloadTier: payload.tier,
+          liveState,
+          policy: PERFORMANCE_POLICY,
+          nowMs,
+        });
+
+        const nextTier = normalizePerformanceTier(decision.nextTier);
         recordPerformanceSample({
           ...payload,
           avgFps,
           tier: nextTier,
+          tierChanged: decision.tierChanged,
+          tierDecisionReason: decision.decisionReason,
+          tierCooldownUntil: decision.tierCooldownUntil,
+          tierCooldownRemainingMs: decision.tierCooldownRemainingMs,
           source,
         });
 
@@ -1730,6 +2052,12 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
                   interactionLatencyMs: payload.interactionLatencyMs ?? liveState.system.performance?.interactionLatencyMs ?? null,
                   memoryUsageMb: payload.memoryUsageMb ?? liveState.system.performance?.memoryUsageMb ?? null,
                   lastDegradeReason: payload.reason ?? liveState.system.performance?.lastDegradeReason ?? null,
+                  tierDecisionReason: decision.decisionReason,
+                  tierCooldownUntil: decision.tierCooldownUntil,
+                  tierCooldownRemainingMs: decision.tierCooldownRemainingMs,
+                  performanceTierUpdatedAt: decision.performanceTierUpdatedAt,
+                  belowThresholdCount: decision.belowThresholdCount,
+                  aboveThresholdCount: decision.aboveThresholdCount,
                   updatedAt: nowIso(),
                 },
               },
@@ -2034,14 +2362,26 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
         playbackSource: liveState.playback?.source ?? null,
         playbackVolume: liveState.playback?.volume ?? null,
         screenSyncStale: Boolean(liveState.screen?.sync?.stale),
+        renderProfile: liveState.system?.renderProfile ?? "off",
         avgFps: liveState.system?.performance?.avgFps ?? null,
         temperatureC: liveState.system?.performance?.temperatureC ?? null,
         interactionLatencyMs: liveState.system?.performance?.interactionLatencyMs ?? null,
         memoryUsageMb: liveState.system?.performance?.memoryUsageMb ?? null,
         lastDegradeReason: liveState.system?.performance?.lastDegradeReason ?? null,
+        tierDecisionReason: liveState.system?.performance?.tierDecisionReason ?? null,
+        tierCooldownUntil: liveState.system?.performance?.tierCooldownUntil ?? null,
+        tierCooldownRemainingMs: Math.max(
+          0,
+          Number(liveState.system?.performance?.tierCooldownUntil ?? 0) - Date.now(),
+        ),
+        performanceTierUpdatedAt: liveState.system?.performance?.performanceTierUpdatedAt ?? null,
         ota: liveState.system?.ota ?? null,
         lastUpdatedAt: liveState.lastUpdatedAt ?? null,
       };
+    },
+    getRuntimeProfile() {
+      const liveState = getNormalizedState();
+      return getRuntimeProfileConfig(liveState.system?.renderProfile ?? "off", liveState.system?.performanceTier ?? "normal");
     },
     getActionLogs(limit = 50) {
       const normalizedLimit = clamp(Number(limit ?? 50), 1, MAX_RUNTIME_LOG_ENTRIES);

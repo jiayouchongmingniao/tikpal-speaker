@@ -237,6 +237,7 @@ export function ConnectorDebugPage() {
   const [state, setState] = useState(null);
   const [screenContext, setScreenContext] = useState(null);
   const [runtimeSummary, setRuntimeSummary] = useState(null);
+  const [runtimeProfile, setRuntimeProfile] = useState(null);
   const [actionLog, setActionLog] = useState([]);
   const [stateTransitions, setStateTransitions] = useState([]);
   const [performanceSamples, setPerformanceSamples] = useState([]);
@@ -296,6 +297,10 @@ export function ConnectorDebugPage() {
     runtimeSummary,
     draftAvgFps: Number(performanceDraft.avgFps || 0),
   });
+  const recentTierDecisions = performanceSamples
+    .filter((item) => item?.tierDecisionReason)
+    .slice(0, 6)
+    .map((item) => `${new Date(item.timestamp).toLocaleTimeString()} · ${item.tier} · ${item.tierDecisionReason}`);
 
   useEffect(() => {
     client.setApiKey(apiKey);
@@ -336,11 +341,12 @@ export function ConnectorDebugPage() {
           client.getState(),
           client.getScreenContext(),
         ]);
-        const [healthResult, calendarFixtures, todoistFixtures, runtimeResult, actionLogResult, transitionsResult, performanceResult] = await Promise.all([
+        const [healthResult, calendarFixtures, todoistFixtures, runtimeResult, runtimeProfileResult, actionLogResult, transitionsResult, performanceResult] = await Promise.all([
           client.health().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
           loadFixtures("calendar"),
           loadFixtures("todoist"),
           client.getRuntimeSummary().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
+          client.getRuntimeProfile().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
           client.getRuntimeActionLog(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
           client.getRuntimeStateTransitions(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
           client.getRuntimePerformanceSamples(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
@@ -355,6 +361,7 @@ export function ConnectorDebugPage() {
         setApiHealth(healthResult.ok ? healthResult.value : null);
         setApiHealthStatus(healthResult.ok ? "ok" : "error");
         setRuntimeSummary(runtimeResult.ok ? runtimeResult.value : null);
+        setRuntimeProfile(runtimeProfileResult.ok ? runtimeProfileResult.value : null);
         setActionLog(actionLogResult.value?.items ?? []);
         setStateTransitions(transitionsResult.value?.items ?? []);
         setPerformanceSamples(performanceResult.value?.items ?? []);
@@ -400,6 +407,7 @@ export function ConnectorDebugPage() {
     setApiKey("");
     setAdminStatus("required");
     setRuntimeSummary(null);
+    setRuntimeProfile(null);
     setActionLog([]);
     setStateTransitions([]);
   }
@@ -617,13 +625,15 @@ export function ConnectorDebugPage() {
   }
 
   async function refreshRuntimePanels() {
-    const [runtimeResult, actionLogResult, transitionsResult, performanceResult] = await Promise.all([
+    const [runtimeResult, runtimeProfileResult, actionLogResult, transitionsResult, performanceResult] = await Promise.all([
       client.getRuntimeSummary().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
+      client.getRuntimeProfile().then((value) => ({ ok: true, value })).catch((nextError) => ({ ok: false, error: nextError })),
       client.getRuntimeActionLog(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
       client.getRuntimeStateTransitions(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
       client.getRuntimePerformanceSamples(12).then((value) => ({ ok: true, value })).catch(() => ({ ok: false, value: { items: [] } })),
     ]);
     setRuntimeSummary(runtimeResult.ok ? runtimeResult.value : null);
+    setRuntimeProfile(runtimeProfileResult.ok ? runtimeProfileResult.value : null);
     setActionLog(actionLogResult.value?.items ?? []);
     setStateTransitions(transitionsResult.value?.items ?? []);
     setPerformanceSamples(performanceResult.value?.items ?? []);
@@ -829,6 +839,10 @@ export function ConnectorDebugPage() {
               <strong>{performanceDebug.tier}</strong>
             </div>
             <div>
+              <span>Render profile</span>
+              <strong>{runtimeProfile?.renderProfile ?? performanceDebug.renderProfile}</strong>
+            </div>
+            <div>
               <span>Suggested</span>
               <strong>{performanceDebug.suggestedTier}</strong>
             </div>
@@ -845,10 +859,30 @@ export function ConnectorDebugPage() {
               <strong>{performanceDebug.budgetLabel}</strong>
             </div>
             <div>
-              <span>Reason</span>
+              <span>Degrade reason</span>
               <strong>{performanceDebug.lastDegradeReason ?? "none"}</strong>
             </div>
+            <div>
+              <span>Tier decision</span>
+              <strong>{performanceDebug.tierDecisionReason ?? "none"}</strong>
+            </div>
+            <div>
+              <span>Cooldown</span>
+              <strong>
+                {performanceDebug.tierCooldownRemainingMs ? `${Math.ceil(performanceDebug.tierCooldownRemainingMs / 1000)}s` : "0s"}
+              </strong>
+            </div>
+            <div>
+              <span>Tier updated</span>
+              <strong>
+                {performanceDebug.performanceTierUpdatedAt
+                  ? new Date(performanceDebug.performanceTierUpdatedAt).toLocaleTimeString()
+                  : "n/a"}
+              </strong>
+            </div>
           </div>
+          <pre>{prettyJson(runtimeProfile?.activeBudget ?? performanceDebug.budget)}</pre>
+          <pre>{recentTierDecisions.join("\n") || "No tier decision history yet."}</pre>
         </section>
 
         <section className="debug-manual-focus">

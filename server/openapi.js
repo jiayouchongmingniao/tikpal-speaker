@@ -315,16 +315,31 @@ export const systemOpenApiDocument = {
           creativeCareMode: { type: ["string", "null"] },
           creativeFlowSuggestion: { type: ["string", "null"] },
           performanceTier: { type: ["string", "null"] },
+          renderProfile: { type: "string", enum: ["off", "balanced", "stable"] },
           avgFps: { type: ["number", "null"] },
           temperatureC: { type: ["number", "null"] },
           interactionLatencyMs: { type: ["number", "null"] },
           memoryUsageMb: { type: ["number", "null"] },
           lastDegradeReason: { type: ["string", "null"] },
+          tierDecisionReason: { type: ["string", "null"] },
+          tierCooldownUntil: { type: ["number", "null"] },
+          tierCooldownRemainingMs: { type: "number" },
+          performanceTierUpdatedAt: { type: ["string", "null"], format: "date-time" },
           otaStatus: { type: ["string", "null"] },
           lastSource: { type: ["string", "null"] },
           controllerCount: { type: "number" },
           screenSyncStale: { type: "boolean" },
           lastUpdatedAt: { type: ["string", "null"], format: "date-time" },
+        },
+      },
+      RuntimeProfile: {
+        type: "object",
+        properties: {
+          renderProfile: { type: "string", enum: ["off", "balanced", "stable"] },
+          activeTier: { type: "string", enum: ["normal", "reduced", "safe"] },
+          activeBudget: { type: "object" },
+          tiers: { type: "object" },
+          tierPolicy: { type: "object" },
         },
       },
       RuntimeActionLogEntry: {
@@ -655,6 +670,21 @@ export const systemOpenApiDocument = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/RuntimeSummary" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/runtime/profile": {
+      get: {
+        summary: "Read render profile and effective per-tier budgets",
+        responses: {
+          200: {
+            description: "Runtime render profile",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/RuntimeProfile" },
               },
             },
           },

@@ -36,7 +36,19 @@ test("render budgets progressively reduce canvas cost", () => {
   assert.equal(normal.particleMultiplier > reduced.particleMultiplier, true);
   assert.equal(reduced.particleMultiplier > safe.particleMultiplier, true);
   assert.equal(normal.pixelRatioCap > safe.pixelRatioCap, true);
+  assert.equal(normal.frameIntervalMs < safe.frameIntervalMs, true);
   assert.deepEqual(getPerformanceRenderBudget("unknown"), normal);
+});
+
+test("rpi render profiles tighten budgets while desktop defaults stay unchanged", () => {
+  const desktop = getPerformanceRenderBudget("normal", "off");
+  const balanced = getPerformanceRenderBudget("normal", "balanced");
+  const stable = getPerformanceRenderBudget("normal", "stable");
+
+  assert.equal(desktop.pixelRatioCap > balanced.pixelRatioCap, true);
+  assert.equal(balanced.pixelRatioCap > stable.pixelRatioCap, true);
+  assert.equal(desktop.maxWaveLayers > balanced.maxWaveLayers, true);
+  assert.equal(balanced.particleMultiplier > stable.particleMultiplier, true);
 });
 
 test("frame window summary reports fps, latency, and optional memory", () => {
@@ -59,19 +71,24 @@ test("debug view model combines runtime metrics with render budget", () => {
   const viewModel = getPerformanceDebugViewModel({
     system: {
       performanceTier: "reduced",
+      renderProfile: "balanced",
       performance: {
         avgFps: 28,
         interactionLatencyMs: 38,
         memoryUsageMb: 96,
         lastDegradeReason: "fps",
+        tierDecisionReason: "pending_degrade_1/2",
+        tierCooldownRemainingMs: 0,
       },
     },
   });
 
   assert.equal(viewModel.tier, "reduced");
+  assert.equal(viewModel.renderProfile, "balanced");
   assert.equal(viewModel.suggestedTier, "reduced");
-  assert.equal(viewModel.budget.maxWaveLayers, 2);
-  assert.equal(viewModel.budgetLabel.includes("particles 55%"), true);
+  assert.equal(viewModel.budget.maxWaveLayers, 1);
+  assert.equal(viewModel.budgetLabel.includes("particles 22%"), true);
+  assert.equal(viewModel.tierDecisionReason, "pending_degrade_1/2");
 });
 
 test("performance trace summary recommends a device tier from real samples", () => {

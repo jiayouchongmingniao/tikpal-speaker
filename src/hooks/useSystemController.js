@@ -478,7 +478,18 @@ function createFallbackState(initialMode = "overview", initialFlowState = "focus
     system: {
       version: "0.1.0",
       performanceTier: "normal",
+      renderProfile: "off",
       otaStatus: "idle",
+      performance: {
+        avgFps: 60,
+        interactionLatencyMs: null,
+        memoryUsageMb: null,
+        lastDegradeReason: null,
+        tierDecisionReason: "boot_default",
+        tierCooldownUntil: null,
+        tierCooldownRemainingMs: 0,
+        performanceTierUpdatedAt: new Date().toISOString(),
+      },
     },
     lastSource: "speaker-ui",
     lastUpdatedAt: new Date().toISOString(),

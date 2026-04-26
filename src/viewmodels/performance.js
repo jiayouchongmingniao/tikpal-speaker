@@ -4,26 +4,88 @@ export const PERFORMANCE_RENDER_BUDGETS = {
     waveStep: 18,
     maxWaveLayers: 3,
     particleMultiplier: 1,
-    frameModulo: 1,
+    frameIntervalMs: 16,
   },
   reduced: {
     pixelRatioCap: 1.5,
     waveStep: 24,
     maxWaveLayers: 2,
     particleMultiplier: 0.55,
-    frameModulo: 1,
+    frameIntervalMs: 33,
   },
   safe: {
     pixelRatioCap: 1,
     waveStep: 32,
     maxWaveLayers: 1,
     particleMultiplier: 0.2,
-    frameModulo: 2,
+    frameIntervalMs: 42,
   },
 };
 
-export function getPerformanceRenderBudget(tier = "normal") {
-  return PERFORMANCE_RENDER_BUDGETS[tier] ?? PERFORMANCE_RENDER_BUDGETS.normal;
+export const RPI_RENDER_PROFILE_OVERRIDES = {
+  balanced: {
+    normal: {
+      pixelRatioCap: 1.5,
+      waveStep: 22,
+      maxWaveLayers: 2,
+      particleMultiplier: 0.45,
+      frameIntervalMs: 33,
+    },
+    reduced: {
+      pixelRatioCap: 1.25,
+      waveStep: 28,
+      maxWaveLayers: 1,
+      particleMultiplier: 0.22,
+      frameIntervalMs: 42,
+    },
+    safe: {
+      pixelRatioCap: 1,
+      waveStep: 36,
+      maxWaveLayers: 1,
+      particleMultiplier: 0.08,
+      frameIntervalMs: 42,
+    },
+  },
+  stable: {
+    normal: {
+      pixelRatioCap: 1.25,
+      waveStep: 28,
+      maxWaveLayers: 1,
+      particleMultiplier: 0.2,
+      frameIntervalMs: 42,
+    },
+    reduced: {
+      pixelRatioCap: 1,
+      waveStep: 34,
+      maxWaveLayers: 1,
+      particleMultiplier: 0.08,
+      frameIntervalMs: 42,
+    },
+    safe: {
+      pixelRatioCap: 1,
+      waveStep: 42,
+      maxWaveLayers: 1,
+      particleMultiplier: 0,
+      frameIntervalMs: 42,
+    },
+  },
+};
+
+export function normalizeRenderProfile(profile = "off") {
+  return profile === "balanced" || profile === "stable" ? profile : "off";
+}
+
+export function getPerformanceRenderBudget(tier = "normal", profile = "off") {
+  const normalizedTier = PERFORMANCE_RENDER_BUDGETS[tier] ? tier : "normal";
+  const normalizedProfile = normalizeRenderProfile(profile);
+  const base = PERFORMANCE_RENDER_BUDGETS[normalizedTier];
+  if (normalizedProfile === "off") {
+    return base;
+  }
+  return {
+    ...base,
+    ...(RPI_RENDER_PROFILE_OVERRIDES[normalizedProfile]?.[normalizedTier] ?? {}),
+  };
 }
 
 export function derivePerformanceTierFromFps(avgFps, fallbackTier = "normal") {
@@ -120,19 +182,29 @@ export function summarizePerformanceTrace(samples = []) {
 export function getPerformanceDebugViewModel({ system = {}, runtimeSummary = null, draftAvgFps = null } = {}) {
   const tier = system.performanceTier ?? runtimeSummary?.performanceTier ?? "normal";
   const performance = system.performance ?? {};
+  const renderProfile = normalizeRenderProfile(system.renderProfile ?? runtimeSummary?.renderProfile ?? "off");
   const avgFps = Number(runtimeSummary?.avgFps ?? performance.avgFps ?? draftAvgFps ?? 0);
-  const budget = getPerformanceRenderBudget(tier);
+  const budget = getPerformanceRenderBudget(tier, renderProfile);
+  const tierCooldownUntil = runtimeSummary?.tierCooldownUntil ?? performance.tierCooldownUntil ?? null;
+  const tierCooldownRemainingMs = runtimeSummary?.tierCooldownRemainingMs ?? performance.tierCooldownRemainingMs ?? null;
+  const tierDecisionReason = runtimeSummary?.tierDecisionReason ?? performance.tierDecisionReason ?? null;
+  const performanceTierUpdatedAt = runtimeSummary?.performanceTierUpdatedAt ?? performance.performanceTierUpdatedAt ?? null;
 
   return {
     tier,
     suggestedTier: derivePerformanceTierFromFps(avgFps, tier),
+    renderProfile,
     avgFps,
     interactionLatencyMs: runtimeSummary?.interactionLatencyMs ?? performance.interactionLatencyMs ?? null,
     memoryUsageMb: runtimeSummary?.memoryUsageMb ?? performance.memoryUsageMb ?? null,
     lastDegradeReason: runtimeSummary?.lastDegradeReason ?? performance.lastDegradeReason ?? null,
+    tierDecisionReason,
+    tierCooldownUntil,
+    tierCooldownRemainingMs,
+    performanceTierUpdatedAt,
     budget,
     budgetLabel: `ratio ${budget.pixelRatioCap} · waves ${budget.maxWaveLayers} · particles ${Math.round(
       budget.particleMultiplier * 100,
-    )}% · frame/${budget.frameModulo}`,
+    )}% · ${Math.round(1000 / Math.max(16, Number(budget.frameIntervalMs ?? 16)))}fps`,
   };
 }

@@ -4,7 +4,7 @@ import { StateTitle } from "./StateTitle";
 import { VisualEngineCanvas } from "./VisualEngineCanvas";
 import { FLOW_THEME } from "../theme";
 import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
-import { getPerformanceRenderBudget } from "../viewmodels/performance";
+import { getPerformanceRenderBudget, normalizeRenderProfile } from "../viewmodels/performance";
 
 function deriveAppPhase({ activeMode, overlayVisible, flowState, transitionStatus }) {
   if (transitionStatus !== "idle") {
@@ -87,10 +87,11 @@ export function FlowModePage({
   };
   const transitionState = toFlowTransitionState(transition, currentState);
   const performanceTier = systemState.system?.performanceTier ?? "normal";
+  const renderProfile = normalizeRenderProfile(systemState.system?.renderProfile ?? "off");
 
   return (
     <main
-      className={`flow-page phase-${appPhase} tone-${theme.uiTone} care-${creativeCare.currentCareMode} ${className}`.trim()}
+      className={`flow-page phase-${appPhase} tone-${theme.uiTone} care-${creativeCare.currentCareMode} render-profile-${renderProfile} ${className}`.trim()}
       role="application"
       aria-label="Flow mode"
     >
@@ -100,7 +101,7 @@ export function FlowModePage({
         theme={theme}
         audioMetrics={audioMetrics}
         appPhase={appPhase}
-        renderBudget={getPerformanceRenderBudget(performanceTier)}
+        renderBudget={getPerformanceRenderBudget(performanceTier, renderProfile)}
       />
       <section className="flow-page__content">
         <div className="flow-care-stack">

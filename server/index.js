@@ -227,6 +227,7 @@ function createSystemApiDescriptor() {
       capabilities: "/api/v1/system/capabilities",
       screenContext: "/api/v1/system/screen/context",
       runtimeSummary: "/api/v1/system/runtime/summary",
+      runtimeProfile: "/api/v1/system/runtime/profile",
       runtimeActionLog: "/api/v1/system/runtime/action-log",
       runtimeStateTransitions: "/api/v1/system/runtime/state-transitions",
       runtimePerformanceSamples: "/api/v1/system/runtime/performance-samples",
@@ -389,6 +390,16 @@ export function createAppServer({
         }
 
         sendJson(response, 200, store.getRuntimeSummary());
+        return;
+      }
+
+      if (path === "/api/v1/system/runtime/profile" && request.method === "GET") {
+        const auth = authorizeRequest(request, response, store, apiKey, "operator");
+        if (!auth) {
+          return;
+        }
+
+        sendJson(response, 200, store.getRuntimeProfile());
         return;
       }
 

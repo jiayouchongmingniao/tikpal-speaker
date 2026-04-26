@@ -26,7 +26,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d");
     let frameId = 0;
-    let frameIndex = 0;
+    let lastRenderedAt = 0;
     let disposed = false;
 
     function resize() {
@@ -102,32 +102,32 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       }
     }
 
-    function render() {
+    function render(nowMs) {
       if (disposed) {
         return;
       }
-
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      const time = performance.now() / 1000;
-      const liveState = currentStateRef.current;
-      const liveMetrics = audioMetricsRef.current;
-      const livePhase = appPhaseRef.current;
-      const budget = renderBudgetRef.current ?? {};
-      const brightness = 0.84 + liveMetrics.volumeNormalized * 0.15;
-      const dimAlpha = livePhase === "sleep_dimmed" ? 0.34 : 0.12;
-      frameIndex += 1;
-      const frameModulo = Math.max(1, Number(budget.frameModulo ?? 1));
 
       if (resizeRequestedRef.current) {
         resizeRequestedRef.current = false;
         resize();
       }
 
-      if (frameModulo > 1 && frameIndex % frameModulo !== 0) {
+      const budget = renderBudgetRef.current ?? {};
+      const frameIntervalMs = Math.max(16, Number(budget.frameIntervalMs ?? 16));
+      if (lastRenderedAt && nowMs - lastRenderedAt < frameIntervalMs) {
         frameId = window.requestAnimationFrame(render);
         return;
       }
+      lastRenderedAt = nowMs;
+
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const time = nowMs / 1000;
+      const liveState = currentStateRef.current;
+      const liveMetrics = audioMetricsRef.current;
+      const livePhase = appPhaseRef.current;
+      const brightness = 0.84 + liveMetrics.volumeNormalized * 0.15;
+      const dimAlpha = livePhase === "sleep_dimmed" ? 0.34 : 0.12;
 
       context.clearRect(0, 0, width, height);
 
@@ -149,7 +149,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
     }
 
     resize();
-    render();
+    frameId = window.requestAnimationFrame(render);
     window.addEventListener("resize", resize);
 
     return () => {

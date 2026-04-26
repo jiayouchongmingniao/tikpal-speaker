@@ -95,6 +95,7 @@ function getGestureDirection(delta) {
 export function SystemShell({ initialMode = "overview", initialFlowState = "focus", debug = false }) {
   const controller = useSystemController({ initialMode, initialFlowState });
   const { state, screenContext } = controller;
+  const renderProfile = state.system?.renderProfile ?? "off";
   const overlayRef = useRef(null);
   const overlayTimerRef = useRef(null);
   const pointerTapRef = useRef({
@@ -698,7 +699,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
 
   return (
     <div
-      className={`system-shell mode-${state.activeMode} transition-${transitionStatus}`}
+      className={`system-shell mode-${state.activeMode} transition-${transitionStatus} render-profile-${renderProfile}`}
       onPointerDown={onShellPointerDown}
       onPointerMove={onShellPointerMove}
       onPointerUp={onShellPointerUp}

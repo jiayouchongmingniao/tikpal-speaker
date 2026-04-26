@@ -83,6 +83,26 @@ textarea {
   z-index: 1;
 }
 
+.flow-page.render-profile-balanced .ambient-bg__layer,
+.flow-page.render-profile-stable .ambient-bg__layer {
+  animation: none;
+  transform: none;
+  transition:
+    opacity 360ms ease,
+    transform 360ms ease,
+    filter 360ms ease;
+}
+
+.flow-page.render-profile-balanced .ambient-bg__layer--next,
+.flow-page.render-profile-stable .ambient-bg__layer--next {
+  mix-blend-mode: normal;
+  filter: none;
+}
+
+.flow-page.render-profile-stable .ambient-bg__layer--next {
+  opacity: 0.38;
+}
+
 .flow-page__content {
   position: relative;
   z-index: 2;
@@ -1002,6 +1022,37 @@ textarea {
   transform: translate3d(-4%, 0, 0) scale(1.006);
 }
 
+.system-shell.render-profile-balanced .page-layer--focus-enter.page-layer--slot-left,
+.system-shell.render-profile-balanced .page-layer--focus-exit.page-layer--slot-left,
+.system-shell.render-profile-stable .page-layer--focus-enter.page-layer--slot-left,
+.system-shell.render-profile-stable .page-layer--focus-exit.page-layer--slot-left {
+  transform: translate3d(-6%, 0, 0) scale(0.97);
+}
+
+.system-shell.render-profile-balanced .page-layer--focus-enter.page-layer--slot-center,
+.system-shell.render-profile-balanced .page-layer--focus-exit.page-layer--slot-center,
+.system-shell.render-profile-stable .page-layer--focus-enter.page-layer--slot-center,
+.system-shell.render-profile-stable .page-layer--focus-exit.page-layer--slot-center {
+  transform: translate3d(0, 0, 0) scale(0.97);
+}
+
+.system-shell.render-profile-balanced .page-layer--focus-enter.page-layer--slot-right,
+.system-shell.render-profile-balanced .page-layer--focus-exit.page-layer--slot-right,
+.system-shell.render-profile-stable .page-layer--focus-enter.page-layer--slot-right,
+.system-shell.render-profile-stable .page-layer--focus-exit.page-layer--slot-right {
+  transform: translate3d(6%, 0, 0) scale(0.97);
+}
+
+.system-shell.render-profile-balanced .page-layer--handoff-in,
+.system-shell.render-profile-stable .page-layer--handoff-in {
+  transform: translate3d(2%, 0, 0) scale(0.998);
+}
+
+.system-shell.render-profile-balanced .page-layer--handoff-out,
+.system-shell.render-profile-stable .page-layer--handoff-out {
+  transform: translate3d(-2%, 0, 0) scale(1.002);
+}
+
 .app-error-boundary {
   position: fixed;
   inset: 0;
@@ -1444,6 +1495,11 @@ textarea {
     box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
     background 220ms ease,
     border-color 220ms ease;
+}
+
+.system-shell.render-profile-balanced .global-overlay,
+.system-shell.render-profile-stable .global-overlay {
+  backdrop-filter: none;
 }
 
 .global-overlay__section {

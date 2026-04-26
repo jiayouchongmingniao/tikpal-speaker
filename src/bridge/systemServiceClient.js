@@ -117,6 +117,11 @@ export function createSystemServiceClient() {
         headers: getAuthHeaders({ admin: true }),
       });
     },
+    async getRuntimeProfile() {
+      return requestJson(`${baseUrl}/runtime/profile`, {
+        headers: getAuthHeaders({ admin: true }),
+      });
+    },
     async getRuntimeActionLog(limit = 30) {
       return requestJson(`${baseUrl}/runtime/action-log?limit=${encodeURIComponent(limit)}`, {
         headers: getAuthHeaders({ admin: true }),
