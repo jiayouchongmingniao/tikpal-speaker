@@ -4,6 +4,7 @@ import { createConnectorAdapterRegistry } from "./connectorAdapters.js";
 import { createJsonFilePersistence } from "./localPersistence.js";
 import { createJsonFileSecretStore } from "./localSecretStore.js";
 import { createMockConnectorSyncService } from "./mockConnectorSyncService.js";
+import { createFileSystemOtaManager } from "./otaReleaseManager.js";
 import { flowOpenApiDocument, systemOpenApiDocument } from "./openapi.js";
 import { createScreenContext } from "./screenContextService.js";
 import { createSystemStateStore } from "./systemStateStore.js";
@@ -260,15 +261,18 @@ function createSystemApiDescriptor() {
 }
 
 function createDefaultSystemStateStore() {
+  const otaManager = process.env.TIKPAL_OTA_RELEASE_ROOT ? createFileSystemOtaManager() : null;
   if (process.env.TIKPAL_DISABLE_PERSISTENCE === "1") {
     return createSystemStateStore({
       secretStore: createJsonFileSecretStore(),
+      otaManager,
     });
   }
 
   return createSystemStateStore({
     persistence: createJsonFilePersistence(),
     secretStore: createJsonFileSecretStore(),
+    otaManager,
   });
 }
 

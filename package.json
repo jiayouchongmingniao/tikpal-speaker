@@ -11,6 +11,7 @@
     "test:screen-context": "node scripts/screen-context-consumers-smoke-test.mjs",
     "test:connectors": "node scripts/connector-adapters-smoke-test.mjs",
     "test:http-smoke": "node scripts/system-actions-http-smoke-test.mjs",
+    "test:ota": "node scripts/ota-release-manager-smoke-test.mjs",
     "test:performance": "node scripts/performance-viewmodels-smoke-test.mjs",
     "test:persistence": "node scripts/system-persistence-smoke-test.mjs",
     "test:smoke": "node scripts/system-state-smoke-test.mjs",

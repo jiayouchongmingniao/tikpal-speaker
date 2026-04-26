@@ -76,6 +76,12 @@ const MOCK_QUEUE = [
   },
 ];
 const PERSISTENCE_VERSION = 1;
+const OTA_OPERATIONAL_ERROR_CODES = new Set([
+  "OTA_RELEASE_NOT_FOUND",
+  "OTA_MANIFEST_MISSING",
+  "OTA_MANIFEST_INVALID",
+  "OTA_HEALTH_CHECK_FAILED",
+]);
 
 function nowIso() {
   return new Date().toISOString();
@@ -597,9 +603,23 @@ function createSecretRecord(payload = {}) {
   };
 }
 
-export function createSystemStateStore({ persistence = null, secretStore = null } = {}) {
+export function createSystemStateStore({ persistence = null, secretStore = null, otaManager = null } = {}) {
   const persisted = persistence?.read?.() ?? null;
   let state = mergePersistedState(createInitialState(), persisted?.state);
+  if (otaManager) {
+    state = {
+      ...state,
+      system: {
+        ...state.system,
+        ota: {
+          ...state.system.ota,
+          releaseRoot: otaManager.releaseRoot ?? state.system.ota.releaseRoot,
+          currentPath: otaManager.currentPath ?? state.system.ota.currentPath,
+          previousPath: otaManager.previousPath ?? state.system.ota.previousPath,
+        },
+      },
+    };
+  }
   const sessions = new Map();
   const sessionIdsByToken = new Map();
   const pairingCodes = new Map();
@@ -1110,6 +1130,45 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
       return snapshot;
     }
 
+    function recordOtaFailure(error) {
+      if (!type.startsWith("ota_") || !OTA_OPERATIONAL_ERROR_CODES.has(error.code)) {
+        return;
+      }
+
+      const failedAt = nowIso();
+      updateState(
+        {
+          ...state,
+          system: {
+            ...state.system,
+            otaStatus: "error",
+            ota: {
+              ...state.system.ota,
+              targetVersion: error.targetVersion ?? payload.targetVersion ?? state.system.ota?.targetVersion ?? null,
+              previousVersion: error.previousVersion ?? state.system.ota?.previousVersion ?? null,
+              updateAvailable: Boolean(state.system.ota?.updateAvailable),
+              canRollback: Boolean(error.previousVersion ?? state.system.ota?.previousVersion),
+              restartRequired: false,
+              lastErrorCode: error.code,
+              lastOperation: {
+                type,
+                status: "failed",
+                phases: [type === "ota_rollback" ? "rollback" : "verifying", "failed"],
+                releasePath: error.releasePath ?? null,
+                manifestPath: error.manifestPath ?? null,
+                manifest: error.manifest ?? null,
+                health: error.health ?? null,
+                message: error.message,
+                updatedAt: failedAt,
+              },
+            },
+          },
+        },
+        source,
+        type,
+      );
+    }
+
     try {
       if (liveState.system.otaStatus === "applying" && !type.startsWith("ota_")) {
         const error = new Error("OTA is in progress");
@@ -1600,7 +1659,8 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
       if (type === "ota_check") {
         const currentVersion = liveState.system.ota?.currentVersion ?? liveState.system.version;
         const targetVersion = payload.targetVersion ?? "0.1.1";
-        const updateAvailable = currentVersion !== targetVersion;
+        const managerResult = otaManager?.check?.({ currentVersion, targetVersion });
+        const updateAvailable = managerResult?.updateAvailable ?? currentVersion !== targetVersion;
 
         return finalize(
           updateState(
@@ -1621,7 +1681,10 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
                   lastOperation: {
                     type,
                     status: "completed",
-                    phases: ["checking", updateAvailable ? "available" : "idle"],
+                    phases: managerResult?.phases ?? ["checking", updateAvailable ? "available" : "idle"],
+                    releasePath: managerResult?.releasePath ?? null,
+                    manifestPath: managerResult?.manifestPath ?? null,
+                    manifest: managerResult?.manifest ?? null,
                     updatedAt: nowIso(),
                   },
                 },
@@ -1645,19 +1708,24 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
         }
 
         const appliedAt = nowIso();
+        const managerResult = otaManager?.apply?.({ currentVersion, targetVersion });
+        const releasePath =
+          managerResult?.releasePath ?? `${liveState.system.ota?.releaseRoot ?? "/opt/tikpal/app/releases"}/${targetVersion}`;
+        const previousVersion = managerResult?.previousVersion ?? currentVersion;
+        const nextCurrentVersion = managerResult?.currentVersion ?? targetVersion;
         return finalize(
           updateState(
             {
               ...liveState,
               system: {
                 ...liveState.system,
-                version: targetVersion,
+                version: nextCurrentVersion,
                 otaStatus: "idle",
                 ota: {
                   ...liveState.system.ota,
-                  currentVersion: targetVersion,
-                  previousVersion: currentVersion,
-                  targetVersion,
+                  currentVersion: nextCurrentVersion,
+                  previousVersion,
+                  targetVersion: managerResult?.targetVersion ?? targetVersion,
                   updateAvailable: false,
                   canRollback: true,
                   restartRequired: false,
@@ -1668,8 +1736,11 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
                   lastOperation: {
                     type,
                     status: "completed",
-                    phases: ["downloading", "verifying", "applying", "restarting", "health_check", "completed"],
-                    releasePath: `${liveState.system.ota?.releaseRoot ?? "/opt/tikpal/app/releases"}/${targetVersion}`,
+                    phases: managerResult?.phases ?? ["downloading", "verifying", "applying", "restarting", "health_check", "completed"],
+                    releasePath,
+                    manifestPath: managerResult?.manifestPath ?? null,
+                    manifest: managerResult?.manifest ?? null,
+                    health: managerResult?.health ?? null,
                     updatedAt: appliedAt,
                   },
                 },
@@ -1693,19 +1764,24 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
         }
 
         const rolledBackAt = nowIso();
+        const managerResult = otaManager?.rollback?.({ currentVersion, previousVersion });
+        const nextCurrentVersion = managerResult?.currentVersion ?? previousVersion;
+        const nextPreviousVersion = managerResult?.previousVersion ?? currentVersion;
+        const releasePath =
+          managerResult?.releasePath ?? `${liveState.system.ota?.releaseRoot ?? "/opt/tikpal/app/releases"}/${previousVersion}`;
         return finalize(
           updateState(
             {
               ...liveState,
               system: {
                 ...liveState.system,
-                version: previousVersion,
+                version: nextCurrentVersion,
                 otaStatus: "idle",
                 ota: {
                   ...liveState.system.ota,
-                  currentVersion: previousVersion,
-                  previousVersion: currentVersion,
-                  targetVersion: null,
+                  currentVersion: nextCurrentVersion,
+                  previousVersion: nextPreviousVersion,
+                  targetVersion: managerResult?.targetVersion ?? null,
                   updateAvailable: false,
                   canRollback: false,
                   restartRequired: false,
@@ -1716,8 +1792,11 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
                   lastOperation: {
                     type,
                     status: "completed",
-                    phases: ["rollback", "restarting", "health_check", "completed"],
-                    releasePath: `${liveState.system.ota?.releaseRoot ?? "/opt/tikpal/app/releases"}/${previousVersion}`,
+                    phases: managerResult?.phases ?? ["rollback", "restarting", "health_check", "completed"],
+                    releasePath,
+                    manifestPath: managerResult?.manifestPath ?? null,
+                    manifest: managerResult?.manifest ?? null,
+                    health: managerResult?.health ?? null,
                     updatedAt: rolledBackAt,
                   },
                 },
@@ -1731,6 +1810,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null 
 
       throw createRejectedError("UNKNOWN_ACTION", `Unsupported action: ${type}`);
     } catch (error) {
+      recordOtaFailure(error);
       recordActionLog({
         timestamp,
         source,
