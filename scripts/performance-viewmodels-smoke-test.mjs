@@ -4,6 +4,7 @@ import {
   getPerformanceDebugViewModel,
   getPerformanceRenderBudget,
   summarizeFrameWindow,
+  summarizePerformanceTrace,
 } from "../src/viewmodels/performance.js";
 
 function test(name, fn) {
@@ -71,6 +72,21 @@ test("debug view model combines runtime metrics with render budget", () => {
   assert.equal(viewModel.suggestedTier, "reduced");
   assert.equal(viewModel.budget.maxWaveLayers, 2);
   assert.equal(viewModel.budgetLabel.includes("particles 55%"), true);
+});
+
+test("performance trace summary recommends a device tier from real samples", () => {
+  const summary = summarizePerformanceTrace([
+    { avgFps: 60, interactionLatencyMs: 24, memoryUsageMb: 64 },
+    { avgFps: 29, interactionLatencyMs: 48, memoryUsageMb: 72 },
+    { avgFps: 23, interactionLatencyMs: 92, memoryUsageMb: 80 },
+    { avgFps: 27, interactionLatencyMs: 54, memoryUsageMb: 76 },
+  ]);
+
+  assert.equal(summary.sampleCount, 4);
+  assert.equal(summary.recommendedTier, "safe");
+  assert.equal(summary.minFps, 23);
+  assert.equal(summary.maxInteractionLatencyMs, 92);
+  assert.equal(summary.reasons.includes("interaction_latency_above_80ms"), true);
 });
 
 console.log("Performance view model smoke tests passed.");
