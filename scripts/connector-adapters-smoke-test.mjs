@@ -129,6 +129,59 @@ await test("adapter errors become connector error state without dropping last go
   assert.equal(context.sync.todoistStatus, "error");
 });
 
+await test("sync service retries transient adapter errors before preserving ScreenContext output", async () => {
+  const store = createSystemStateStore();
+  let calls = 0;
+  const registry = createConnectorAdapterRegistry({
+    calendar: {
+      name: "calendar",
+      mode: "retry-test",
+      async sync() {
+        calls += 1;
+        if (calls === 1) {
+          const error = new Error("Calendar API timed out once");
+          error.code = "CALENDAR_TRANSIENT_TIMEOUT";
+          throw error;
+        }
+
+        return {
+          connected: true,
+          status: "ok",
+          accountLabel: "calendar.retry@tikpal.local",
+          lastSyncAt: "2026-04-26T12:00:00.000Z",
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          currentEvent: {
+            id: "retry_current",
+            title: "Recovered focus block",
+          },
+          nextEvent: null,
+          remainingEvents: 1,
+        };
+      },
+    },
+  });
+  const syncService = createMockConnectorSyncService(store, { adapterRegistry: registry });
+
+  const job = syncService.runSync("calendar", {
+    delayMs: 0,
+    maxAttempts: 2,
+    retryDelayMs: 5,
+  });
+  await sleep(30);
+
+  const completedJob = syncService.getJob(job.id);
+  assert.equal(completedJob.status, "ok");
+  assert.equal(completedJob.attempts, 2);
+  assert.equal(completedJob.lastErrorCode, null);
+  assert.equal(calls, 2);
+  assert.equal(store.getSnapshot().integrations.calendar.status, "ok");
+
+  const context = createScreenContext(store.getSnapshot());
+  assert.equal(context.currentBlock.title, "Recovered focus block");
+  assert.equal(context.sync.calendarStatus, "ok");
+});
+
 await test("real calendar adapter maps provider events without exposing UI to provider schema", async () => {
   const adapter = createRealConnectorAdapter("calendar", {
     credentials: {

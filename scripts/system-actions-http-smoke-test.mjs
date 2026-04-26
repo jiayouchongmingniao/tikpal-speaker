@@ -539,6 +539,8 @@ try {
     assert.equal(syncStartResponse.status, 202);
     assert.equal(syncStartResponse.json.connector, "calendar");
     assert.equal(syncStartResponse.json.status, "syncing");
+    assert.equal(syncStartResponse.json.adapterMode, "fixture");
+    assert.equal(syncStartResponse.json.maxAttempts, 1);
 
     const syncingStateResponse = await requestJson(`${baseUrl}/api/v1/system/state`, {
       headers: authHeaders,
@@ -556,6 +558,8 @@ try {
     );
     assert.equal(jobResponse.status, 200);
     assert.equal(jobResponse.json.status, "ok");
+    assert.equal(jobResponse.json.attempts, 1);
+    assert.equal(jobResponse.json.adapterMode, "fixture");
     assert.equal(jobResponse.json.finishedAt !== null, true);
 
     const screenContextResponse = await requestJson(`${baseUrl}/api/v1/system/screen/context`, {
