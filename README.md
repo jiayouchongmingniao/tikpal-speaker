@@ -22,6 +22,19 @@ Main view: [http://localhost:4173/](http://localhost:4173/)
 
 Preview gallery: [http://localhost:4173/preview.html](http://localhost:4173/preview.html)
 
+## Flow Renderer
+
+Flow now prefers the `gl` renderer by default and automatically falls back to `canvas` if WebGL2 cannot be created or later becomes unstable.
+
+If you want the build to stay explicitly pinned to OpenGL/WebGL without relying on a URL query, set the frontend env before `npm run dev` or `npm run build`:
+
+```bash
+VITE_FLOW_RENDERER=gl npm run dev
+VITE_FLOW_RENDERER=gl npm run build
+```
+
+For target-device deployments that use `npm run build` followed by `npm run preview`, make sure `VITE_FLOW_RENDERER=gl` is present in the build environment before restarting `tikpal-web`.
+
 ## Build
 
 ```bash

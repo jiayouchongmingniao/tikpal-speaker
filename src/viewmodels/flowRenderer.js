@@ -1,5 +1,7 @@
 export const FLOW_RENDERER_STATS_EVENT = "tikpal-flow-renderer-stats";
 
+const DEFAULT_FLOW_RENDERER = "gl";
+
 const DEFAULT_FLOW_RENDERER_STATS = {
   rendererType: "canvas",
   rendererFallbackCount: 0,
@@ -21,6 +23,11 @@ export function normalizeFlowRenderer(renderer = "canvas") {
 }
 
 export function getPreferredFlowRenderer() {
+  const fromWindow = readRendererFromWindow();
+  if (fromWindow) {
+    return normalizeFlowRenderer(fromWindow);
+  }
+
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     const fromQuery = params.get("FLOW_RENDERER") ?? params.get("flowRenderer");
@@ -29,12 +36,7 @@ export function getPreferredFlowRenderer() {
     }
   }
 
-  const fromWindow = readRendererFromWindow();
-  if (fromWindow) {
-    return normalizeFlowRenderer(fromWindow);
-  }
-
-  return normalizeFlowRenderer(import.meta.env.VITE_FLOW_RENDERER ?? import.meta.env.FLOW_RENDERER ?? "canvas");
+  return normalizeFlowRenderer(import.meta.env.VITE_FLOW_RENDERER ?? import.meta.env.FLOW_RENDERER ?? DEFAULT_FLOW_RENDERER);
 }
 
 export function readFlowRendererStats() {
