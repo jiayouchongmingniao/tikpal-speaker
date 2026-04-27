@@ -140,7 +140,7 @@ export function FlowWebGLCanvas({
 
       draw = reglInstance({
         vert: `#version 300 es
-precision mediump float;
+precision highp float;
 in vec2 position;
 out vec2 vUv;
 void main() {
@@ -148,7 +148,7 @@ void main() {
   gl_Position = vec4(position, 0.0, 1.0);
 }`,
         frag: `#version 300 es
-precision mediump float;
+precision highp float;
 in vec2 vUv;
 out vec4 fragColor;
 uniform vec2 uResolution;
@@ -165,8 +165,12 @@ uniform float uLayerCount;
 uniform float uDimAlpha;
 uniform float uStateCode;
 
-float hash(vec2 p) {
-  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+float hash(float n) {
+  return fract(sin(n) * 43758.5453123);
+}
+
+vec2 hash2(float n) {
+  return vec2(hash(n * 17.13), hash(n * 31.7));
 }
 
 void main() {
@@ -183,20 +187,42 @@ void main() {
     wave += sin((uv.x * freq) + (uTime * speed) + (layer * 0.8)) * (uAmplitude * layerFactor);
   }
 
-  float center = 0.55 + wave * 0.18 + (uLow - 0.2) * 0.06;
+  float center = 0.52 + wave * 0.12 + (uLow - 0.2) * 0.045;
   float dist = abs(uv.y - center);
-  float waveBand = smoothstep(0.18, 0.0, dist);
-
-  vec3 base = mix(uGlow * 0.35, uAccent * (0.9 + uHigh * 0.5), waveBand);
+  float waveGlow = smoothstep(0.24, 0.01, dist);
+  float waveCore = smoothstep(0.08, 0.0, dist);
   float sleepShift = step(1.5, uStateCode);
-  base *= mix(1.0, 0.52, sleepShift);
+  vec3 bgTop = mix(vec3(0.02, 0.02, 0.05), uGlow * 0.08, 0.55);
+  vec3 bgBottom = mix(vec3(0.0, 0.0, 0.015), uAccent * 0.03, 0.2);
+  vec3 color = mix(bgBottom, bgTop, smoothstep(0.0, 0.85, uv.y));
 
-  vec2 grid = floor(uv * vec2(120.0, 68.0) + vec2(uTime * 0.18, uTime * 0.13));
-  float sparkle = step(0.992 - uParticle * 0.4, hash(grid));
-  float sparkleMask = smoothstep(0.2, 0.8, uv.y) * (0.25 + uVolume * 0.75);
-  vec3 particles = uGlow * sparkle * sparkleMask;
+  vec3 waveColor = mix(uGlow * 0.65, uAccent * (1.0 + uHigh * 0.28), waveCore);
+  color += waveColor * (waveGlow * 0.85 + waveCore * 0.65);
 
-  vec3 color = base + particles;
+  float horizonGlow = exp(-pow((uv.y - center) * 7.5, 2.0)) * (0.16 + uVolume * 0.12);
+  color += uGlow * horizonGlow;
+
+  float particleCount = floor(mix(6.0, 22.0, clamp(uParticle, 0.0, 1.0)));
+  vec3 particles = vec3(0.0);
+  for (int index = 0; index < 24; index += 1) {
+    float id = float(index);
+    if (id >= particleCount) {
+      break;
+    }
+
+    vec2 seed = hash2(id + floor(uTime * 0.08) * 23.0 + uStateCode * 11.0);
+    float drift = fract(seed.x + uTime * (0.01 + seed.y * 0.04) * (0.5 + uHigh));
+    vec2 pos = vec2(
+      drift,
+      0.16 + fract(seed.y * 1.37 + id * 0.11 + uTime * 0.012) * 0.58
+    );
+    float radius = mix(0.0018, 0.0065, hash(id * 9.1 + 4.0) + uHigh * 0.25);
+    float alpha = smoothstep(radius, radius * 0.18, distance(uv, pos));
+    particles += mix(uGlow, uAccent, seed.x) * alpha * (0.18 + uVolume * 0.2);
+  }
+
+  color += particles;
+  color *= mix(1.0, 0.58, sleepShift);
   color = mix(color, vec3(0.0), uDimAlpha);
   fragColor = vec4(color, 1.0);
 }`,
