@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { FLOW_RENDERER_STATS_EVENT, readFlowRendererStats } from "../viewmodels/flowRenderer";
 import { summarizeFrameWindow } from "../viewmodels/performance";
 
 const DEFAULT_SAMPLE_INTERVAL_MS = 5000;
@@ -11,11 +12,28 @@ export function usePerformanceTelemetry({
 } = {}) {
   const reportRef = useRef(reportPerformance);
   const activeModeRef = useRef(activeMode);
+  const flowRendererStatsRef = useRef(readFlowRendererStats());
 
   useEffect(() => {
     reportRef.current = reportPerformance;
     activeModeRef.current = activeMode;
   }, [activeMode, reportPerformance]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    function onRendererStats(event) {
+      flowRendererStatsRef.current = {
+        ...flowRendererStatsRef.current,
+        ...(event?.detail ?? {}),
+      };
+    }
+
+    window.addEventListener(FLOW_RENDERER_STATS_EVENT, onRendererStats);
+    return () => window.removeEventListener(FLOW_RENDERER_STATS_EVENT, onRendererStats);
+  }, []);
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined" || !window.requestAnimationFrame) {
@@ -58,6 +76,11 @@ export function usePerformanceTelemetry({
         reportRef.current?.({
           ...summary,
           activeMode: activeModeRef.current,
+          rendererType: flowRendererStatsRef.current.rendererType ?? "canvas",
+          rendererFallbackCount: Number(flowRendererStatsRef.current.rendererFallbackCount ?? 0),
+          glInitErrorCount: Number(flowRendererStatsRef.current.glInitErrorCount ?? 0),
+          glContextLostCount: Number(flowRendererStatsRef.current.glContextLostCount ?? 0),
+          rendererFallbackReason: flowRendererStatsRef.current.rendererFallbackReason ?? null,
         });
         resetWindow(now);
       }
