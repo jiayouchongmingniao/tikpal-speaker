@@ -21,6 +21,8 @@
     "validation:preflight": "node scripts/validation-preflight.mjs",
     "validation:device": "node scripts/target-device-validation-device.mjs",
     "validation:capture": "node scripts/target-device-validation-capture.mjs",
+    "validation:rpi-report": "node scripts/rpi-calibration-report.mjs",
+    "validation:release-gate": "node scripts/validation-release-gate.mjs",
     "test:persistence": "node scripts/system-persistence-smoke-test.mjs",
     "test:smoke": "node scripts/system-state-smoke-test.mjs",
     "preview": "vite preview",

@@ -42,6 +42,7 @@ npm run test:ota
 npm run test:performance
 npm run test:persistence
 npm run validation:preflight
+npm run validation:release-gate
 ```
 
 可选：生成一份目标设备验收快照，作为本轮记录附件：
@@ -186,39 +187,78 @@ export TIKPAL_PLAYER_API_BASE=http://localhost:9001/player
 
 ---
 
-## 6. 性能 trace
+## 6. 性能校准（树莓派稳定阶段）
 
-### 采样
+### 6.1 运行档与目标
 
-在 debug surface 运行 3 到 5 分钟后导出：
+- 默认运行档：`RPI_RENDER_PROFILE=balanced`
+- 高温或高负载兜底：`RPI_RENDER_PROFILE=stable`
+- 目标：在无可见频闪前提下，校准阈值并固化发布门禁
+
+### 6.2 三个 5 分钟场景采样
+
+1. `overview -> flow -> screen -> overview` 循环
+2. 长驻 `flow`
+3. 混合交互（音量 / 切歌 / 番茄钟）
+
+每个场景采样后导出：
 
 ```bash
 curl -s 'http://localhost:8787/api/v1/system/runtime/performance-samples?limit=200' \
   -H 'X-Tikpal-Key: dev-admin-key' \
-  > performance-samples.json
+  > performance-loop.json
 ```
 
-### 汇总
+同理得到：
+
+- `performance-flow.json`
+- `performance-mixed.json`
+
+### 6.3 单场景快速汇总
 
 ```bash
-npm run performance:trace -- ./performance-samples.json
+npm run performance:trace -- ./performance-loop.json
+npm run performance:trace -- ./performance-flow.json
+npm run performance:trace -- ./performance-mixed.json
+```
+
+### 6.4 30 分钟长时观察（建议发布前必做）
+
+```bash
+curl -s 'http://localhost:8787/api/v1/system/runtime/performance-samples?limit=200' \
+  -H 'X-Tikpal-Key: dev-admin-key' \
+  > performance-soak-30m.json
+```
+
+### 6.5 生成一份校准报告
+
+```bash
+npm run validation:rpi-report -- \
+  --scenario-loop ./performance-loop.json \
+  --scenario-flow ./performance-flow.json \
+  --scenario-mixed ./performance-mixed.json \
+  --soak ./performance-soak-30m.json \
+  --profile balanced \
+  --api-base http://localhost:8787/api/v1/system \
+  --ui-base http://localhost:4173 \
+  --out ./rpi-calibration-report.md
 ```
 
 通过标准：
 
-- `recommendedTier` 与实际体验一致
-- `p10Fps >= 24` 时不应长期停留在 `safe`
-- `interactionLatencyMs` 超过 `80ms` 时需记录原因
-- `normal / reduced / safe` 下主要路径都可完成
+- `p10Fps >= 24`
+- `recommendedTier` 与主观体验一致
+- `tier` 在 10 分钟窗口内不频繁往返（默认阈值：每 10 分钟 <= 6 次切换）
+- 模式切换无可见白闪/亮闪，交互路径持续可用
 
 记录：
 
-| 模式 | avgFps | p10Fps | latency max | recommendedTier | 结论 |
-| --- | --- | --- | --- | --- | --- |
-| Overview |  |  |  |  |  |
-| Listen |  |  |  |  |  |
-| Flow |  |  |  |  |  |
-| Screen |  |  |  |  |  |
+| 场景 | avgFps | p10Fps | latency max | recommendedTier | switches/10m | 结论 |
+| --- | --- | --- | --- | --- | --- | --- |
+| loop-5m |  |  |  |  |  |  |
+| flow-5m |  |  |  |  |  |  |
+| mixed-5m |  |  |  |  |  |  |
+| soak-30m |  |  |  |  |  |  |
 
 ---
 
@@ -283,9 +323,12 @@ export TIKPAL_OTA_RESTART_COMMAND='sudo systemctl restart tikpal-api tikpal-web'
 | 性能降级 |  |  |
 | OTA |  |  |
 | portable 端到端闭环 |  |  |
+| 树莓派性能校准 |  |  |
+| 发布门禁 (`validation:release-gate`) |  |  |
 
 最终判定：
 
 - [ ] 可进入长期试运行
 - [ ] 需要继续工程修复
 - [ ] 需要调整产品 / 交互假设
+- [ ] 触发 OpenGL PoC 门控（满足 A/B/C 任一条件）

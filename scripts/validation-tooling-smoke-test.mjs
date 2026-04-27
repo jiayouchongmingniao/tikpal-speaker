@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { createAppServer } from "../server/index.js";
 
 function listen(server) {
@@ -139,6 +142,49 @@ await test("systemd verify is diagnostic on non-systemd hosts", async () => {
   const code = await new Promise((resolve) => child.on("close", resolve));
   assert.equal(code, 0);
   assert.match(stdout, /diagnostic: /);
+});
+
+await test("rpi calibration report renders scenario and soak sections", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tikpal-rpi-report-"));
+  const loopPath = path.join(tempDir, "loop.json");
+  const flowPath = path.join(tempDir, "flow.json");
+  const mixedPath = path.join(tempDir, "mixed.json");
+  const soakPath = path.join(tempDir, "soak.json");
+  const baseTs = Date.now();
+  const createSamples = (fpsValues, tiers) => ({
+    items: fpsValues.map((fps, index) => ({
+      timestamp: new Date(baseTs + index * 3000).toISOString(),
+      avgFps: fps,
+      interactionLatencyMs: 30 + index,
+      memoryUsageMb: 96 + index,
+      tier: tiers[index] ?? tiers[tiers.length - 1],
+    })),
+  });
+
+  await fs.writeFile(loopPath, JSON.stringify(createSamples([30, 29, 28, 27, 26], ["normal", "normal", "reduced", "reduced", "reduced"])));
+  await fs.writeFile(flowPath, JSON.stringify(createSamples([32, 31, 30, 31, 32], ["reduced", "reduced", "reduced", "normal", "normal"])));
+  await fs.writeFile(mixedPath, JSON.stringify(createSamples([28, 27, 26, 27, 28], ["reduced", "safe", "safe", "safe", "reduced"])));
+  await fs.writeFile(soakPath, JSON.stringify(createSamples([29, 29, 30, 30, 29], ["reduced", "reduced", "reduced", "reduced", "reduced"])));
+
+  const result = await runNode([
+    "scripts/rpi-calibration-report.mjs",
+    "--scenario-loop",
+    loopPath,
+    "--scenario-flow",
+    flowPath,
+    "--scenario-mixed",
+    mixedPath,
+    "--soak",
+    soakPath,
+    "--profile",
+    "balanced",
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Raspberry Pi Calibration Report/);
+  assert.match(result.stdout, /Scenario Summary/);
+  assert.match(result.stdout, /30 min Soak/);
+  assert.match(result.stdout, /OpenGL Gate/);
 });
 
 console.log("Validation tooling smoke tests passed.");
