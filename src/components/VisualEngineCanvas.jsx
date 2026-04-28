@@ -117,10 +117,16 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       context.fill();
     }
 
-    function drawParticles(time, liveMetrics, particleScale = 1) {
+    function drawParticles(time, liveMetrics, particleScale = 1, options = {}) {
       const liveState = currentStateRef.current;
       const liveTheme = themeRef.current;
       const budget = renderBudgetRef.current ?? {};
+      const {
+        alphaHex = "30",
+        driftMultiplier = 14,
+        verticalOffset = 0,
+        radiusMultiplier = 1,
+      } = options;
 
       if (!["flow", "relax"].includes(liveState)) {
         return;
@@ -134,14 +140,30 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
 
       for (let index = 0; index < count; index += 1) {
         const seed = index / count;
-        const x = (seed * width * 1.7 + time * 14 * (1 + liveMetrics.highEnergy)) % width;
-        const y = height * (0.18 + ((seed * 1.31 + time * 0.01) % 0.64));
-        const radius = 1 + ((index % 5) + liveMetrics.highEnergy * 6) * 0.28;
+        const x = (seed * width * 1.7 + time * driftMultiplier * (1 + liveMetrics.highEnergy)) % width;
+        const y = height * (0.18 + ((seed * 1.31 + verticalOffset + time * 0.01) % 0.64));
+        const radius = (1 + ((index % 5) + liveMetrics.highEnergy * 6) * 0.28) * radiusMultiplier;
         context.beginPath();
         context.arc(x, y, radius, 0, Math.PI * 2);
-        context.fillStyle = `${liveTheme.glow}30`;
+        context.fillStyle = `${liveTheme.glow}${alphaHex}`;
         context.fill();
       }
+    }
+
+    function drawLightVeil(time, liveMetrics) {
+      const { width, height } = viewportRef.current;
+      const liveTheme = themeRef.current;
+      const pulse = 0.16 + liveMetrics.midEnergy * 0.12 + Math.sin(time * 0.4) * 0.03;
+      const veilGradient = context.createRadialGradient(width * 0.52, height * 0.56, height * 0.08, width * 0.52, height * 0.56, height * 0.72);
+      veilGradient.addColorStop(0, `${liveTheme.glow}1e`);
+      veilGradient.addColorStop(0.32, `${liveTheme.accent}12`);
+      veilGradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+      context.save();
+      context.globalCompositeOperation = "screen";
+      context.globalAlpha = clamp(pulse, 0.14, 0.28);
+      context.fillStyle = veilGradient;
+      context.fillRect(0, 0, width, height);
+      context.restore();
     }
 
     function render(nowMs) {
@@ -202,8 +224,23 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
         drawWaveLayer(time, layerIndex, smoothedMetrics);
       }
 
+      if (livePhase !== "transitioning") {
+        drawLightVeil(time, smoothedMetrics);
+      }
+
       const particleScale = livePhase === "transitioning" ? 0.12 : livePhase === "sleep_dimmed" ? 0 : liveState === "flow" ? 0.92 : 0.78;
-      drawParticles(time, smoothedMetrics, particleScale);
+      drawParticles(time, smoothedMetrics, particleScale, {
+        alphaHex: livePhase === "transitioning" ? "18" : "36",
+        driftMultiplier: 14,
+      });
+      if (livePhase !== "transitioning" && particleScale > 0) {
+        drawParticles(time + 11, smoothedMetrics, particleScale * 0.52, {
+          alphaHex: "20",
+          driftMultiplier: 8,
+          verticalOffset: 0.23,
+          radiusMultiplier: 0.72,
+        });
+      }
 
       context.fillStyle = `rgba(0, 0, 0, ${dimAlpha})`;
       context.fillRect(0, 0, width, height);

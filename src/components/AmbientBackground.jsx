@@ -12,6 +12,8 @@ export function AmbientBackground({ currentState, transitionState, appPhase = "i
   const nextBlur = renderProfile === "stable" ? "blur(4px)" : isStableProfile ? "blur(6px)" : "blur(10px)";
   const nextBlendMode = renderProfile === "stable" ? "screen" : isStableProfile ? "soft-light" : "screen";
   const baseOpacity = isTransitioning ? 0.98 : 0.92;
+  const auraOpacity = isTransitioning ? 0.16 : renderProfile === "stable" ? 0.18 : isStableProfile ? 0.24 : 0.3;
+  const auraBlur = renderProfile === "stable" ? "blur(20px)" : isStableProfile ? "blur(24px)" : "blur(30px)";
 
   return (
     <div className="ambient-bg" aria-hidden="true">
@@ -31,6 +33,17 @@ export function AmbientBackground({ currentState, transitionState, appPhase = "i
           opacity: transitionState ? nextOpacity : nextOpacity * 0.82,
           filter: nextBlur,
           mixBlendMode: nextBlendMode,
+        }}
+      />
+      <div
+        className="ambient-bg__layer ambient-bg__layer--depth"
+        style={{
+          background: `radial-gradient(circle at 50% 62%, ${baseTheme.glow}00 0%, ${baseTheme.glow}22 28%, transparent 66%),
+            radial-gradient(circle at 84% 18%, ${nextTheme.glow}33 0%, transparent 32%),
+            radial-gradient(circle at 16% 82%, ${baseTheme.accent}22 0%, transparent 30%)`,
+          opacity: auraOpacity,
+          filter: auraBlur,
+          mixBlendMode: "screen",
         }}
       />
     </div>

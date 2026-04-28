@@ -95,7 +95,7 @@ test("debug view model combines runtime metrics with render budget", () => {
   assert.equal(viewModel.renderProfile, "balanced");
   assert.equal(viewModel.suggestedTier, "reduced");
   assert.equal(viewModel.budget.maxWaveLayers, 1);
-  assert.equal(viewModel.budgetLabel.includes("particles 20%"), true);
+  assert.equal(viewModel.budgetLabel.includes("particles 24%"), true);
   assert.equal(viewModel.tierDecisionReason, "pending_degrade_1/2");
 });
 

@@ -28,14 +28,14 @@ export const RPI_RENDER_PROFILE_OVERRIDES = {
       pixelRatioCap: 1.4,
       waveStep: 24,
       maxWaveLayers: 2,
-      particleMultiplier: 0.42,
+      particleMultiplier: 0.5,
       frameIntervalMs: 33,
     },
     reduced: {
       pixelRatioCap: 1.15,
       waveStep: 28,
       maxWaveLayers: 1,
-      particleMultiplier: 0.2,
+      particleMultiplier: 0.24,
       frameIntervalMs: 42,
     },
     safe: {
@@ -51,14 +51,14 @@ export const RPI_RENDER_PROFILE_OVERRIDES = {
       pixelRatioCap: 1.15,
       waveStep: 30,
       maxWaveLayers: 1,
-      particleMultiplier: 0.2,
+      particleMultiplier: 0.24,
       frameIntervalMs: 42,
     },
     reduced: {
       pixelRatioCap: 1,
       waveStep: 34,
       maxWaveLayers: 1,
-      particleMultiplier: 0.08,
+      particleMultiplier: 0.12,
       frameIntervalMs: 42,
     },
     safe: {
