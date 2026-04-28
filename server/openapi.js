@@ -83,6 +83,16 @@ export const flowOpenApiDocument = {
         responses: { 200: { description: "Service is up" } },
       },
     },
+    "/openapi.json": {
+      get: {
+        summary: "Read the Flow OpenAPI document",
+        responses: {
+          200: {
+            description: "OpenAPI document for the Flow API",
+          },
+        },
+      },
+    },
     "/state": {
       get: {
         summary: "Read the latest Flow snapshot",
@@ -97,13 +107,142 @@ export const flowOpenApiDocument = {
           },
         },
       },
+      patch: {
+        summary: "Patch the current Flow snapshot",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  currentState: { $ref: "#/components/schemas/FlowState" },
+                  uiVisible: { type: "boolean" },
+                  appPhase: { type: "string" },
+                  playerState: { $ref: "#/components/schemas/PlayerState" },
+                  audioMetrics: { type: "object" },
+                  source: { $ref: "#/components/schemas/ControlSource" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Patched Flow snapshot",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/FlowSnapshot" },
+              },
+            },
+          },
+        },
+      },
     },
     "/actions": {
       post: {
         summary: "Trigger a Flow control action",
         security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["type"],
+                properties: {
+                  type: { type: "string" },
+                  payload: { type: "object" },
+                  source: { $ref: "#/components/schemas/ControlSource" },
+                },
+              },
+            },
+          },
+        },
         responses: {
-          200: { description: "Updated snapshot after action" },
+          200: {
+            description: "Updated snapshot after action",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/FlowSnapshot" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/controller-sessions": {
+      post: {
+        summary: "Create a Flow controller session",
+        security: [{ tikpalApiKey: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  deviceId: { type: "string" },
+                  name: { type: "string" },
+                  role: { $ref: "#/components/schemas/Role" },
+                  capabilities: {
+                    type: "array",
+                    items: { type: "string" },
+                  },
+                  ttlSec: { type: "number", minimum: 0 },
+                  source: { $ref: "#/components/schemas/ControlSource" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: "Created controller session",
+          },
+        },
+      },
+    },
+    "/controller-sessions/{sessionId}": {
+      get: {
+        summary: "Read a Flow controller session",
+        security: [{ tikpalApiKey: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "sessionId",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description: "Controller session snapshot",
+          },
+          404: {
+            description: "Session not found",
+          },
+        },
+      },
+      delete: {
+        summary: "Revoke a Flow controller session",
+        security: [{ tikpalApiKey: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "sessionId",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description: "Session revoked",
+          },
+          404: {
+            description: "Session not found",
+          },
         },
       },
     },
@@ -721,6 +860,21 @@ export const systemOpenApiDocument = {
         },
       },
     },
+    "/runtime/performance-samples": {
+      get: {
+        summary: "Read recent performance telemetry samples",
+        responses: {
+          200: {
+            description: "Recent performance samples",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/RuntimeLogList" },
+              },
+            },
+          },
+        },
+      },
+    },
     "/ota/status": {
       get: {
         summary: "Read current OTA status and version pointers",
@@ -1318,5 +1472,56 @@ export const systemOpenApiDocument = {
         },
       },
     },
+  },
+};
+
+function createTaggedPaths(document, tagName, basePath) {
+  return Object.fromEntries(
+    Object.entries(document.paths).map(([path, operations]) => {
+      const fullPath = `${basePath}${path === "/" ? "" : path}`;
+      return [
+        fullPath,
+        Object.fromEntries(
+          Object.entries(operations).map(([method, operation]) => [
+            method,
+            {
+              ...operation,
+              tags: operation.tags ?? [tagName],
+            },
+          ]),
+        ),
+      ];
+    }),
+  );
+}
+
+export const combinedOpenApiDocument = {
+  openapi: "3.1.0",
+  info: {
+    title: "tikpal-speaker Unified API",
+    version: "1.0.0",
+    description: "Unified OpenAPI document for all tikpal-speaker HTTP APIs.",
+  },
+  servers: [{ url: "/" }],
+  tags: [
+    {
+      name: "System API",
+      description: "Device, state, integrations, sessions, and OTA endpoints under /api/v1/system.",
+    },
+    {
+      name: "Flow API",
+      description: "Legacy Flow control endpoints under /api/v1/flow.",
+    },
+  ],
+  components: {
+    securitySchemes: structuredClone(systemOpenApiDocument.components.securitySchemes),
+    schemas: {
+      ...structuredClone(systemOpenApiDocument.components.schemas),
+      ...structuredClone(flowOpenApiDocument.components.schemas),
+    },
+  },
+  paths: {
+    ...createTaggedPaths(systemOpenApiDocument, "System API", "/api/v1/system"),
+    ...createTaggedPaths(flowOpenApiDocument, "Flow API", "/api/v1/flow"),
   },
 };

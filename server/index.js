@@ -5,7 +5,7 @@ import { createJsonFilePersistence } from "./localPersistence.js";
 import { createJsonFileSecretStore } from "./localSecretStore.js";
 import { createMockConnectorSyncService } from "./mockConnectorSyncService.js";
 import { createFileSystemOtaManager } from "./otaReleaseManager.js";
-import { flowOpenApiDocument, systemOpenApiDocument } from "./openapi.js";
+import { combinedOpenApiDocument, flowOpenApiDocument, systemOpenApiDocument } from "./openapi.js";
 import { createHttpPlayerAdapter } from "./playerAdapter.js";
 import { createScreenContext } from "./screenContextService.js";
 import { createSystemStateStore } from "./systemStateStore.js";
@@ -22,6 +22,15 @@ function sendJson(response, statusCode, payload, extraHeaders = {}) {
 function sendEmpty(response, statusCode, extraHeaders = {}) {
   response.writeHead(statusCode, extraHeaders);
   response.end();
+}
+
+function sendHtml(response, statusCode, html, extraHeaders = {}) {
+  response.writeHead(statusCode, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...extraHeaders,
+  });
+  response.end(html);
 }
 
 function setCorsHeaders(request, response, allowedOrigins) {
@@ -211,6 +220,46 @@ function sendActionError(response, statusCode, body, code, message) {
   });
 }
 
+function createSwaggerHtml(specUrl = "/api/v1/openapi.json") {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>tikpal-speaker Swagger</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+    <style>
+      body {
+        margin: 0;
+        background: #f6f7f9;
+      }
+      #swagger-ui {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .topbar {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+      window.ui = SwaggerUIBundle({
+        url: ${JSON.stringify(specUrl)},
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        displayRequestDuration: true,
+        persistAuthorization: true,
+        docExpansion: "list",
+        defaultModelsExpandDepth: 1,
+      });
+    </script>
+  </body>
+</html>`;
+}
+
 function createSystemApiDescriptor() {
   return {
     service: "tikpal-speaker-system-api",
@@ -221,6 +270,8 @@ function createSystemApiDescriptor() {
       pairing: "admin api key required for controller session creation",
     },
     endpoints: {
+      swagger: "/swagger",
+      unifiedOpenapi: "/api/v1/openapi.json",
       health: "/api/v1/system/health",
       openapi: "/api/v1/system/openapi.json",
       state: "/api/v1/system/state",
@@ -336,6 +387,16 @@ export function createAppServer({
     const segments = getPathSegments(request);
 
     try {
+      if ((path === "/swagger" || path === "/api-docs" || path === "/api/v1/swagger") && request.method === "GET") {
+        sendHtml(response, 200, createSwaggerHtml("/api/v1/openapi.json"));
+        return;
+      }
+
+      if (path === "/api/v1/openapi.json" && request.method === "GET") {
+        sendJson(response, 200, combinedOpenApiDocument);
+        return;
+      }
+
       if (path === "/api/v1/system/health" && request.method === "GET") {
         sendJson(response, 200, {
           ok: true,
