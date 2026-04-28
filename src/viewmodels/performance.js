@@ -25,45 +25,45 @@ export const PERFORMANCE_RENDER_BUDGETS = {
 export const RPI_RENDER_PROFILE_OVERRIDES = {
   balanced: {
     normal: {
-      pixelRatioCap: 1.5,
-      waveStep: 22,
+      pixelRatioCap: 1.35,
+      waveStep: 26,
       maxWaveLayers: 2,
-      particleMultiplier: 0.45,
+      particleMultiplier: 0.3,
       frameIntervalMs: 33,
     },
     reduced: {
-      pixelRatioCap: 1.25,
-      waveStep: 28,
+      pixelRatioCap: 1.1,
+      waveStep: 30,
       maxWaveLayers: 1,
-      particleMultiplier: 0.22,
+      particleMultiplier: 0.14,
       frameIntervalMs: 42,
     },
     safe: {
       pixelRatioCap: 1,
-      waveStep: 36,
+      waveStep: 38,
       maxWaveLayers: 1,
-      particleMultiplier: 0.08,
+      particleMultiplier: 0.04,
       frameIntervalMs: 42,
     },
   },
   stable: {
     normal: {
-      pixelRatioCap: 1.25,
-      waveStep: 28,
+      pixelRatioCap: 1.1,
+      waveStep: 32,
       maxWaveLayers: 1,
-      particleMultiplier: 0.2,
+      particleMultiplier: 0.12,
       frameIntervalMs: 42,
     },
     reduced: {
       pixelRatioCap: 1,
-      waveStep: 34,
+      waveStep: 38,
       maxWaveLayers: 1,
-      particleMultiplier: 0.08,
+      particleMultiplier: 0.04,
       frameIntervalMs: 42,
     },
     safe: {
       pixelRatioCap: 1,
-      waveStep: 42,
+      waveStep: 46,
       maxWaveLayers: 1,
       particleMultiplier: 0,
       frameIntervalMs: 42,
@@ -104,7 +104,7 @@ export function derivePerformanceTierFromFps(avgFps, fallbackTier = "normal") {
   return "normal";
 }
 
-export function summarizeFrameWindow({ frames, elapsedMs, maxFrameDeltaMs, memory }) {
+export function summarizeFrameWindow({ frames, elapsedMs, maxFrameDeltaMs, memory, diagnostics = null }) {
   const avgFps = elapsedMs > 0 ? Math.round((frames * 1000 * 10) / elapsedMs) / 10 : 0;
   const memoryUsageMb = memory?.usedJSHeapSize ? Math.round(memory.usedJSHeapSize / 1024 / 1024) : null;
 
@@ -113,6 +113,7 @@ export function summarizeFrameWindow({ frames, elapsedMs, maxFrameDeltaMs, memor
     interactionLatencyMs: Math.round(Math.max(0, Number(maxFrameDeltaMs ?? 0))),
     memoryUsageMb,
     reason: "frontend_sampler",
+    ...(diagnostics ? { diagnostics } : {}),
   };
 }
 

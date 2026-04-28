@@ -59,12 +59,20 @@ test("frame window summary reports fps, latency, and optional memory", () => {
     memory: {
       usedJSHeapSize: 32.4 * 1024 * 1024,
     },
+    diagnostics: {
+      skippedRenderCount: 3,
+      resizeCommitCount: 1,
+    },
   });
 
   assert.equal(summary.avgFps, 60);
   assert.equal(summary.interactionLatencyMs, 41);
   assert.equal(summary.memoryUsageMb, 32);
   assert.equal(summary.reason, "frontend_sampler");
+  assert.deepEqual(summary.diagnostics, {
+    skippedRenderCount: 3,
+    resizeCommitCount: 1,
+  });
 });
 
 test("debug view model combines runtime metrics with render budget", () => {
@@ -87,7 +95,7 @@ test("debug view model combines runtime metrics with render budget", () => {
   assert.equal(viewModel.renderProfile, "balanced");
   assert.equal(viewModel.suggestedTier, "reduced");
   assert.equal(viewModel.budget.maxWaveLayers, 1);
-  assert.equal(viewModel.budgetLabel.includes("particles 22%"), true);
+  assert.equal(viewModel.budgetLabel.includes("particles 14%"), true);
   assert.equal(viewModel.tierDecisionReason, "pending_degrade_1/2");
 });
 

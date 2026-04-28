@@ -95,7 +95,12 @@ export function FlowModePage({
       role="application"
       aria-label="Flow mode"
     >
-      <AmbientBackground currentState={currentState} transitionState={transitionState} />
+      <AmbientBackground
+        currentState={currentState}
+        transitionState={transitionState}
+        appPhase={appPhase}
+        renderProfile={renderProfile}
+      />
       <VisualEngineCanvas
         currentState={currentState}
         theme={theme}

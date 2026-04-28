@@ -48,11 +48,21 @@ export function usePerformanceTelemetry({
 
       const elapsedMs = now - windowStartedAt;
       if (elapsedMs >= sampleIntervalMs) {
+        const diagnostics =
+          window.__TIKPAL_CANVAS_DEBUG__ && typeof window.__TIKPAL_CANVAS_DEBUG__ === "object"
+            ? {
+                skippedRenderCount: Number(window.__TIKPAL_CANVAS_DEBUG__.skippedRenderCount ?? 0),
+                resizeCommitCount: Number(window.__TIKPAL_CANVAS_DEBUG__.resizeCommitCount ?? 0),
+                transitionFrameBudgetHits: Number(window.__TIKPAL_CANVAS_DEBUG__.transitionFrameBudgetHits ?? 0),
+                lastFrameIntervalMs: Number(window.__TIKPAL_CANVAS_DEBUG__.lastFrameIntervalMs ?? 0),
+              }
+            : null;
         const summary = summarizeFrameWindow({
           frames,
           elapsedMs,
           maxFrameDeltaMs,
           memory: performance.memory,
+          diagnostics,
         });
 
         reportRef.current?.({
