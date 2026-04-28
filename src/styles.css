@@ -1,5 +1,6 @@
 :root {
-  font-family: "Inter", "SF Pro Display", "Segoe UI", sans-serif;
+  --app-font-family: "Inter", "SF Pro Display", "Segoe UI", sans-serif;
+  font-family: var(--app-font-family);
   color: rgba(255, 255, 255, 0.94);
   background: #020305;
   font-synthesis: none;
@@ -231,6 +232,149 @@ textarea {
     radial-gradient(circle at bottom right, rgba(255, 125, 184, 0.12), transparent 28%),
     #05070d;
   overflow: hidden;
+}
+
+.shell-settings {
+  position: fixed;
+  top: 22px;
+  right: 22px;
+  z-index: 31;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.shell-settings__trigger.is-active {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.shell-settings__panel {
+  width: min(420px, calc(100vw - 28px));
+  max-height: min(72vh, 760px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(10, 14, 25, 0.96), rgba(7, 10, 18, 0.94)),
+    rgba(7, 10, 18, 0.94);
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(18px);
+  opacity: 0;
+  transform: translateY(-6px) scale(0.985);
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.shell-settings__panel.is-open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.shell-settings__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.shell-settings__header h2 {
+  margin: 6px 0 0;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.shell-settings__kicker {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.shell-settings__intro {
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.72;
+}
+
+.shell-settings__options {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.shell-settings__option {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  color: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.shell-settings__option:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.shell-settings__option.is-selected {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.11);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.2);
+}
+
+.shell-settings__option:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.78);
+  outline-offset: 2px;
+}
+
+.shell-settings__option-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.shell-settings__option-header strong {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.shell-settings__option-header span:last-child {
+  opacity: 0.68;
+}
+
+.shell-settings__option-preview {
+  display: block;
+  margin-top: 10px;
+  font-size: clamp(21px, 2vw, 28px);
+  line-height: 1.15;
+}
+
+.shell-settings__option-copy {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.68;
 }
 
 .shell-button,
@@ -1679,6 +1823,23 @@ textarea {
   .overview-grid,
   .mode-page {
     grid-template-columns: 1fr;
+  }
+
+  .shell-settings {
+    top: 14px;
+    right: 14px;
+    left: 14px;
+    align-items: stretch;
+  }
+
+  .shell-settings__panel {
+    width: 100%;
+    max-height: min(68vh, 720px);
+  }
+
+  .shell-settings__header {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .overview-page,

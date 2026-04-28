@@ -14,6 +14,7 @@ import {
   getSafariGesturePinchIntent,
   RETURN_OVERVIEW,
 } from "../interactions/systemShellInput";
+import { FONT_PRESETS } from "../typography";
 import { getOtaStatusHint } from "../viewmodels/screenContextConsumers";
 
 const OVERVIEW_MODES = ["listen", "flow", "screen"];
@@ -75,7 +76,14 @@ function getPageLayerClass(pageMode, activeMode, transition) {
 }
 
 function isInteractiveTarget(target) {
-  return target instanceof Element && Boolean(target.closest("button, input, a, [role='button'], [data-overlay-action]"));
+  return (
+    target instanceof Element &&
+    Boolean(target.closest("button, input, select, textarea, label, a, [role='button'], [data-overlay-action], [data-shell-settings]"))
+  );
+}
+
+function isShellSettingsTarget(target) {
+  return target instanceof Element && Boolean(target.closest("[data-shell-settings]"));
 }
 
 function getOverlayActions(container) {
@@ -92,7 +100,13 @@ function getGestureDirection(delta) {
   return delta > 0 ? "right" : "left";
 }
 
-export function SystemShell({ initialMode = "overview", initialFlowState = "focus", debug = false }) {
+export function SystemShell({
+  initialMode = "overview",
+  initialFlowState = "focus",
+  debug = false,
+  fontPresetId,
+  onFontPresetChange,
+}) {
   const controller = useSystemController({ initialMode, initialFlowState });
   const { state, screenContext } = controller;
   const renderProfile = state.system?.renderProfile ?? "off";
@@ -121,6 +135,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   const [overviewFocusIndex, setOverviewFocusIndex] = useState(0);
   const [overlayFocusIndex, setOverlayFocusIndex] = useState(0);
   const [inputDebug, setInputDebug] = useState("idle");
+  const [fontPanelOpen, setFontPanelOpen] = useState(false);
   const transitionStatus = state.transition?.status ?? "idle";
   const transition = state.transition ?? { status: "idle", from: state.activeMode, to: state.activeMode };
   const isFocusMode = state.activeMode !== "overview";
@@ -329,6 +344,12 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
         return;
       }
 
+      if (fontPanelOpen && event.key === "Escape") {
+        event.preventDefault();
+        setFontPanelOpen(false);
+        return;
+      }
+
       if (event.key === "Escape" || event.key === "Backspace") {
         event.preventDefault();
         controller.returnOverview();
@@ -380,7 +401,7 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [controller, overviewFocusIndex, overlayFocusIndex, state.activeMode, state.overlay.visible, transitionStatus]);
+  }, [controller, fontPanelOpen, overviewFocusIndex, overlayFocusIndex, state.activeMode, state.overlay.visible, transitionStatus]);
 
   useEffect(() => {
     function moveOverviewFocus(direction) {
@@ -551,6 +572,16 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   }, [controller, debug, overlayFocusIndex, overviewFocusIndex, state.activeMode, state.overlay.visible, transitionStatus]);
 
   function onShellPointerDown(event) {
+    if (fontPanelOpen) {
+      if (isShellSettingsTarget(event.target)) {
+        return;
+      }
+
+      setFontPanelOpen(false);
+      pointerTapRef.current.active = false;
+      return;
+    }
+
     if (event.pointerType === "touch") {
       return;
     }
@@ -567,6 +598,10 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   }
 
   function onShellPointerMove(event) {
+    if (fontPanelOpen) {
+      return;
+    }
+
     if (event.pointerType === "touch") {
       return;
     }
@@ -582,6 +617,10 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   }
 
   function onShellPointerUp(event) {
+    if (fontPanelOpen) {
+      return;
+    }
+
     if (event.pointerType === "touch") {
       return;
     }
@@ -604,6 +643,16 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   }
 
   function onShellTouchStart(event) {
+    if (fontPanelOpen) {
+      if (isShellSettingsTarget(event.target)) {
+        return;
+      }
+
+      setFontPanelOpen(false);
+      singleTouchTapRef.current.active = false;
+      return;
+    }
+
     if (state.activeMode === "overview") {
       return;
     }
@@ -663,6 +712,10 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   }
 
   function onShellTouchMove(event) {
+    if (fontPanelOpen) {
+      return;
+    }
+
     if (!singleTouchTapRef.current.active) {
       return;
     }
@@ -681,6 +734,10 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
   }
 
   function onShellTouchEnd(event) {
+    if (fontPanelOpen) {
+      return;
+    }
+
     if (!singleTouchTapRef.current.active) {
       return;
     }
@@ -709,6 +766,65 @@ export function SystemShell({ initialMode = "overview", initialFlowState = "focu
       onTouchEnd={onShellTouchEnd}
       onTouchCancel={onShellTouchCancel}
     >
+      <div className="shell-settings" data-shell-settings>
+        <button
+          type="button"
+          className={`shell-button shell-button--ghost shell-settings__trigger ${fontPanelOpen ? "is-active" : ""}`}
+          aria-expanded={fontPanelOpen}
+          aria-controls="typography-panel"
+          onClick={() => setFontPanelOpen((current) => !current)}
+          data-shell-settings
+        >
+          Fonts
+        </button>
+
+        <section
+          id="typography-panel"
+          className={`shell-settings__panel ${fontPanelOpen ? "is-open" : ""}`}
+          aria-hidden={!fontPanelOpen}
+          data-shell-settings
+        >
+          <div className="shell-settings__header">
+            <div>
+              <span className="shell-settings__kicker">Typography</span>
+              <h2>Choose your reading tone</h2>
+            </div>
+            <button
+              type="button"
+              className="shell-button shell-button--ghost"
+              onClick={() => setFontPanelOpen(false)}
+              data-shell-settings
+            >
+              Close
+            </button>
+          </div>
+
+          <p className="shell-settings__intro">
+            Apply a system-safe font across Listen, Flow, Screen, and the debug surface.
+          </p>
+
+          <div className="shell-settings__options" role="list" aria-label="Font presets">
+            {FONT_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={`shell-settings__option ${fontPresetId === preset.id ? "is-selected" : ""}`}
+                onClick={() => onFontPresetChange(preset.id)}
+                style={{ fontFamily: preset.fontFamily }}
+                data-shell-settings
+              >
+                <span className="shell-settings__option-header">
+                  <strong>{preset.label}</strong>
+                  <span>{fontPresetId === preset.id ? "Active" : "Apply"}</span>
+                </span>
+                <span className="shell-settings__option-preview">{preset.preview}</span>
+                <span className="shell-settings__option-copy">{preset.description}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+
       {shouldRenderOverview ? (
         <OverviewPage
           className={getPageLayerClass("overview", state.activeMode, transition)}
