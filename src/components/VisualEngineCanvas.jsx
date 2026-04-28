@@ -126,6 +126,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
         driftMultiplier = 14,
         verticalOffset = 0,
         radiusMultiplier = 1,
+        horizontalSpread = 1.7,
       } = options;
 
       if (!["flow", "relax"].includes(liveState)) {
@@ -140,7 +141,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
 
       for (let index = 0; index < count; index += 1) {
         const seed = index / count;
-        const x = (seed * width * 1.7 + time * driftMultiplier * (1 + liveMetrics.highEnergy)) % width;
+        const x = (seed * width * horizontalSpread + time * driftMultiplier * (1 + liveMetrics.highEnergy)) % width;
         const y = height * (0.18 + ((seed * 1.31 + verticalOffset + time * 0.01) % 0.64));
         const radius = (1 + ((index % 5) + liveMetrics.highEnergy * 6) * 0.28) * radiusMultiplier;
         context.beginPath();
@@ -148,6 +149,29 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
         context.fillStyle = `${liveTheme.glow}${alphaHex}`;
         context.fill();
       }
+    }
+
+    function drawBloomMotes(time, liveMetrics, particleScale = 1) {
+      const liveTheme = themeRef.current;
+      const budget = renderBudgetRef.current ?? {};
+      const { width, height } = viewportRef.current;
+      const count = Math.max(2, Math.round((budget.maxWaveLayers ?? 1) * 2 * particleScale));
+
+      context.save();
+      context.globalCompositeOperation = "screen";
+      for (let index = 0; index < count; index += 1) {
+        const seed = (index + 1) / (count + 1);
+        const x = (width * (0.12 + seed * 0.78) + Math.sin(time * 0.22 + index) * width * 0.06) % width;
+        const y = height * (0.2 + ((seed * 1.9 + time * 0.018) % 0.5));
+        const radius = 18 + seed * 34 + liveMetrics.highEnergy * 18;
+        const orb = context.createRadialGradient(x, y, 0, x, y, radius);
+        orb.addColorStop(0, `${liveTheme.glow}2c`);
+        orb.addColorStop(0.42, `${liveTheme.accent}12`);
+        orb.addColorStop(1, "rgba(0, 0, 0, 0)");
+        context.fillStyle = orb;
+        context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+      }
+      context.restore();
     }
 
     function drawLightVeil(time, liveMetrics) {
@@ -235,11 +259,13 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       });
       if (livePhase !== "transitioning" && particleScale > 0) {
         drawParticles(time + 11, smoothedMetrics, particleScale * 0.52, {
-          alphaHex: "20",
+          alphaHex: "26",
           driftMultiplier: 8,
           verticalOffset: 0.23,
           radiusMultiplier: 0.72,
+          horizontalSpread: 1.28,
         });
+        drawBloomMotes(time, smoothedMetrics, particleScale * 0.9);
       }
 
       context.fillStyle = `rgba(0, 0, 0, ${dimAlpha})`;

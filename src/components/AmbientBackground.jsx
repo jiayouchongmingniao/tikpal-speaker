@@ -8,12 +8,13 @@ export function AmbientBackground({ currentState, transitionState, appPhase = "i
       : baseTheme;
   const isTransitioning = appPhase === "transitioning";
   const isStableProfile = renderProfile === "balanced" || renderProfile === "stable";
-  const nextOpacity = isTransitioning ? 0.52 : renderProfile === "stable" ? 0.32 : isStableProfile ? 0.38 : 0.48;
-  const nextBlur = renderProfile === "stable" ? "blur(4px)" : isStableProfile ? "blur(6px)" : "blur(10px)";
+  const nextOpacity = isTransitioning ? 0.52 : renderProfile === "stable" ? 0.4 : isStableProfile ? 0.48 : 0.58;
+  const nextBlur = renderProfile === "stable" ? "blur(5px)" : isStableProfile ? "blur(8px)" : "blur(12px)";
   const nextBlendMode = renderProfile === "stable" ? "screen" : isStableProfile ? "soft-light" : "screen";
   const baseOpacity = isTransitioning ? 0.98 : 0.92;
-  const auraOpacity = isTransitioning ? 0.16 : renderProfile === "stable" ? 0.18 : isStableProfile ? 0.24 : 0.3;
-  const auraBlur = renderProfile === "stable" ? "blur(20px)" : isStableProfile ? "blur(24px)" : "blur(30px)";
+  const auraOpacity = isTransitioning ? 0.16 : renderProfile === "stable" ? 0.24 : isStableProfile ? 0.3 : 0.38;
+  const auraBlur = renderProfile === "stable" ? "blur(22px)" : isStableProfile ? "blur(28px)" : "blur(34px)";
+  const contourOpacity = isTransitioning ? 0.12 : renderProfile === "stable" ? 0.16 : isStableProfile ? 0.2 : 0.24;
 
   return (
     <div className="ambient-bg" aria-hidden="true">
@@ -38,11 +39,22 @@ export function AmbientBackground({ currentState, transitionState, appPhase = "i
       <div
         className="ambient-bg__layer ambient-bg__layer--depth"
         style={{
-          background: `radial-gradient(circle at 50% 62%, ${baseTheme.glow}00 0%, ${baseTheme.glow}22 28%, transparent 66%),
-            radial-gradient(circle at 84% 18%, ${nextTheme.glow}33 0%, transparent 32%),
-            radial-gradient(circle at 16% 82%, ${baseTheme.accent}22 0%, transparent 30%)`,
+          background: `radial-gradient(circle at 50% 62%, ${baseTheme.glow}00 0%, ${baseTheme.glow}28 28%, transparent 66%),
+            radial-gradient(circle at 84% 18%, ${nextTheme.glow}40 0%, transparent 32%),
+            radial-gradient(circle at 16% 82%, ${baseTheme.accent}28 0%, transparent 30%)`,
           opacity: auraOpacity,
           filter: auraBlur,
+          mixBlendMode: "screen",
+        }}
+      />
+      <div
+        className="ambient-bg__layer ambient-bg__layer--contour"
+        style={{
+          background: `linear-gradient(180deg, transparent 0%, ${nextTheme.glow}10 28%, ${baseTheme.accent}1c 54%, transparent 100%),
+            radial-gradient(circle at 38% 48%, ${nextTheme.glow}22 0%, transparent 22%),
+            radial-gradient(circle at 62% 54%, ${baseTheme.glow}20 0%, transparent 26%)`,
+          opacity: contourOpacity,
+          filter: "blur(18px)",
           mixBlendMode: "screen",
         }}
       />
