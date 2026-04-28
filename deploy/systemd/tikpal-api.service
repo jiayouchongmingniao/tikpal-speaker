@@ -11,6 +11,8 @@ WorkingDirectory=@APP_DIR@
 Environment=NODE_ENV=production
 Environment=TIKPAL_FLOW_API_HOST=0.0.0.0
 Environment=TIKPAL_FLOW_API_PORT=8787
+Environment="TIKPAL_SYSTEM_REBOOT_COMMAND=/usr/bin/sudo -n /usr/bin/systemctl reboot"
+Environment="TIKPAL_SYSTEM_SHUTDOWN_COMMAND=/usr/bin/sudo -n /usr/bin/systemctl poweroff"
 ExecStart=/usr/bin/env node server/index.js
 Restart=always
 RestartSec=3

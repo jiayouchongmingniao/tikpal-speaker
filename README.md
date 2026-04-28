@@ -116,14 +116,14 @@ sudo systemctl status tikpal-api tikpal-web
 journalctl -u tikpal-api -u tikpal-web -f
 ```
 
-Optional system power actions:
+Systemd deployment defaults for in-app power actions:
 
 ```bash
-export TIKPAL_SYSTEM_REBOOT_COMMAND='sudo -n systemctl reboot'
-export TIKPAL_SYSTEM_SHUTDOWN_COMMAND='sudo -n systemctl poweroff'
+TIKPAL_SYSTEM_REBOOT_COMMAND='/usr/bin/sudo -n /usr/bin/systemctl reboot'
+TIKPAL_SYSTEM_SHUTDOWN_COMMAND='/usr/bin/sudo -n /usr/bin/systemctl poweroff'
 ```
 
-These commands are used by the in-app `Power` menu. The service user must be allowed to run them non-interactively.
+These commands are wired into the API systemd template and power the in-app `Power` menu. The service user must be allowed to run them non-interactively.
 
 ## Flow Control API
 

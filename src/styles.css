@@ -251,7 +251,7 @@ textarea {
   bottom: 22px;
   z-index: 31;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   align-items: flex-end;
   gap: 12px;
 }
@@ -473,6 +473,10 @@ textarea {
   background: rgba(255, 255, 255, 0.12);
 }
 
+.shell-power__action.is-confirming strong {
+  color: rgba(255, 239, 168, 0.98);
+}
+
 .shell-power__action--danger {
   border-color: rgba(255, 120, 120, 0.18);
 }
@@ -480,6 +484,10 @@ textarea {
 .shell-power__action--danger.is-confirming {
   border-color: rgba(255, 120, 120, 0.46);
   background: rgba(120, 24, 24, 0.42);
+}
+
+.shell-power__action--danger.is-confirming strong {
+  color: rgba(255, 196, 196, 0.98);
 }
 
 .shell-power__action:focus-visible {
