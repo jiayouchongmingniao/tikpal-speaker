@@ -501,6 +501,56 @@ try {
     assert.equal(playerActions.some((action) => action.type === "set_volume" && action.payload.volume === 72), true);
   });
 
+  await test("player adapter failures reject playback actions without dropping the last good playback snapshot", async () => {
+    const failingStore = createSystemStateStore();
+    const failingServer = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      store: failingStore,
+      apiKey: API_KEY,
+      playerAdapter: {
+        async runAction() {
+          const error = new Error("Player request timed out after 1000ms");
+          error.code = "PLAYER_TIMEOUT";
+          throw error;
+        },
+      },
+    });
+    const failingAddress = failingServer.address();
+    const failingBaseUrl = `http://127.0.0.1:${failingAddress.port}`;
+
+    try {
+      const beforeResponse = await requestJson(`${failingBaseUrl}/api/v1/system/state`, {
+        headers: { "X-Tikpal-Key": API_KEY },
+      });
+      const previousTrackTitle = beforeResponse.json.playback.trackTitle;
+
+      const actionResponse = await postAction(
+        failingBaseUrl,
+        {
+          type: "toggle_play",
+          payload: {},
+          source: "portable_controller",
+          requestId: "player_timeout_toggle",
+        },
+        { "X-Tikpal-Key": API_KEY },
+      );
+
+      assert.equal(actionResponse.status, 504);
+      assert.equal(actionResponse.json.ok, false);
+      assert.equal(actionResponse.json.error.code, "PLAYER_TIMEOUT");
+
+      const afterResponse = await requestJson(`${failingBaseUrl}/api/v1/system/state`, {
+        headers: { "X-Tikpal-Key": API_KEY },
+      });
+      assert.equal(afterResponse.status, 200);
+      assert.equal(afterResponse.json.playback.trackTitle, previousTrackTitle);
+      assert.equal(afterResponse.json.playback.state, beforeResponse.json.playback.state);
+    } finally {
+      await new Promise((resolve) => failingServer.close(resolve));
+    }
+  });
+
   await test("portable controller can submit creative care voice context", async () => {
     const createResponse = await requestJson(`${baseUrl}/api/v1/system/controller-sessions`, {
       method: "POST",

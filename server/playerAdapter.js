@@ -30,6 +30,14 @@ function normalizePlaybackState(value, fallback = "pause") {
   return fallback;
 }
 
+function assertPlayerPayload(payload, context = "status") {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw createPlayerError("PLAYER_INVALID_PAYLOAD", `Player ${context} payload must be a JSON object`);
+  }
+
+  return payload;
+}
+
 export function normalizePlayerState(payload = {}, fallback = {}) {
   const state = payload.playerState ?? payload.playback ?? payload;
   const volume = Number(state.volume ?? state.volumePercent ?? fallback.volume ?? 58);
@@ -40,9 +48,9 @@ export function normalizePlayerState(payload = {}, fallback = {}) {
     volume: clamp(Number.isFinite(volume) ? volume : fallback.volume ?? 58, 0, 100),
     trackTitle: state.trackTitle ?? state.title ?? state.song ?? fallback.trackTitle ?? null,
     artist: state.artist ?? state.albumArtist ?? fallback.artist ?? null,
-    source: state.source ?? state.service ?? state.player ?? fallback.source ?? null,
+    source: state.source ?? state.service ?? state.player ?? state.origin ?? fallback.source ?? null,
     progress: clamp(Number.isFinite(progress) ? progress : fallback.progress ?? 0, 0, 1),
-    nextTrackTitle: state.nextTrackTitle ?? state.nextTitle ?? fallback.nextTrackTitle ?? null,
+    nextTrackTitle: state.nextTrackTitle ?? state.nextTitle ?? state.nextSong ?? fallback.nextTrackTitle ?? null,
   };
 }
 
@@ -64,13 +72,21 @@ async function requestJson(url, { fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT
       throw createPlayerError("PLAYER_HTTP_ERROR", `Player request failed with ${response.status}`);
     }
 
-    return response.json();
+    try {
+      return await response.json();
+    } catch {
+      throw createPlayerError("PLAYER_INVALID_PAYLOAD", "Player response is not valid JSON");
+    }
   } catch (error) {
     if (error?.name === "AbortError" || error?.code === "ABORT_ERR") {
       throw createPlayerError("PLAYER_TIMEOUT", `Player request timed out after ${timeoutMs}ms`);
     }
 
-    throw error;
+    if (error?.code) {
+      throw error;
+    }
+
+    throw createPlayerError("PLAYER_NETWORK_ERROR", error instanceof Error ? error.message : "Player request failed");
   } finally {
     clearTimeout(timeoutId);
   }
@@ -92,7 +108,7 @@ export function createHttpPlayerAdapter({ baseUrl = process.env.TIKPAL_PLAYER_AP
         fetchImpl,
         timeoutMs: normalizedTimeoutMs,
       });
-      return normalizePlayerState(payload, fallback);
+      return normalizePlayerState(assertPlayerPayload(payload, "status"), fallback);
     },
     async runAction(type, payload = {}, fallback = {}) {
       const actionPayload =
@@ -110,7 +126,7 @@ export function createHttpPlayerAdapter({ baseUrl = process.env.TIKPAL_PLAYER_AP
         method: "POST",
         body: actionPayload,
       });
-      return normalizePlayerState(response, fallback);
+      return normalizePlayerState(assertPlayerPayload(response, "action"), fallback);
     },
   };
 }

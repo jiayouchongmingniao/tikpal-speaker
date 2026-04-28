@@ -68,7 +68,13 @@ async function requestPlayerJson(playerApiBase, path, { method = "GET", body } =
   });
 
   if (!response.ok) {
-    throw new Error(`Player request failed with ${response.status}`);
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore invalid error bodies
+    }
+    throw new Error(payload?.error?.message ?? `Player request failed with ${response.status}`);
   }
 
   return response.json();
@@ -560,10 +566,14 @@ export function ConnectorDebugPage() {
     setError("");
 
     try {
-      const status = await requestPlayerJson(playerDraft.apiBase, "/status");
+      const [status, nextState] = await Promise.all([
+        requestPlayerJson(playerDraft.apiBase, "/status"),
+        client.getState().catch(() => null),
+      ]);
       setPlayerEvidence((current) => ({
         ...current,
         status,
+        playback: nextState?.playback ?? current.playback ?? null,
         source: getPlayerApiSource(),
       }));
     } catch (nextError) {
@@ -579,25 +589,32 @@ export function ConnectorDebugPage() {
     setError("");
 
     try {
-      const remote = await requestPlayerJson(playerDraft.apiBase, "/actions", {
-        method: "POST",
-        body: action === "set_volume" ? { action, volume: Number(playerDraft.volume || 0) } : { action },
-      });
-      const nextState = await client.getState();
+      const payload = action === "set_volume" ? { volume: Number(playerDraft.volume || 0) } : {};
+      const systemResult = await client.sendAction(action, payload, "debug_surface");
+      const [remoteStatus, nextState] = await Promise.all([
+        requestPlayerJson(playerDraft.apiBase, "/status").catch((error) => ({ error: error.message })),
+        client.getState(),
+      ]);
       setState(nextState);
       setPlayerEvidence((current) => ({
         ...current,
         [action]: {
-          remote,
+          systemAction: systemResult,
+          remoteStatus,
           playback: nextState.playback,
         },
       }));
       await refreshRuntimePanels();
     } catch (nextError) {
       setError(nextError.message);
+      const nextState = await client.getState().catch(() => state);
       setPlayerEvidence((current) => ({
         ...current,
-        [`${action}Error`]: nextError.message,
+        [`${action}Error`]: {
+          message: nextError.message,
+          code: nextError.payload?.error?.code ?? null,
+          playback: nextState?.playback ?? null,
+        },
       }));
     }
   }

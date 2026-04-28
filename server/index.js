@@ -220,6 +220,22 @@ function sendActionError(response, statusCode, body, code, message) {
   });
 }
 
+function getPlayerErrorStatus(code) {
+  if (code === "PLAYER_TIMEOUT") {
+    return 504;
+  }
+
+  if (code === "PLAYER_INVALID_PAYLOAD") {
+    return 502;
+  }
+
+  if (code === "PLAYER_HTTP_ERROR" || code === "PLAYER_NETWORK_ERROR") {
+    return 502;
+  }
+
+  return 500;
+}
+
 function createSwaggerHtml(specUrl = "/api/v1/openapi.json") {
   return `<!doctype html>
 <html lang="en">
@@ -362,15 +378,11 @@ export function createAppServer({
       return payload;
     }
 
-    try {
-      const playerState = await playerAdapter.runAction(type, payload, store.getSnapshot().playback);
-      return {
-        ...payload,
-        playerState,
-      };
-    } catch {
-      return payload;
-    }
+    const playerState = await playerAdapter.runAction(type, payload, store.getSnapshot().playback);
+    return {
+      ...payload,
+      playerState,
+    };
   }
 
   return http.createServer(async (request, response) => {
@@ -812,7 +824,20 @@ export function createAppServer({
           return;
         }
         const previousState = structuredClone(store.getSnapshot());
-        const enrichedPayload = await enrichPlaybackAction(body.type, body.payload ?? {});
+        let enrichedPayload = body.payload ?? {};
+        try {
+          enrichedPayload = await enrichPlaybackAction(body.type, body.payload ?? {});
+        } catch (error) {
+          const code = error instanceof Error && "code" in error ? error.code : "PLAYER_ACTION_FAILED";
+          sendActionError(
+            response,
+            getPlayerErrorStatus(code),
+            body,
+            code,
+            error instanceof Error ? error.message : String(error),
+          );
+          return;
+        }
         const snapshot = store.runAction(body.type, enrichedPayload, body.source ?? "remote-client");
         sendActionResult(response, previousState, snapshot, body);
         return;
@@ -1019,11 +1044,15 @@ export function createAppServer({
         code?.startsWith("CALENDAR_") ||
         code?.startsWith("TODOIST_") ||
         code === "INVALID_VOICE_MOOD" ||
-        code === "INVALID_CARE_MODE"
+        code === "INVALID_CARE_MODE" ||
+        code === "PLAYER_HTTP_ERROR" ||
+        code === "PLAYER_TIMEOUT" ||
+        code === "PLAYER_INVALID_PAYLOAD" ||
+        code === "PLAYER_NETWORK_ERROR"
       ) {
         sendActionError(
           response,
-          code === "OTA_IN_PROGRESS" ? 409 : 400,
+          code === "OTA_IN_PROGRESS" ? 409 : code?.startsWith("PLAYER_") ? getPlayerErrorStatus(code) : 400,
           actionBody,
           code,
           error instanceof Error ? error.message : String(error),

@@ -90,4 +90,37 @@ await test("server player adapter preserves fallback fields when provider payloa
   assert.equal(state.progress, 0.4);
 });
 
+await test("server player adapter rejects non-object payloads with a classified error", async () => {
+  const adapter = createHttpPlayerAdapter({
+    baseUrl: "https://player.example.test/api",
+    timeoutMs: 100,
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return [];
+      },
+    }),
+  });
+
+  await assert.rejects(
+    () => adapter.getStatus(),
+    (error) => error?.code === "PLAYER_INVALID_PAYLOAD",
+  );
+});
+
+await test("server player adapter classifies network failures", async () => {
+  const adapter = createHttpPlayerAdapter({
+    baseUrl: "https://player.example.test/api",
+    timeoutMs: 100,
+    fetchImpl: async () => {
+      throw new Error("connect ECONNREFUSED");
+    },
+  });
+
+  await assert.rejects(
+    () => adapter.runAction("toggle_play", {}, {}),
+    (error) => error?.code === "PLAYER_NETWORK_ERROR",
+  );
+});
+
 console.log("Server player adapter smoke tests passed.");
