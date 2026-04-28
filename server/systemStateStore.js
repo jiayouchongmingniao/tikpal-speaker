@@ -44,6 +44,8 @@ const ACTION_ROLE_REQUIREMENTS = {
   ota_check: "admin",
   ota_apply: "admin",
   ota_rollback: "admin",
+  system_reboot: "admin",
+  system_shutdown: "admin",
 };
 const CONNECTOR_NAMES = ["calendar", "todoist"];
 const MOCK_QUEUE = [
@@ -1837,6 +1839,23 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
                 ...liveState.screen,
                 currentTask: payload.title ?? liveState.screen.currentTask,
                 pomodoroFocusTask: payload.title ?? liveState.screen.currentTask,
+              },
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "system_reboot" || type === "system_shutdown") {
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              overlay: {
+                state: "hidden",
+                reason: null,
+                visible: false,
               },
             },
             source,

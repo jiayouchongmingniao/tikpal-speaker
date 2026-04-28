@@ -136,6 +136,11 @@ export function SystemShell({
   const [overlayFocusIndex, setOverlayFocusIndex] = useState(0);
   const [inputDebug, setInputDebug] = useState("idle");
   const [fontPanelOpen, setFontPanelOpen] = useState(false);
+  const [powerPanelOpen, setPowerPanelOpen] = useState(false);
+  const [pendingPowerAction, setPendingPowerAction] = useState("");
+  const [powerNotice, setPowerNotice] = useState("");
+  const [powerError, setPowerError] = useState("");
+  const [powerBusy, setPowerBusy] = useState(false);
   const transitionStatus = state.transition?.status ?? "idle";
   const transition = state.transition ?? { status: "idle", from: state.activeMode, to: state.activeMode };
   const isFocusMode = state.activeMode !== "overview";
@@ -247,6 +252,38 @@ export function SystemShell({
     }
   }
 
+  function closeShellPanels() {
+    setFontPanelOpen(false);
+    setPowerPanelOpen(false);
+    setPendingPowerAction("");
+  }
+
+  async function handlePowerAction(type) {
+    if (!type) {
+      return;
+    }
+
+    setPowerError("");
+    setPowerNotice("");
+
+    if (pendingPowerAction !== type) {
+      setPendingPowerAction(type);
+      return;
+    }
+
+    setPowerBusy(true);
+    try {
+      await controller.dispatch(type, {}, "speaker-ui-power");
+      setPowerNotice(type === "system_reboot" ? "Restart requested. The UI may disconnect in a moment." : "Shutdown requested. The UI may disconnect in a moment.");
+      setPendingPowerAction("");
+      setPowerPanelOpen(false);
+    } catch (error) {
+      setPowerError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPowerBusy(false);
+    }
+  }
+
   useEffect(
     () => () => {
       clearOverlayTimer();
@@ -344,9 +381,9 @@ export function SystemShell({
         return;
       }
 
-      if (fontPanelOpen && event.key === "Escape") {
+      if ((fontPanelOpen || powerPanelOpen) && event.key === "Escape") {
         event.preventDefault();
-        setFontPanelOpen(false);
+        closeShellPanels();
         return;
       }
 
@@ -401,7 +438,7 @@ export function SystemShell({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [controller, fontPanelOpen, overviewFocusIndex, overlayFocusIndex, state.activeMode, state.overlay.visible, transitionStatus]);
+  }, [controller, fontPanelOpen, overviewFocusIndex, overlayFocusIndex, powerPanelOpen, state.activeMode, state.overlay.visible, transitionStatus]);
 
   useEffect(() => {
     function moveOverviewFocus(direction) {
@@ -572,12 +609,12 @@ export function SystemShell({
   }, [controller, debug, overlayFocusIndex, overviewFocusIndex, state.activeMode, state.overlay.visible, transitionStatus]);
 
   function onShellPointerDown(event) {
-    if (fontPanelOpen) {
+    if (fontPanelOpen || powerPanelOpen) {
       if (isShellSettingsTarget(event.target)) {
         return;
       }
 
-      setFontPanelOpen(false);
+      closeShellPanels();
       pointerTapRef.current.active = false;
       return;
     }
@@ -598,7 +635,7 @@ export function SystemShell({
   }
 
   function onShellPointerMove(event) {
-    if (fontPanelOpen) {
+    if (fontPanelOpen || powerPanelOpen) {
       return;
     }
 
@@ -617,7 +654,7 @@ export function SystemShell({
   }
 
   function onShellPointerUp(event) {
-    if (fontPanelOpen) {
+    if (fontPanelOpen || powerPanelOpen) {
       return;
     }
 
@@ -643,12 +680,12 @@ export function SystemShell({
   }
 
   function onShellTouchStart(event) {
-    if (fontPanelOpen) {
+    if (fontPanelOpen || powerPanelOpen) {
       if (isShellSettingsTarget(event.target)) {
         return;
       }
 
-      setFontPanelOpen(false);
+      closeShellPanels();
       singleTouchTapRef.current.active = false;
       return;
     }
@@ -712,7 +749,7 @@ export function SystemShell({
   }
 
   function onShellTouchMove(event) {
-    if (fontPanelOpen) {
+    if (fontPanelOpen || powerPanelOpen) {
       return;
     }
 
@@ -734,7 +771,7 @@ export function SystemShell({
   }
 
   function onShellTouchEnd(event) {
-    if (fontPanelOpen) {
+    if (fontPanelOpen || powerPanelOpen) {
       return;
     }
 
@@ -773,6 +810,10 @@ export function SystemShell({
           aria-expanded={fontPanelOpen}
           aria-controls="typography-panel"
           onClick={() => setFontPanelOpen((current) => !current)}
+          onClickCapture={() => {
+            setPowerPanelOpen(false);
+            setPendingPowerAction("");
+          }}
           data-shell-settings
         >
           Fonts
@@ -822,6 +863,80 @@ export function SystemShell({
               </button>
             ))}
           </div>
+        </section>
+      </div>
+
+      <div className="shell-power" data-shell-settings>
+        <button
+          type="button"
+          className={`shell-button shell-button--ghost shell-power__trigger ${powerPanelOpen ? "is-active" : ""}`}
+          aria-expanded={powerPanelOpen}
+          aria-controls="power-panel"
+          onClick={() => {
+            setFontPanelOpen(false);
+            setPowerPanelOpen((current) => !current);
+            setPendingPowerAction("");
+            setPowerError("");
+            setPowerNotice("");
+          }}
+          data-shell-settings
+        >
+          Power
+        </button>
+
+        <section
+          id="power-panel"
+          className={`shell-power__panel ${powerPanelOpen ? "is-open" : ""}`}
+          aria-hidden={!powerPanelOpen}
+          data-shell-settings
+        >
+          <div className="shell-settings__header">
+            <div>
+              <span className="shell-settings__kicker">System</span>
+              <h2>Power controls</h2>
+            </div>
+            <button
+              type="button"
+              className="shell-button shell-button--ghost"
+              onClick={() => {
+                setPowerPanelOpen(false);
+                setPendingPowerAction("");
+              }}
+              data-shell-settings
+            >
+              Close
+            </button>
+          </div>
+
+          <p className="shell-settings__intro">
+            Use a second tap to confirm. These actions affect the whole device.
+          </p>
+
+          <div className="shell-power__actions" data-shell-settings>
+            <button
+              type="button"
+              className={`shell-power__action ${pendingPowerAction === "system_reboot" ? "is-confirming" : ""}`}
+              onClick={() => handlePowerAction("system_reboot")}
+              disabled={powerBusy}
+              data-shell-settings
+            >
+              <strong>{pendingPowerAction === "system_reboot" ? "Confirm restart" : "Restart system"}</strong>
+              <span>Reboot the Raspberry Pi and relaunch Tikpal on boot.</span>
+            </button>
+            <button
+              type="button"
+              className={`shell-power__action shell-power__action--danger ${pendingPowerAction === "system_shutdown" ? "is-confirming" : ""}`}
+              onClick={() => handlePowerAction("system_shutdown")}
+              disabled={powerBusy}
+              data-shell-settings
+            >
+              <strong>{pendingPowerAction === "system_shutdown" ? "Confirm shutdown" : "Shut down system"}</strong>
+              <span>Power off the device cleanly.</span>
+            </button>
+          </div>
+
+          {powerNotice ? <p className="shell-power__message shell-power__message--notice">{powerNotice}</p> : null}
+          {powerError ? <p className="shell-power__message shell-power__message--error">{powerError}</p> : null}
         </section>
       </div>
 

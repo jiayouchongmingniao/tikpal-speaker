@@ -576,6 +576,8 @@ export const systemOpenApiDocument = {
               "ota_check",
               "ota_apply",
               "ota_rollback",
+              "system_reboot",
+              "system_shutdown",
             ],
           },
           payload: { type: "object" },

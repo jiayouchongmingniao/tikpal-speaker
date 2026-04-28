@@ -116,6 +116,15 @@ sudo systemctl status tikpal-api tikpal-web
 journalctl -u tikpal-api -u tikpal-web -f
 ```
 
+Optional system power actions:
+
+```bash
+export TIKPAL_SYSTEM_REBOOT_COMMAND='sudo -n systemctl reboot'
+export TIKPAL_SYSTEM_SHUTDOWN_COMMAND='sudo -n systemctl poweroff'
+```
+
+These commands are used by the in-app `Power` menu. The service user must be allowed to run them non-interactively.
+
 ## Flow Control API
 
 The repo now includes a lightweight REST service for touchscreens and external controllers such as `https://tikpal.ai`.

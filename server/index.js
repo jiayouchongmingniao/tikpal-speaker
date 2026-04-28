@@ -7,6 +7,7 @@ import { createMockConnectorSyncService } from "./mockConnectorSyncService.js";
 import { createFileSystemOtaManager } from "./otaReleaseManager.js";
 import { combinedOpenApiDocument, flowOpenApiDocument, systemOpenApiDocument } from "./openapi.js";
 import { createHttpPlayerAdapter } from "./playerAdapter.js";
+import { createDefaultPowerAdapter } from "./powerActionAdapter.js";
 import { createScreenContext } from "./screenContextService.js";
 import { createSystemStateStore } from "./systemStateStore.js";
 
@@ -236,6 +237,22 @@ function getPlayerErrorStatus(code) {
   return 500;
 }
 
+function getPowerErrorStatus(code) {
+  if (code === "POWER_ACTION_UNAVAILABLE") {
+    return 503;
+  }
+
+  if (code === "POWER_ACTION_TIMEOUT") {
+    return 504;
+  }
+
+  if (code === "POWER_INVALID_ACTION") {
+    return 400;
+  }
+
+  return 500;
+}
+
 function createSwaggerHtml(specUrl = "/api/v1/openapi.json") {
   return `<!doctype html>
 <html lang="en">
@@ -359,11 +376,16 @@ function createDefaultPlayerAdapter() {
   return createHttpPlayerAdapter();
 }
 
+function createSystemPowerAdapter() {
+  return createDefaultPowerAdapter();
+}
+
 export function createAppServer({
   store = createDefaultSystemStateStore(),
   connectorSyncService = createDefaultConnectorSyncService(store),
   connectorTokenExchange = exchangeConnectorAuthorizationCode,
   playerAdapter = createDefaultPlayerAdapter(),
+  powerAdapter = createSystemPowerAdapter(),
   apiKey = process.env.TIKPAL_API_KEY ?? "",
   allowedOrigins = new Set(
     (process.env.TIKPAL_ALLOWED_ORIGINS ??
@@ -838,6 +860,27 @@ export function createAppServer({
           );
           return;
         }
+        if (["system_reboot", "system_shutdown"].includes(body.type)) {
+          try {
+            if (!powerAdapter) {
+              const error = new Error(`System power action is not configured for ${body.type}`);
+              error.code = "POWER_ACTION_UNAVAILABLE";
+              throw error;
+            }
+
+            await powerAdapter.runAction(body.type, body.payload ?? {});
+          } catch (error) {
+            const code = error instanceof Error && "code" in error ? error.code : "POWER_ACTION_FAILED";
+            sendActionError(
+              response,
+              getPowerErrorStatus(code),
+              body,
+              code,
+              error instanceof Error ? error.message : String(error),
+            );
+            return;
+          }
+        }
         const snapshot = store.runAction(body.type, enrichedPayload, body.source ?? "remote-client");
         sendActionResult(response, previousState, snapshot, body);
         return;
@@ -1048,11 +1091,21 @@ export function createAppServer({
         code === "PLAYER_HTTP_ERROR" ||
         code === "PLAYER_TIMEOUT" ||
         code === "PLAYER_INVALID_PAYLOAD" ||
-        code === "PLAYER_NETWORK_ERROR"
+        code === "PLAYER_NETWORK_ERROR" ||
+        code === "POWER_ACTION_UNAVAILABLE" ||
+        code === "POWER_ACTION_TIMEOUT" ||
+        code === "POWER_ACTION_FAILED" ||
+        code === "POWER_INVALID_ACTION"
       ) {
         sendActionError(
           response,
-          code === "OTA_IN_PROGRESS" ? 409 : code?.startsWith("PLAYER_") ? getPlayerErrorStatus(code) : 400,
+          code === "OTA_IN_PROGRESS"
+            ? 409
+            : code?.startsWith("PLAYER_")
+              ? getPlayerErrorStatus(code)
+              : code?.startsWith("POWER_")
+                ? getPowerErrorStatus(code)
+                : 400,
           actionBody,
           code,
           error instanceof Error ? error.message : String(error),

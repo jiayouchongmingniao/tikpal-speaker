@@ -551,6 +551,86 @@ try {
     }
   });
 
+  await test("system power actions can be executed through the action API", async () => {
+    const powerActions = [];
+    const powerStore = createSystemStateStore();
+    const powerServer = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      store: powerStore,
+      apiKey: API_KEY,
+      powerAdapter: {
+        async runAction(type) {
+          powerActions.push(type);
+          return {
+            action: type,
+            requestedAt: new Date().toISOString(),
+          };
+        },
+      },
+    });
+    const powerAddress = powerServer.address();
+    const powerBaseUrl = `http://127.0.0.1:${powerAddress.port}`;
+
+    try {
+      const response = await postAction(
+        powerBaseUrl,
+        {
+          type: "system_reboot",
+          payload: {},
+          source: "api",
+          requestId: "power_reboot",
+        },
+        { "X-Tikpal-Key": API_KEY },
+      );
+
+      assert.equal(response.status, 200);
+      assert.equal(response.json.ok, true);
+      assert.equal(response.json.appliedAction.type, "system_reboot");
+      assert.deepEqual(powerActions, ["system_reboot"]);
+    } finally {
+      await new Promise((resolve) => powerServer.close(resolve));
+    }
+  });
+
+  await test("system power actions return a structured unavailable error when no command is configured", async () => {
+    const powerStore = createSystemStateStore();
+    const powerServer = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      store: powerStore,
+      apiKey: API_KEY,
+      powerAdapter: {
+        async runAction() {
+          const error = new Error("System power action is not configured");
+          error.code = "POWER_ACTION_UNAVAILABLE";
+          throw error;
+        },
+      },
+    });
+    const powerAddress = powerServer.address();
+    const powerBaseUrl = `http://127.0.0.1:${powerAddress.port}`;
+
+    try {
+      const response = await postAction(
+        powerBaseUrl,
+        {
+          type: "system_shutdown",
+          payload: {},
+          source: "api",
+          requestId: "power_shutdown",
+        },
+        { "X-Tikpal-Key": API_KEY },
+      );
+
+      assert.equal(response.status, 503);
+      assert.equal(response.json.ok, false);
+      assert.equal(response.json.error.code, "POWER_ACTION_UNAVAILABLE");
+    } finally {
+      await new Promise((resolve) => powerServer.close(resolve));
+    }
+  });
+
   await test("portable controller can submit creative care voice context", async () => {
     const createResponse = await requestJson(`${baseUrl}/api/v1/system/controller-sessions`, {
       method: "POST",
