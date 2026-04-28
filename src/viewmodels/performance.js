@@ -189,11 +189,6 @@ export function getPerformanceDebugViewModel({ system = {}, runtimeSummary = nul
   const tierCooldownRemainingMs = runtimeSummary?.tierCooldownRemainingMs ?? performance.tierCooldownRemainingMs ?? null;
   const tierDecisionReason = runtimeSummary?.tierDecisionReason ?? performance.tierDecisionReason ?? null;
   const performanceTierUpdatedAt = runtimeSummary?.performanceTierUpdatedAt ?? performance.performanceTierUpdatedAt ?? null;
-  const rendererType = runtimeSummary?.rendererType ?? performance.rendererType ?? "canvas";
-  const rendererFallbackCount = runtimeSummary?.rendererFallbackCount ?? performance.rendererFallbackCount ?? 0;
-  const glInitErrorCount = runtimeSummary?.glInitErrorCount ?? performance.glInitErrorCount ?? 0;
-  const glContextLostCount = runtimeSummary?.glContextLostCount ?? performance.glContextLostCount ?? 0;
-  const rendererFallbackReason = runtimeSummary?.rendererFallbackReason ?? performance.rendererFallbackReason ?? null;
 
   return {
     tier,
@@ -207,11 +202,6 @@ export function getPerformanceDebugViewModel({ system = {}, runtimeSummary = nul
     tierCooldownUntil,
     tierCooldownRemainingMs,
     performanceTierUpdatedAt,
-    rendererType,
-    rendererFallbackCount,
-    glInitErrorCount,
-    glContextLostCount,
-    rendererFallbackReason,
     budget,
     budgetLabel: `ratio ${budget.pixelRatioCap} · waves ${budget.maxWaveLayers} · particles ${Math.round(
       budget.particleMultiplier * 100,

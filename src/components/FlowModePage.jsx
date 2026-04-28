@@ -1,11 +1,10 @@
 import { AmbientBackground } from "./AmbientBackground";
-import { FlowVisualRenderer } from "./FlowVisualRenderer";
 import { SideInfoPanel } from "./SideInfoPanel";
 import { StateTitle } from "./StateTitle";
+import { VisualEngineCanvas } from "./VisualEngineCanvas";
 import { FLOW_THEME } from "../theme";
 import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
 import { getPerformanceRenderBudget, normalizeRenderProfile } from "../viewmodels/performance";
-import { getPreferredFlowRenderer } from "../viewmodels/flowRenderer";
 
 function deriveAppPhase({ activeMode, overlayVisible, flowState, transitionStatus }) {
   if (transitionStatus !== "idle") {
@@ -89,7 +88,6 @@ export function FlowModePage({
   const transitionState = toFlowTransitionState(transition, currentState);
   const performanceTier = systemState.system?.performanceTier ?? "normal";
   const renderProfile = normalizeRenderProfile(systemState.system?.renderProfile ?? "off");
-  const preferredRenderer = getPreferredFlowRenderer();
 
   return (
     <main
@@ -98,8 +96,7 @@ export function FlowModePage({
       aria-label="Flow mode"
     >
       <AmbientBackground currentState={currentState} transitionState={transitionState} />
-      <FlowVisualRenderer
-        preferredRenderer={preferredRenderer}
+      <VisualEngineCanvas
         currentState={currentState}
         theme={theme}
         audioMetrics={audioMetrics}

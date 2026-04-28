@@ -880,26 +880,6 @@ export function ConnectorDebugPage() {
                   : "n/a"}
               </strong>
             </div>
-            <div>
-              <span>Renderer</span>
-              <strong>{performanceDebug.rendererType ?? "canvas"}</strong>
-            </div>
-            <div>
-              <span>Fallbacks</span>
-              <strong>{performanceDebug.rendererFallbackCount ?? 0}</strong>
-            </div>
-            <div>
-              <span>GL init errors</span>
-              <strong>{performanceDebug.glInitErrorCount ?? 0}</strong>
-            </div>
-            <div>
-              <span>GL context lost</span>
-              <strong>{performanceDebug.glContextLostCount ?? 0}</strong>
-            </div>
-            <div>
-              <span>Fallback reason</span>
-              <strong>{performanceDebug.rendererFallbackReason ?? "none"}</strong>
-            </div>
           </div>
           <pre>{prettyJson(runtimeProfile?.activeBudget ?? performanceDebug.budget)}</pre>
           <pre>{recentTierDecisions.join("\n") || "No tier decision history yet."}</pre>
