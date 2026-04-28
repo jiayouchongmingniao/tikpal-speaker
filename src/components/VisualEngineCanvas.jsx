@@ -91,7 +91,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       const amplitude =
         height * (liveTheme.motionAmplitude * 0.22 + liveMetrics.lowEnergy * 0.08 + layerIndex * 0.014);
       const speed = liveTheme.motionSpeed * (0.7 + liveMetrics.beatConfidence * 0.6 + layerIndex * 0.12);
-      const alpha = clamp(0.12 + layerIndex * 0.08 + liveMetrics.highEnergy * 0.1, 0.12, 0.42);
+      const alpha = clamp(0.14 + layerIndex * 0.08 + liveMetrics.highEnergy * 0.12, 0.14, 0.48);
 
       context.beginPath();
       context.moveTo(0, height);
@@ -180,12 +180,12 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
         isPlaying: liveMetrics.isPlaying,
       };
       smoothedMetricsRef.current = smoothedMetrics;
-      const volumeLift = smoothedMetrics.volumeNormalized * 0.08;
-      const energyLift = smoothedMetrics.highEnergy * 0.04;
-      const brightness = clamp(0.88 + volumeLift + energyLift, 0.86, 0.97);
-      const dimAlpha = livePhase === "sleep_dimmed" ? 0.24 : livePhase === "transitioning" ? 0.14 : 0.1;
-      const fadeAlpha = livePhase === "transitioning" ? 0.18 : livePhase === "sleep_dimmed" ? 0.16 : 0.12;
-      const backgroundAlpha = clamp(1 - brightness, 0.04, 0.14);
+      const volumeLift = smoothedMetrics.volumeNormalized * 0.1;
+      const energyLift = smoothedMetrics.highEnergy * 0.06;
+      const brightness = clamp(0.89 + volumeLift + energyLift, 0.87, 0.985);
+      const dimAlpha = livePhase === "sleep_dimmed" ? 0.24 : livePhase === "transitioning" ? 0.14 : 0.08;
+      const fadeAlpha = livePhase === "transitioning" ? 0.18 : livePhase === "sleep_dimmed" ? 0.16 : 0.09;
+      const backgroundAlpha = clamp(1 - brightness, 0.03, 0.12);
 
       context.save();
       context.globalCompositeOperation = "source-over";
@@ -196,13 +196,13 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       context.fillStyle = `rgba(2, 3, 5, ${backgroundAlpha})`;
       context.fillRect(0, 0, width, height);
 
-      const desiredLayerCount = livePhase === "transitioning" ? 1 : liveState === "flow" ? 2 : 1;
+      const desiredLayerCount = livePhase === "transitioning" ? 1 : liveState === "flow" ? 3 : 2;
       const layerCount = Math.min(desiredLayerCount, budget.maxWaveLayers ?? desiredLayerCount);
       for (let layerIndex = 0; layerIndex < layerCount; layerIndex += 1) {
         drawWaveLayer(time, layerIndex, smoothedMetrics);
       }
 
-      const particleScale = livePhase === "transitioning" ? 0.12 : livePhase === "sleep_dimmed" ? 0 : 0.72;
+      const particleScale = livePhase === "transitioning" ? 0.12 : livePhase === "sleep_dimmed" ? 0 : liveState === "flow" ? 0.92 : 0.78;
       drawParticles(time, smoothedMetrics, particleScale);
 
       context.fillStyle = `rgba(0, 0, 0, ${dimAlpha})`;

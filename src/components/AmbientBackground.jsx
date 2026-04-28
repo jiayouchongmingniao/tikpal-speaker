@@ -8,9 +8,9 @@ export function AmbientBackground({ currentState, transitionState, appPhase = "i
       : baseTheme;
   const isTransitioning = appPhase === "transitioning";
   const isStableProfile = renderProfile === "balanced" || renderProfile === "stable";
-  const nextOpacity = isTransitioning ? 0.52 : renderProfile === "stable" ? 0.24 : isStableProfile ? 0.3 : 0.42;
-  const nextBlur = isStableProfile ? "none" : "blur(10px)";
-  const nextBlendMode = isStableProfile ? "normal" : "screen";
+  const nextOpacity = isTransitioning ? 0.52 : renderProfile === "stable" ? 0.32 : isStableProfile ? 0.38 : 0.48;
+  const nextBlur = renderProfile === "stable" ? "blur(4px)" : isStableProfile ? "blur(6px)" : "blur(10px)";
+  const nextBlendMode = renderProfile === "stable" ? "screen" : isStableProfile ? "soft-light" : "screen";
   const baseOpacity = isTransitioning ? 0.98 : 0.92;
 
   return (
