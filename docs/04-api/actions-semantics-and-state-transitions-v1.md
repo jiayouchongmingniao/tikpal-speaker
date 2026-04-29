@@ -477,6 +477,9 @@ type ActionResponse = {
 
 - 若当前不在 `flow`，动作仍可成功，只改变内部 Flow 状态
 - 进入 `focused_flow` 时应使用最新 Flow 状态
+- 本机 `Flow` 双指下滑可触发该动作，推荐沿固定顺序切到下一个状态
+- 推荐本机顺序：`focus -> flow -> relax -> sleep -> focus`
+- 本机双指捏合返回 `Overview` 的优先级高于本动作
 
 ### ignored 条件
 

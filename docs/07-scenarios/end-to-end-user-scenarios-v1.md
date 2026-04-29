@@ -143,9 +143,10 @@
 ### 步骤
 
 1. 用户进入 `focused_flow`
-2. 用户切换 `focus -> relax`
-3. 页面完成状态过渡
-4. 用户双指捏合返回 `Overview`
+2. 用户双指下滑一次，触发 `focus -> flow`
+3. 用户再次双指下滑，触发 `flow -> relax`
+4. 页面完成状态过渡
+5. 用户双指捏合返回 `Overview`
 
 ### API 联调步骤
 
@@ -161,6 +162,7 @@ curl -X POST /api/v1/system/actions \
 ### 预期结果
 
 - Flow 状态切换有明确反馈
+- 双指下滑可在 `Flow` 内部循环切状态，不先跳回 `Overview`
 - 本机与 API 控制都能生效
 - 双指捏合可稳定回到 `Overview`
 
@@ -169,6 +171,7 @@ curl -X POST /api/v1/system/actions \
 - `flow.state = relax`
 - `activeMode` 从 `flow -> overview`
 - `lastSource` 正确记录
+- 双指下滑不会误触发为 pinch 返回
 
 ---
 

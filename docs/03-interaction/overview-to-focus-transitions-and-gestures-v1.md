@@ -57,3 +57,11 @@
 - 双指捏合：返回 Overview
 - 单击空白：显示控制层
 - 可选单指横滑：切相邻模式
+- `Flow` 中可选双指下滑：切下一个 `focus / flow / relax / sleep` 子状态
+
+## Flow 特殊手势
+
+- 双指下滑只在 `focused_flow` 内生效
+- 顺序固定为 `focus -> flow -> relax -> sleep -> focus`
+- 双指下滑不应先返回 `Overview`，而应在 `Flow` 内部完成状态接力
+- pinch 返回 `Overview` 仍保持更高优先级
