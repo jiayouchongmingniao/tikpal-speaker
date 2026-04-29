@@ -1,6 +1,13 @@
 import { FLOW_THEME } from "../theme";
 
-export function AmbientBackground({ currentState, transitionState, appPhase = "immersive", renderProfile = "off" }) {
+export function AmbientBackground({
+  currentState,
+  transitionState,
+  appPhase = "immersive",
+  performanceTier = "normal",
+  renderProfile = "off",
+  flowDiagnosticMode = "off",
+}) {
   const baseTheme = FLOW_THEME[currentState] ?? FLOW_THEME.focus;
   const nextTheme =
     transitionState && FLOW_THEME[transitionState.to]
@@ -8,9 +15,21 @@ export function AmbientBackground({ currentState, transitionState, appPhase = "i
       : baseTheme;
   const isTransitioning = appPhase === "transitioning";
   const isStableProfile = renderProfile === "balanced" || renderProfile === "stable";
-  const nextOpacity = isTransitioning ? 0.52 : renderProfile === "stable" ? 0.4 : isStableProfile ? 0.48 : 0.58;
-  const nextBlur = renderProfile === "stable" ? "blur(5px)" : isStableProfile ? "blur(8px)" : "blur(12px)";
-  const nextBlendMode = renderProfile === "stable" ? "screen" : isStableProfile ? "soft-light" : "screen";
+  const isLowPowerTier = performanceTier === "safe";
+  const isStaticDiagnostic = flowDiagnosticMode === "static";
+  const nextOpacity = isStaticDiagnostic
+    ? 0.34
+    : isTransitioning
+      ? 0.52
+      : renderProfile === "stable"
+        ? 0.4
+        : isStableProfile
+          ? 0.48
+          : 0.58;
+  const nextBlur =
+    isStaticDiagnostic || renderProfile === "stable" || isLowPowerTier ? "blur(4px)" : isStableProfile ? "blur(8px)" : "blur(12px)";
+  const nextBlendMode =
+    isStaticDiagnostic || renderProfile === "stable" || isLowPowerTier ? "normal" : isStableProfile ? "soft-light" : "screen";
   const baseOpacity = isTransitioning ? 0.98 : 0.92;
   const auraOpacity = isTransitioning ? 0.16 : renderProfile === "stable" ? 0.24 : isStableProfile ? 0.3 : 0.38;
   const auraBlur = renderProfile === "stable" ? "blur(22px)" : isStableProfile ? "blur(28px)" : "blur(34px)";
@@ -36,28 +55,32 @@ export function AmbientBackground({ currentState, transitionState, appPhase = "i
           mixBlendMode: nextBlendMode,
         }}
       />
-      <div
-        className="ambient-bg__layer ambient-bg__layer--depth"
-        style={{
-          background: `radial-gradient(circle at 50% 62%, ${baseTheme.glow}00 0%, ${baseTheme.glow}28 28%, transparent 66%),
-            radial-gradient(circle at 84% 18%, ${nextTheme.glow}40 0%, transparent 32%),
-            radial-gradient(circle at 16% 82%, ${baseTheme.accent}28 0%, transparent 30%)`,
-          opacity: auraOpacity,
-          filter: auraBlur,
-          mixBlendMode: "screen",
-        }}
-      />
-      <div
-        className="ambient-bg__layer ambient-bg__layer--contour"
-        style={{
-          background: `linear-gradient(180deg, transparent 0%, ${nextTheme.glow}10 28%, ${baseTheme.accent}1c 54%, transparent 100%),
-            radial-gradient(circle at 38% 48%, ${nextTheme.glow}22 0%, transparent 22%),
-            radial-gradient(circle at 62% 54%, ${baseTheme.glow}20 0%, transparent 26%)`,
-          opacity: contourOpacity,
-          filter: "blur(18px)",
-          mixBlendMode: "screen",
-        }}
-      />
+      {!isLowPowerTier && !isStaticDiagnostic ? (
+        <div
+          className="ambient-bg__layer ambient-bg__layer--depth"
+          style={{
+            background: `radial-gradient(circle at 50% 62%, ${baseTheme.glow}00 0%, ${baseTheme.glow}28 28%, transparent 66%),
+              radial-gradient(circle at 84% 18%, ${nextTheme.glow}40 0%, transparent 32%),
+              radial-gradient(circle at 16% 82%, ${baseTheme.accent}28 0%, transparent 30%)`,
+            opacity: auraOpacity,
+            filter: auraBlur,
+            mixBlendMode: "screen",
+          }}
+        />
+      ) : null}
+      {!isLowPowerTier && !isStaticDiagnostic ? (
+        <div
+          className="ambient-bg__layer ambient-bg__layer--contour"
+          style={{
+            background: `linear-gradient(180deg, transparent 0%, ${nextTheme.glow}10 28%, ${baseTheme.accent}1c 54%, transparent 100%),
+              radial-gradient(circle at 38% 48%, ${nextTheme.glow}22 0%, transparent 22%),
+              radial-gradient(circle at 62% 54%, ${baseTheme.glow}20 0%, transparent 26%)`,
+            opacity: contourOpacity,
+            filter: "blur(18px)",
+            mixBlendMode: "screen",
+          }}
+        />
+      ) : null}
     </div>
   );
 }

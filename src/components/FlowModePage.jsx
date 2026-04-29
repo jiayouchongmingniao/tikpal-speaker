@@ -5,7 +5,12 @@ import { VisualEngineCanvas } from "./VisualEngineCanvas";
 import { FLOW_THEME } from "../theme";
 import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
 import { deriveFlowAppPhase, toFlowTransitionState } from "../viewmodels/flowRenderDiagnostics";
-import { getPerformanceRenderBudget, normalizeRenderProfile } from "../viewmodels/performance";
+import {
+  getPerformanceRenderBudget,
+  isMinimalFlowRenderBudget,
+  isStaticFlowRenderBudget,
+  normalizeRenderProfile,
+} from "../viewmodels/performance";
 
 function createDerivedMetrics(playback, flow, creativeCare) {
   const metrics = flow.audioMetrics ?? {};
@@ -54,10 +59,18 @@ export function FlowModePage({
   const transitionState = toFlowTransitionState(transition, currentState);
   const performanceTier = systemState.system?.performanceTier ?? "normal";
   const renderProfile = normalizeRenderProfile(systemState.system?.renderProfile ?? "off");
+  const flowDiagnosticMode = systemState.system?.flowDiagnosticMode === "static" ? "static" : "off";
+  const renderBudget = getPerformanceRenderBudget(performanceTier, renderProfile);
+  const isStaticFlowBudget = isStaticFlowRenderBudget(renderBudget);
+  const isMinimalFlowBudget = isMinimalFlowRenderBudget(renderBudget);
 
   return (
     <main
-      className={`flow-page phase-${appPhase} tone-${theme.uiTone} care-${creativeCare.currentCareMode} render-profile-${renderProfile} ${className}`.trim()}
+      className={`flow-page phase-${appPhase} tone-${theme.uiTone} care-${creativeCare.currentCareMode} render-profile-${renderProfile} ${
+        isStaticFlowBudget ? "flow-page--static-budget" : ""
+      } ${
+        isMinimalFlowBudget ? "flow-page--minimal-budget" : ""
+      } ${className}`.trim()}
       role="application"
       aria-label="Flow mode"
     >
@@ -65,14 +78,17 @@ export function FlowModePage({
         currentState={currentState}
         transitionState={transitionState}
         appPhase={appPhase}
+        performanceTier={performanceTier}
         renderProfile={renderProfile}
+        flowDiagnosticMode={flowDiagnosticMode}
       />
       <VisualEngineCanvas
         currentState={currentState}
         theme={theme}
         audioMetrics={audioMetrics}
         appPhase={appPhase}
-        renderBudget={getPerformanceRenderBudget(performanceTier, renderProfile)}
+        renderBudget={renderBudget}
+        flowDiagnosticMode={flowDiagnosticMode}
       />
       <section className="flow-page__content">
         <div className="flow-care-stack">

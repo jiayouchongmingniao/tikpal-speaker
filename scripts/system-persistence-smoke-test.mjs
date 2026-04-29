@@ -26,6 +26,22 @@ const persistence = createJsonFilePersistence(persistencePath);
 const secretStore = createJsonFileSecretStore(secretPath);
 
 try {
+  await test("flow diagnostic mode restores from persisted state", () => {
+    persistence.write({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: {
+        system: {
+          flowDiagnosticMode: "static",
+        },
+      },
+    });
+
+    const store = createSystemStateStore({ persistence, secretStore });
+    assert.equal(store.getSnapshot().system.flowDiagnosticMode, "static");
+    assert.equal(store.getRuntimeSummary().flowDiagnosticMode, "static");
+  });
+
   await test("system state, sessions, pairing, and connector metadata survive restart", () => {
     const firstStore = createSystemStateStore({ persistence, secretStore });
     const session = firstStore.createSession(

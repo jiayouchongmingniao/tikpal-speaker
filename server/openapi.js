@@ -455,6 +455,7 @@ export const systemOpenApiDocument = {
           creativeFlowSuggestion: { type: ["string", "null"] },
           performanceTier: { type: ["string", "null"] },
           renderProfile: { type: "string", enum: ["off", "balanced", "stable"] },
+          flowDiagnosticMode: { type: "string", enum: ["off", "static"] },
           avgFps: { type: ["number", "null"] },
           temperatureC: { type: ["number", "null"] },
           interactionLatencyMs: { type: ["number", "null"] },
@@ -475,6 +476,7 @@ export const systemOpenApiDocument = {
         type: "object",
         properties: {
           renderProfile: { type: "string", enum: ["off", "balanced", "stable"] },
+          flowDiagnosticMode: { type: "string", enum: ["off", "static"] },
           activeTier: { type: "string", enum: ["normal", "reduced", "safe"] },
           activeBudget: { type: "object" },
           tiers: { type: "object" },

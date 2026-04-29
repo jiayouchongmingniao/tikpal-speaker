@@ -1,0 +1,17 @@
+[Unit]
+Description=Tikpal Speaker Chromium Kiosk
+After=network.target tikpal-web.service
+Wants=tikpal-web.service
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+Group=@SERVICE_GROUP@
+WorkingDirectory=@APP_DIR@
+EnvironmentFile=-@APP_DIR@/.env.kiosk
+ExecStart=/usr/bin/env bash @APP_DIR@/deploy/chromium/launch-tikpal-kiosk.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

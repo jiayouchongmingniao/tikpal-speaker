@@ -102,71 +102,89 @@ const PERFORMANCE_POLICY = {
 const BASE_RENDER_BUDGETS = {
   normal: {
     pixelRatioCap: 2,
+    renderScale: 1,
     waveStep: 18,
     maxWaveLayers: 3,
     particleMultiplier: 1,
     frameIntervalMs: 16,
+    flowSceneMode: "animated",
   },
   reduced: {
     pixelRatioCap: 1.5,
+    renderScale: 1,
     waveStep: 24,
     maxWaveLayers: 2,
     particleMultiplier: 0.55,
     frameIntervalMs: 33,
+    flowSceneMode: "animated",
   },
   safe: {
     pixelRatioCap: 1,
+    renderScale: 1,
     waveStep: 32,
     maxWaveLayers: 1,
     particleMultiplier: 0.2,
     frameIntervalMs: 42,
+    flowSceneMode: "animated",
   },
 };
 const RPI_RENDER_PROFILE_BUDGET_OVERRIDES = {
   balanced: {
     normal: {
       pixelRatioCap: 1.5,
+      renderScale: 1,
       waveStep: 22,
       maxWaveLayers: 2,
       particleMultiplier: 0.45,
       frameIntervalMs: 33,
+      flowSceneMode: "animated",
     },
     reduced: {
       pixelRatioCap: 1.25,
+      renderScale: 1,
       waveStep: 28,
       maxWaveLayers: 1,
       particleMultiplier: 0.22,
       frameIntervalMs: 42,
+      flowSceneMode: "animated",
     },
     safe: {
-      pixelRatioCap: 1,
-      waveStep: 36,
+      pixelRatioCap: 0.68,
+      renderScale: 0.36,
+      waveStep: 72,
       maxWaveLayers: 1,
-      particleMultiplier: 0.08,
-      frameIntervalMs: 42,
+      particleMultiplier: 0,
+      frameIntervalMs: 90,
+      flowSceneMode: "minimal",
     },
   },
   stable: {
     normal: {
-      pixelRatioCap: 1.25,
+      pixelRatioCap: 1,
+      renderScale: 1,
       waveStep: 28,
       maxWaveLayers: 1,
-      particleMultiplier: 0.2,
+      particleMultiplier: 0.18,
       frameIntervalMs: 42,
+      flowSceneMode: "animated",
     },
     reduced: {
-      pixelRatioCap: 1,
-      waveStep: 34,
-      maxWaveLayers: 1,
-      particleMultiplier: 0.08,
-      frameIntervalMs: 42,
-    },
-    safe: {
-      pixelRatioCap: 1,
-      waveStep: 42,
+      pixelRatioCap: 0.72,
+      renderScale: 0.5,
+      waveStep: 48,
       maxWaveLayers: 1,
       particleMultiplier: 0,
-      frameIntervalMs: 42,
+      frameIntervalMs: 66,
+      flowSceneMode: "animated",
+    },
+    safe: {
+      pixelRatioCap: 0.5,
+      renderScale: 0.24,
+      waveStep: 120,
+      maxWaveLayers: 1,
+      particleMultiplier: 0,
+      frameIntervalMs: 120,
+      flowSceneMode: "minimal",
     },
   },
 };
@@ -181,6 +199,10 @@ function clamp(value, min, max) {
 
 function normalizePerformanceTier(tier = "normal") {
   return PERFORMANCE_TIERS.includes(tier) ? tier : "normal";
+}
+
+function normalizeFlowDiagnosticMode(mode = "off") {
+  return mode === "static" ? "static" : "off";
 }
 
 function normalizeRenderProfile(profile = "off") {
@@ -537,6 +559,7 @@ function summarizeRuntimeState(state) {
     creativeFlowSuggestion: state.creativeCare?.suggestedFlowState ?? null,
     performanceTier: state.system?.performanceTier ?? null,
     renderProfile: state.system?.renderProfile ?? "off",
+    flowDiagnosticMode: state.system?.flowDiagnosticMode ?? "off",
     avgFps: state.system?.performance?.avgFps ?? null,
     otaStatus: state.system?.otaStatus ?? null,
     lastSource: state.lastSource ?? null,
@@ -608,6 +631,7 @@ function summarizeActionPayload(type, payload = {}) {
 
 function createInitialState() {
   const renderProfile = normalizeRenderProfile(process.env.RPI_RENDER_PROFILE ?? "off");
+  const flowDiagnosticMode = normalizeFlowDiagnosticMode(process.env.TIKPAL_FLOW_DIAGNOSTIC_MODE ?? "off");
   return {
     activeMode: "overview",
     focusedPanel: null,
@@ -698,6 +722,7 @@ function createInitialState() {
       otaStatus: "idle",
       performanceTier: "normal",
       renderProfile,
+      flowDiagnosticMode,
       ota: {
         currentVersion: process.env.npm_package_version ?? "0.1.0",
         previousVersion: null,
@@ -894,6 +919,9 @@ function mergePersistedState(defaultState, persistedState) {
       ...(persistedState.system ?? {}),
       performanceTier: normalizePerformanceTier(persistedState.system?.performanceTier ?? defaultState.system.performanceTier),
       renderProfile: normalizeRenderProfile(persistedState.system?.renderProfile ?? defaultState.system.renderProfile ?? "off"),
+      flowDiagnosticMode: normalizeFlowDiagnosticMode(
+        persistedState.system?.flowDiagnosticMode ?? defaultState.system.flowDiagnosticMode ?? "off",
+      ),
       ota: {
         ...defaultState.system.ota,
         ...(persistedState.system?.ota ?? {}),
@@ -1038,6 +1066,8 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       interactionLatencyMs: sample.interactionLatencyMs ?? null,
       memoryUsageMb: sample.memoryUsageMb ?? null,
       reason: sample.reason ?? null,
+      flowDiagnosticMode: normalizeFlowDiagnosticMode(sample.flowDiagnosticMode ?? "off"),
+      diagnostics: sample.diagnostics ?? null,
       source: sample.source ?? null,
     });
   }
@@ -1240,6 +1270,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       performance: {
         tier: state.system.performanceTier,
         renderProfile: state.system.renderProfile ?? "off",
+        flowDiagnosticMode: state.system.flowDiagnosticMode ?? "off",
         policy: createPerformancePolicySnapshot(),
       },
       auth: {
@@ -2426,6 +2457,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
         playbackVolume: liveState.playback?.volume ?? null,
         screenSyncStale: Boolean(liveState.screen?.sync?.stale),
         renderProfile: liveState.system?.renderProfile ?? "off",
+        flowDiagnosticMode: liveState.system?.flowDiagnosticMode ?? "off",
         avgFps: liveState.system?.performance?.avgFps ?? null,
         temperatureC: liveState.system?.performance?.temperatureC ?? null,
         interactionLatencyMs: liveState.system?.performance?.interactionLatencyMs ?? null,
@@ -2444,7 +2476,10 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
     },
     getRuntimeProfile() {
       const liveState = getNormalizedState();
-      return getRuntimeProfileConfig(liveState.system?.renderProfile ?? "off", liveState.system?.performanceTier ?? "normal");
+      return {
+        ...getRuntimeProfileConfig(liveState.system?.renderProfile ?? "off", liveState.system?.performanceTier ?? "normal"),
+        flowDiagnosticMode: liveState.system?.flowDiagnosticMode ?? "off",
+      };
     },
     getActionLogs(limit = 50) {
       const normalizedLimit = clamp(Number(limit ?? 50), 1, MAX_RUNTIME_LOG_ENTRIES);

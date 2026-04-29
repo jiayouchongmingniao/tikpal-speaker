@@ -144,6 +144,84 @@ await test("systemd verify is diagnostic on non-systemd hosts", async () => {
   assert.match(stdout, /diagnostic: /);
 });
 
+await test("systemd dry-run includes kiosk service template", async () => {
+  const child = spawn("bash", ["deploy/systemd/install-systemd-services.sh", "--dry-run"], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      APP_DIR: process.cwd(),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  const code = await new Promise((resolve) => child.on("close", resolve));
+  assert.equal(code, 0);
+  assert.match(stdout, /# tikpal-kiosk\.service/);
+  assert.match(stdout, /ExecStart=\/usr\/bin\/env bash .*deploy\/chromium\/launch-tikpal-kiosk\.sh/);
+});
+
+await test("kiosk launcher check reports missing dependencies clearly", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tikpal-kiosk-check-"));
+  const flagsPath = path.join(tempDir, "chromium-flags.conf");
+  const policyDir = path.join(tempDir, "policies");
+  await fs.mkdir(policyDir, { recursive: true });
+  await fs.writeFile(flagsPath, "--start-fullscreen\n");
+
+  const child = spawn("bash", ["deploy/chromium/launch-tikpal-kiosk.sh", "--check"], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      APP_DIR: process.cwd(),
+      TIKPAL_CHROMIUM_BIN: path.join(tempDir, "missing-chromium"),
+      TIKPAL_CHROMIUM_FLAGS_FILE: flagsPath,
+      TIKPAL_CHROMIUM_POLICY_DIR: policyDir,
+      TIKPAL_KIOSK_DISPLAY: ":0",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+  const code = await new Promise((resolve) => child.on("close", resolve));
+  assert.equal(code, 1);
+  assert.match(stderr, /Chromium binary not found or not executable/);
+});
+
+await test("kiosk launcher check fails when managed policy is missing", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tikpal-kiosk-policy-"));
+  const flagsPath = path.join(tempDir, "chromium-flags.conf");
+  const chromiumPath = path.join(tempDir, "chromium-browser");
+  const policyDir = path.join(tempDir, "policies");
+  await fs.mkdir(policyDir, { recursive: true });
+  await fs.writeFile(flagsPath, "--start-fullscreen\n");
+  await fs.writeFile(chromiumPath, "#!/usr/bin/env bash\nexit 0\n");
+  await fs.chmod(chromiumPath, 0o755);
+
+  const child = spawn("bash", ["deploy/chromium/launch-tikpal-kiosk.sh", "--check"], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      APP_DIR: process.cwd(),
+      TIKPAL_CHROMIUM_BIN: chromiumPath,
+      TIKPAL_CHROMIUM_FLAGS_FILE: flagsPath,
+      TIKPAL_CHROMIUM_POLICY_DIR: policyDir,
+      TIKPAL_KIOSK_DISPLAY: ":0",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+  const code = await new Promise((resolve) => child.on("close", resolve));
+  assert.equal(code, 1);
+  assert.match(stderr, /managed policy file not found/);
+});
+
 await test("rpi calibration report renders scenario and soak sections", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tikpal-rpi-report-"));
   const loopPath = path.join(tempDir, "loop.json");

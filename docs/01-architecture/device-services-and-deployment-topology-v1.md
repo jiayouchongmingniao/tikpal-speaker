@@ -58,7 +58,15 @@
 
 - `nginx.service`
 - `tikpal-system-service.service`
-- 可选 `tikpal-kiosk.service`
+- `tikpal-kiosk.service`
+
+## Pi4 kiosk browser package
+
+- Chromium 仍使用上游系统包，不维护源码 fork
+- 设备侧通过 `deploy/chromium/launch-tikpal-kiosk.sh` 包装为 Tikpal 专用 kiosk
+- 浏览器 profile 与系统默认 profile 隔离
+- `tikpal-kiosk.service` 负责 Chromium 生命周期与异常恢复
+- `deploy/chromium/managed-policies.json` 负责关闭首启、默认浏览器、翻译、密码管理等浏览器噪声
 
 ## 原则
 

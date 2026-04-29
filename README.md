@@ -95,7 +95,7 @@ npm run test:persistence
 
 ## Run As Services
 
-The repo includes `systemd` templates for the API (`8787`) and web preview (`4173`).
+The repo includes `systemd` templates for the API (`8787`), web preview (`4173`), and an app-specific Chromium kiosk.
 
 Default deployment layout:
 
@@ -108,6 +108,7 @@ Install on the target machine:
 cd /home/moode/code/tikpal-speaker
 npm install
 npm run build
+cp .env.kiosk.example .env.kiosk
 sudo APP_DIR=/home/moode/code/tikpal-speaker SERVICE_USER=moode bash deploy/systemd/install-systemd-services.sh
 ```
 
@@ -115,13 +116,31 @@ Service names:
 
 - `tikpal-api.service`
 - `tikpal-web.service`
+- `tikpal-kiosk.service`
 
 Useful commands:
 
 ```bash
-sudo systemctl restart tikpal-api tikpal-web
-sudo systemctl status tikpal-api tikpal-web
-journalctl -u tikpal-api -u tikpal-web -f
+sudo systemctl restart tikpal-api tikpal-web tikpal-kiosk
+sudo systemctl status tikpal-api tikpal-web tikpal-kiosk
+journalctl -u tikpal-api -u tikpal-web -u tikpal-kiosk -f
+```
+
+Kiosk-specific environment lives in `.env.kiosk`:
+
+- `TIKPAL_KIOSK_URL=http://localhost:4173/flow/`
+- `TIKPAL_KIOSK_WINDOW=2560x720`
+- `TIKPAL_KIOSK_DISPLAY=:0`
+- `TIKPAL_CHROMIUM_BIN=/usr/lib/chromium-browser/chromium-browser`
+- `TIKPAL_CHROMIUM_PROFILE_DIR=/home/moode/.config/tikpal-chromium-kiosk`
+- `TIKPAL_CHROMIUM_FLAGS_FILE=/home/moode/code/tikpal-speaker/deploy/chromium/chromium-flags.conf`
+- `TIKPAL_CHROMIUM_POLICY_DIR=/etc/chromium/policies/managed`
+- `TIKPAL_CHROMIUM_POLICY_BASENAME=tikpal-kiosk-managed.json`
+
+The Chromium launcher validates its dependencies without opening a browser:
+
+```bash
+APP_DIR=/home/moode/code/tikpal-speaker bash deploy/chromium/launch-tikpal-kiosk.sh --check
 ```
 
 Systemd deployment defaults for in-app power actions:

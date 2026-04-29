@@ -55,6 +55,23 @@ export function usePerformanceTelemetry({
                 resizeCommitCount: Number(window.__TIKPAL_CANVAS_DEBUG__.resizeCommitCount ?? 0),
                 transitionFrameBudgetHits: Number(window.__TIKPAL_CANVAS_DEBUG__.transitionFrameBudgetHits ?? 0),
                 lastFrameIntervalMs: Number(window.__TIKPAL_CANVAS_DEBUG__.lastFrameIntervalMs ?? 0),
+                width: Number(window.__TIKPAL_CANVAS_DEBUG__.width ?? 0),
+                height: Number(window.__TIKPAL_CANVAS_DEBUG__.height ?? 0),
+                ratio: Number(window.__TIKPAL_CANVAS_DEBUG__.ratio ?? 0),
+                renderScale: Number(window.__TIKPAL_CANVAS_DEBUG__.renderScale ?? 0),
+                effectiveRatio: Number(window.__TIKPAL_CANVAS_DEBUG__.effectiveRatio ?? 0),
+                desiredLayerCount: Number(window.__TIKPAL_CANVAS_DEBUG__.desiredLayerCount ?? 0),
+                layerCount: Number(window.__TIKPAL_CANVAS_DEBUG__.layerCount ?? 0),
+                flowDiagnosticMode: window.__TIKPAL_CANVAS_DEBUG__.flowDiagnosticMode === "static" ? "static" : "off",
+                staticSceneActive: Boolean(window.__TIKPAL_CANVAS_DEBUG__.staticSceneActive),
+                lowPowerBudget: Boolean(window.__TIKPAL_CANVAS_DEBUG__.lowPowerBudget),
+                flowSceneMode:
+                  window.__TIKPAL_CANVAS_DEBUG__.flowSceneMode === "static"
+                    ? "static"
+                    : window.__TIKPAL_CANVAS_DEBUG__.flowSceneMode === "minimal"
+                      ? "minimal"
+                      : "animated",
+                phase: String(window.__TIKPAL_CANVAS_DEBUG__.phase ?? ""),
               }
             : null;
         const summary = summarizeFrameWindow({
@@ -68,6 +85,7 @@ export function usePerformanceTelemetry({
         reportRef.current?.({
           ...summary,
           activeMode: activeModeRef.current,
+          flowDiagnosticMode: diagnostics?.flowDiagnosticMode ?? "off",
           rendererType: "canvas",
           rendererFallbackCount: 0,
           glInitErrorCount: 0,

@@ -8,14 +8,16 @@ function roundMetric(value, digits = 3) {
   return Math.round(value * 10 ** digits) / 10 ** digits;
 }
 
-export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase, renderBudget }) {
+export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase, renderBudget, flowDiagnosticMode = "off" }) {
   const canvasRef = useRef(null);
   const currentStateRef = useRef(currentState);
   const themeRef = useRef(theme);
   const audioMetricsRef = useRef(audioMetrics);
   const appPhaseRef = useRef(appPhase);
   const renderBudgetRef = useRef(renderBudget);
+  const flowDiagnosticModeRef = useRef(flowDiagnosticMode);
   const resizeRequestedRef = useRef(false);
+  const staticSceneDirtyRef = useRef(true);
   const canvasMetricsRef = useRef({
     skippedRenderCount: 0,
     resizeCommitCount: 0,
@@ -26,6 +28,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
     width: 0,
     height: 0,
     ratio: 1,
+    effectiveRatio: 1,
   });
   const smoothedMetricsRef = useRef({
     volumeNormalized: audioMetrics?.volumeNormalized ?? 0.58,
@@ -41,12 +44,17 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
     themeRef.current = theme;
     audioMetricsRef.current = audioMetrics;
     appPhaseRef.current = appPhase;
+    flowDiagnosticModeRef.current = flowDiagnosticMode;
     const previousBudget = renderBudgetRef.current ?? {};
     renderBudgetRef.current = renderBudget;
-    if ((previousBudget.pixelRatioCap ?? 2) !== (renderBudget?.pixelRatioCap ?? 2)) {
+    if (
+      (previousBudget.pixelRatioCap ?? 2) !== (renderBudget?.pixelRatioCap ?? 2) ||
+      (previousBudget.renderScale ?? 1) !== (renderBudget?.renderScale ?? 1)
+    ) {
       resizeRequestedRef.current = true;
     }
-  }, [appPhase, audioMetrics, currentState, renderBudget, theme]);
+    staticSceneDirtyRef.current = true;
+  }, [appPhase, audioMetrics, currentState, flowDiagnosticMode, renderBudget, theme]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -57,11 +65,14 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
 
     function requestResize() {
       resizeRequestedRef.current = true;
+      staticSceneDirtyRef.current = true;
     }
 
     function resize({ preserveFrame = false } = {}) {
       const budget = renderBudgetRef.current ?? {};
       const ratio = Math.min(window.devicePixelRatio || 1, budget.pixelRatioCap ?? 2);
+      const renderScale = Math.max(0.25, Math.min(1, Number(budget.renderScale ?? 1)));
+      const effectiveRatio = ratio * renderScale;
       const width = window.innerWidth;
       const height = window.innerHeight;
 
@@ -69,18 +80,20 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
         preserveFrame &&
         viewportRef.current.width === width &&
         viewportRef.current.height === height &&
-        viewportRef.current.ratio === ratio
+        viewportRef.current.ratio === ratio &&
+        viewportRef.current.effectiveRatio === effectiveRatio
       ) {
         return false;
       }
 
-      canvas.width = Math.floor(width * ratio);
-      canvas.height = Math.floor(height * ratio);
+      canvas.width = Math.max(1, Math.floor(width * effectiveRatio));
+      canvas.height = Math.max(1, Math.floor(height * effectiveRatio));
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      viewportRef.current = { width, height, ratio };
+      context.setTransform(effectiveRatio, 0, 0, effectiveRatio, 0, 0);
+      viewportRef.current = { width, height, ratio, effectiveRatio };
       canvasMetricsRef.current.resizeCommitCount += 1;
+      staticSceneDirtyRef.current = true;
       return true;
     }
 
@@ -134,10 +147,10 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       }
 
       const { width, height } = viewportRef.current;
-      const count = Math.max(
-        2,
-        Math.floor(liveTheme.particleDensity * 120 * (budget.particleMultiplier ?? 1) * particleScale),
-      );
+      const count = Math.floor(liveTheme.particleDensity * 120 * (budget.particleMultiplier ?? 1) * particleScale);
+      if (count < 1) {
+        return;
+      }
 
       for (let index = 0; index < count; index += 1) {
         const seed = index / count;
@@ -155,7 +168,10 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       const liveTheme = themeRef.current;
       const budget = renderBudgetRef.current ?? {};
       const { width, height } = viewportRef.current;
-      const count = Math.max(2, Math.round((budget.maxWaveLayers ?? 1) * 2 * particleScale));
+      const count = Math.round((budget.maxWaveLayers ?? 1) * 2 * particleScale);
+      if (count < 1) {
+        return;
+      }
 
       context.save();
       context.globalCompositeOperation = "screen";
@@ -190,6 +206,28 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       context.restore();
     }
 
+    function renderStaticDiagnosticScene(width, height, liveTheme) {
+      const staticMetrics = {
+        lowEnergy: 0.16,
+        highEnergy: 0.08,
+        beatConfidence: 0.1,
+      };
+      context.save();
+      context.globalCompositeOperation = "source-over";
+      context.fillStyle = "rgba(2, 3, 5, 0.12)";
+      context.fillRect(0, 0, width, height);
+      context.restore();
+
+      drawWaveLayer(0, 0, staticMetrics);
+
+      const vignette = context.createLinearGradient(0, 0, 0, height);
+      vignette.addColorStop(0, `${liveTheme.glow}10`);
+      vignette.addColorStop(0.5, "rgba(2, 3, 5, 0)");
+      vignette.addColorStop(1, "rgba(2, 3, 5, 0.2)");
+      context.fillStyle = vignette;
+      context.fillRect(0, 0, width, height);
+    }
+
     function render(nowMs) {
       if (disposed) {
         return;
@@ -201,7 +239,15 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       }
 
       const budget = renderBudgetRef.current ?? {};
+      const diagnosticMode = flowDiagnosticModeRef.current ?? "off";
+      const sceneMode = budget.flowSceneMode ?? "animated";
+      const isStaticScene = diagnosticMode === "static" || sceneMode === "static" || sceneMode === "minimal";
+      const isMinimalScene = diagnosticMode !== "static" && sceneMode === "minimal";
       const frameIntervalMs = Math.max(16, Number(budget.frameIntervalMs ?? 16));
+      const isLowPowerBudget =
+        Number(budget.pixelRatioCap ?? 1) <= 0.85 ||
+        Number(budget.particleMultiplier ?? 1) <= 0.08 ||
+        Number(budget.maxWaveLayers ?? 1) <= 1;
       if (lastRenderedAt && nowMs - lastRenderedAt < frameIntervalMs) {
         canvasMetricsRef.current.skippedRenderCount += 1;
         frameId = window.requestAnimationFrame(render);
@@ -211,7 +257,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       lastRenderedAt = nowMs;
 
       const { width, height } = viewportRef.current;
-      const time = nowMs / 1000;
+      const time = isStaticScene ? 0 : nowMs / 1000;
       const liveState = currentStateRef.current;
       const liveMetrics = audioMetricsRef.current;
       const livePhase = appPhaseRef.current;
@@ -232,6 +278,28 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       const dimAlpha = livePhase === "sleep_dimmed" ? 0.24 : livePhase === "transitioning" ? 0.14 : 0.08;
       const fadeAlpha = livePhase === "transitioning" ? 0.18 : livePhase === "sleep_dimmed" ? 0.16 : 0.09;
       const backgroundAlpha = clamp(1 - brightness, 0.03, 0.12);
+      const desiredLayerCount = isStaticScene ? 1 : livePhase === "transitioning" ? 1 : liveState === "flow" ? 3 : 2;
+      const layerCount = Math.min(desiredLayerCount, budget.maxWaveLayers ?? desiredLayerCount);
+
+      if (isStaticScene && !staticSceneDirtyRef.current) {
+        window.__TIKPAL_CANVAS_DEBUG__ = {
+          ...canvasMetricsRef.current,
+          width,
+          height,
+          ratio: viewportRef.current.ratio,
+          renderScale: Number(budget.renderScale ?? 1),
+          effectiveRatio: viewportRef.current.effectiveRatio,
+          desiredLayerCount,
+          layerCount,
+          flowDiagnosticMode: diagnosticMode,
+          staticSceneActive: true,
+          lowPowerBudget: isLowPowerBudget,
+          flowSceneMode: sceneMode,
+          phase: livePhase,
+        };
+        frameId = window.requestAnimationFrame(render);
+        return;
+      }
 
       context.save();
       context.globalCompositeOperation = "source-over";
@@ -242,30 +310,39 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       context.fillStyle = `rgba(2, 3, 5, ${backgroundAlpha})`;
       context.fillRect(0, 0, width, height);
 
-      const desiredLayerCount = livePhase === "transitioning" ? 1 : liveState === "flow" ? 3 : 2;
-      const layerCount = Math.min(desiredLayerCount, budget.maxWaveLayers ?? desiredLayerCount);
-      for (let layerIndex = 0; layerIndex < layerCount; layerIndex += 1) {
-        drawWaveLayer(time, layerIndex, smoothedMetrics);
-      }
+      if (isStaticScene) {
+        if (staticSceneDirtyRef.current) {
+          renderStaticDiagnosticScene(width, height, themeRef.current);
+          staticSceneDirtyRef.current = false;
+        }
+      } else {
+        for (let layerIndex = 0; layerIndex < layerCount; layerIndex += 1) {
+          drawWaveLayer(time, layerIndex, smoothedMetrics);
+        }
 
-      if (livePhase !== "transitioning") {
-        drawLightVeil(time, smoothedMetrics);
-      }
+        if (livePhase !== "transitioning" && !isLowPowerBudget && !isMinimalScene) {
+          drawLightVeil(time, smoothedMetrics);
+        }
 
-      const particleScale = livePhase === "transitioning" ? 0.12 : livePhase === "sleep_dimmed" ? 0 : liveState === "flow" ? 0.92 : 0.78;
-      drawParticles(time, smoothedMetrics, particleScale, {
-        alphaHex: livePhase === "transitioning" ? "18" : "36",
-        driftMultiplier: 14,
-      });
-      if (livePhase !== "transitioning" && particleScale > 0) {
-        drawParticles(time + 11, smoothedMetrics, particleScale * 0.52, {
-          alphaHex: "26",
-          driftMultiplier: 8,
-          verticalOffset: 0.23,
-          radiusMultiplier: 0.72,
-          horizontalSpread: 1.28,
-        });
-        drawBloomMotes(time, smoothedMetrics, particleScale * 0.9);
+        if (!isMinimalScene) {
+          const particleScale =
+            livePhase === "transitioning" ? 0.12 : livePhase === "sleep_dimmed" ? 0 : liveState === "flow" ? 0.92 : 0.78;
+          const primaryParticleScale = isLowPowerBudget ? particleScale * 0.42 : particleScale;
+          drawParticles(time, smoothedMetrics, primaryParticleScale, {
+            alphaHex: livePhase === "transitioning" ? "18" : "36",
+            driftMultiplier: isLowPowerBudget ? 10 : 14,
+          });
+          if (!isLowPowerBudget && livePhase !== "transitioning" && particleScale > 0) {
+            drawParticles(time + 11, smoothedMetrics, particleScale * 0.52, {
+              alphaHex: "26",
+              driftMultiplier: 8,
+              verticalOffset: 0.23,
+              radiusMultiplier: 0.72,
+              horizontalSpread: 1.28,
+            });
+            drawBloomMotes(time, smoothedMetrics, particleScale * 0.9);
+          }
+        }
       }
 
       context.fillStyle = `rgba(0, 0, 0, ${dimAlpha})`;
@@ -280,8 +357,14 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
         width,
         height,
         ratio: viewportRef.current.ratio,
+        renderScale: Number(budget.renderScale ?? 1),
+        effectiveRatio: viewportRef.current.effectiveRatio,
         desiredLayerCount,
         layerCount,
+        flowDiagnosticMode: diagnosticMode,
+        staticSceneActive: isStaticScene,
+        lowPowerBudget: isLowPowerBudget,
+        flowSceneMode: sceneMode,
         phase: livePhase,
       };
 

@@ -4,6 +4,7 @@ import {
   derivePerformanceTierFromFps,
   getPerformanceDebugViewModel,
   getPerformanceRenderBudget,
+  isStaticFlowRenderBudget,
   summarizeFrameWindow,
   summarizePerformanceTrace,
 } from "../src/viewmodels/performance.js";
@@ -45,11 +46,15 @@ test("rpi render profiles tighten budgets while desktop defaults stay unchanged"
   const desktop = getPerformanceRenderBudget("normal", "off");
   const balanced = getPerformanceRenderBudget("normal", "balanced");
   const stable = getPerformanceRenderBudget("normal", "stable");
+  const stableSafe = getPerformanceRenderBudget("safe", "stable");
 
   assert.equal(desktop.pixelRatioCap > balanced.pixelRatioCap, true);
   assert.equal(balanced.pixelRatioCap > stable.pixelRatioCap, true);
   assert.equal(desktop.maxWaveLayers > balanced.maxWaveLayers, true);
   assert.equal(balanced.particleMultiplier > stable.particleMultiplier, true);
+  assert.equal(stableSafe.renderScale, 0.24);
+  assert.equal(isStaticFlowRenderBudget(stableSafe), false);
+  assert.equal(stableSafe.flowSceneMode, "minimal");
 });
 
 test("frame window summary reports fps, latency, and optional memory", () => {
@@ -96,7 +101,9 @@ test("debug view model combines runtime metrics with render budget", () => {
   assert.equal(viewModel.renderProfile, "balanced");
   assert.equal(viewModel.suggestedTier, "reduced");
   assert.equal(viewModel.budget.maxWaveLayers, 1);
+  assert.equal(viewModel.budget.renderScale, 1);
   assert.equal(viewModel.budgetLabel.includes("particles 24%"), true);
+  assert.equal(viewModel.budgetLabel.includes("scale 100%"), true);
   assert.equal(viewModel.tierDecisionReason, "pending_degrade_1/2");
 });
 
@@ -141,8 +148,10 @@ test("flow render diagnostics explain full budget, budget-limited, and transitio
     },
   });
   assert.equal(budgetLimited.waveVisualMode, "single-wave");
-  assert.equal(budgetLimited.primaryReason, "performance_budget");
+  assert.equal(budgetLimited.primaryReason, "minimal_budget");
   assert.equal(budgetLimited.backgroundLayeringActive, false);
+  assert.equal(budgetLimited.staticFlowBudget, false);
+  assert.equal(budgetLimited.minimalFlowBudget, true);
 
   const transitionLimited = deriveFlowRenderDiagnostics({
     systemState: {

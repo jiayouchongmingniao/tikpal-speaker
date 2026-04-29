@@ -1,24 +1,30 @@
 export const PERFORMANCE_RENDER_BUDGETS = {
   normal: {
     pixelRatioCap: 2,
+    renderScale: 1,
     waveStep: 18,
     maxWaveLayers: 3,
     particleMultiplier: 1,
     frameIntervalMs: 16,
+    flowSceneMode: "animated",
   },
   reduced: {
     pixelRatioCap: 1.5,
+    renderScale: 1,
     waveStep: 24,
     maxWaveLayers: 2,
     particleMultiplier: 0.55,
     frameIntervalMs: 33,
+    flowSceneMode: "animated",
   },
   safe: {
     pixelRatioCap: 1,
+    renderScale: 1,
     waveStep: 32,
     maxWaveLayers: 1,
     particleMultiplier: 0.2,
     frameIntervalMs: 42,
+    flowSceneMode: "animated",
   },
 };
 
@@ -26,47 +32,59 @@ export const RPI_RENDER_PROFILE_OVERRIDES = {
   balanced: {
     normal: {
       pixelRatioCap: 1.4,
+      renderScale: 1,
       waveStep: 24,
       maxWaveLayers: 2,
       particleMultiplier: 0.5,
       frameIntervalMs: 33,
+      flowSceneMode: "animated",
     },
     reduced: {
       pixelRatioCap: 1.15,
+      renderScale: 1,
       waveStep: 28,
       maxWaveLayers: 1,
       particleMultiplier: 0.24,
       frameIntervalMs: 42,
+      flowSceneMode: "animated",
     },
     safe: {
-      pixelRatioCap: 1,
-      waveStep: 36,
+      pixelRatioCap: 0.68,
+      renderScale: 0.36,
+      waveStep: 72,
       maxWaveLayers: 1,
-      particleMultiplier: 0.08,
-      frameIntervalMs: 42,
+      particleMultiplier: 0,
+      frameIntervalMs: 90,
+      flowSceneMode: "minimal",
     },
   },
   stable: {
     normal: {
-      pixelRatioCap: 1.15,
+      pixelRatioCap: 1,
+      renderScale: 1,
       waveStep: 30,
       maxWaveLayers: 1,
-      particleMultiplier: 0.24,
+      particleMultiplier: 0.18,
       frameIntervalMs: 42,
+      flowSceneMode: "animated",
     },
     reduced: {
-      pixelRatioCap: 1,
-      waveStep: 34,
-      maxWaveLayers: 1,
-      particleMultiplier: 0.12,
-      frameIntervalMs: 42,
-    },
-    safe: {
-      pixelRatioCap: 1,
-      waveStep: 46,
+      pixelRatioCap: 0.72,
+      renderScale: 0.5,
+      waveStep: 48,
       maxWaveLayers: 1,
       particleMultiplier: 0,
-      frameIntervalMs: 42,
+      frameIntervalMs: 66,
+      flowSceneMode: "animated",
+    },
+    safe: {
+      pixelRatioCap: 0.5,
+      renderScale: 0.24,
+      waveStep: 120,
+      maxWaveLayers: 1,
+      particleMultiplier: 0,
+      frameIntervalMs: 120,
+      flowSceneMode: "minimal",
     },
   },
 };
@@ -86,6 +104,14 @@ export function getPerformanceRenderBudget(tier = "normal", profile = "off") {
     ...base,
     ...(RPI_RENDER_PROFILE_OVERRIDES[normalizedProfile]?.[normalizedTier] ?? {}),
   };
+}
+
+export function isStaticFlowRenderBudget(budget = {}) {
+  return budget?.flowSceneMode === "static";
+}
+
+export function isMinimalFlowRenderBudget(budget = {}) {
+  return budget?.flowSceneMode === "minimal";
 }
 
 export function derivePerformanceTierFromFps(avgFps, fallbackTier = "normal") {
@@ -206,6 +232,6 @@ export function getPerformanceDebugViewModel({ system = {}, runtimeSummary = nul
     budget,
     budgetLabel: `ratio ${budget.pixelRatioCap} · waves ${budget.maxWaveLayers} · particles ${Math.round(
       budget.particleMultiplier * 100,
-    )}% · ${Math.round(1000 / Math.max(16, Number(budget.frameIntervalMs ?? 16)))}fps`,
+    )}% · scale ${Math.round((budget.renderScale ?? 1) * 100)}% · ${Math.round(1000 / Math.max(16, Number(budget.frameIntervalMs ?? 16)))}fps`,
   };
 }

@@ -479,6 +479,7 @@ function createFallbackState(initialMode = "overview", initialFlowState = "focus
       version: "0.1.0",
       performanceTier: "normal",
       renderProfile: "off",
+      flowDiagnosticMode: "off",
       otaStatus: "idle",
       performance: {
         avgFps: 60,

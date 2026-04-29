@@ -1,5 +1,5 @@
 import { FLOW_THEME } from "../theme.js";
-import { getPerformanceRenderBudget, normalizeRenderProfile } from "./performance.js";
+import { getPerformanceRenderBudget, isStaticFlowRenderBudget, normalizeRenderProfile } from "./performance.js";
 
 export function deriveFlowAppPhase({ activeMode, overlayVisible, flowState, transitionStatus }) {
   if (transitionStatus !== "idle") {
@@ -88,6 +88,8 @@ export function deriveFlowRenderDiagnostics({
   const desiredLayerCount =
     canvasDebug?.desiredLayerCount ?? (appPhase === "transitioning" ? 1 : flowState === "flow" ? 3 : 2);
   const renderBudget = runtimeProfile?.activeBudget ?? getPerformanceRenderBudget(performanceTier, renderProfile);
+  const staticFlowBudget = isStaticFlowRenderBudget(renderBudget);
+  const minimalFlowBudget = renderBudget?.flowSceneMode === "minimal";
   const maxWaveLayers = Number(renderBudget.maxWaveLayers ?? desiredLayerCount);
   const actualLayerCount =
     canvasDebug?.layerCount ?? Math.min(Number(desiredLayerCount ?? 1), Number.isFinite(maxWaveLayers) ? maxWaveLayers : desiredLayerCount);
@@ -103,6 +105,10 @@ export function deriveFlowRenderDiagnostics({
   let primaryReason = "full_flow_budget";
   if (appPhase === "transitioning") {
     primaryReason = "transition_phase";
+  } else if (staticFlowBudget) {
+    primaryReason = "static_budget";
+  } else if (minimalFlowBudget) {
+    primaryReason = "minimal_budget";
   } else if (budgetLimited) {
     primaryReason = "performance_budget";
   } else if (waveVisualMode === "single-wave" && ambientDiagnostics.backgroundLayeringActive) {
@@ -112,6 +118,10 @@ export function deriveFlowRenderDiagnostics({
   let explanation = `Rendering ${actualLayerCount} wave layers with full Flow budget.`;
   if (primaryReason === "transition_phase") {
     explanation = "Transition phase forces the canvas down to one wave layer until the mode settles.";
+  } else if (primaryReason === "static_budget") {
+    explanation = "Static Flow budget freezes the scene to protect device stability on the lowest runtime tier.";
+  } else if (primaryReason === "minimal_budget") {
+    explanation = "Minimal Flow budget keeps one animated wave and removes secondary effects to stay within the device budget.";
   } else if (primaryReason === "performance_budget") {
     explanation = `Performance budget caps waves at ${maxWaveLayers}, so the canvas is below the desired ${desiredLayerCount} layers.`;
   } else if (primaryReason === "background_layering") {
@@ -126,6 +136,8 @@ export function deriveFlowRenderDiagnostics({
     actualLayerCount,
     maxWaveLayers,
     waveVisualMode,
+    staticFlowBudget,
+    minimalFlowBudget,
     primaryReason,
     backgroundLayeringActive: ambientDiagnostics.backgroundLayeringActive,
     ambientDiagnostics,
