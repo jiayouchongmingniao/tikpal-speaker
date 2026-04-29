@@ -11,6 +11,9 @@ function formatProgress(progress) {
 export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSetVolume, className = "" }) {
   const progressPercent = Math.round(Math.max(0, Math.min(1, Number(state.playback.progress ?? 0))) * 100);
   const creativeCare = getCreativeCareViewModel(state);
+  const queueLength = Math.max(1, Number(state.playback.queueLength ?? 1));
+  const currentTrackIndex = Math.max(0, Number(state.playback.currentTrackIndex ?? 0));
+  const nextTrackTitle = state.playback.nextTrackTitle ?? "To be announced";
 
   return (
     <main className={`mode-page mode-page--listen ${className}`.trim()} role="application" aria-label="Listen mode">
@@ -76,11 +79,11 @@ export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSe
           </div>
           <div className="mode-metric" role="listitem">
             <span>Next</span>
-            <strong>{state.playback.nextTrackTitle}</strong>
+            <strong>{nextTrackTitle}</strong>
           </div>
           <div className="mode-metric" role="listitem">
             <span>Queue</span>
-            <strong>{state.playback.currentTrackIndex + 1} of {state.playback.queueLength ?? 1}</strong>
+            <strong>{Math.min(currentTrackIndex + 1, queueLength)} of {queueLength}</strong>
           </div>
         </div>
       </section>

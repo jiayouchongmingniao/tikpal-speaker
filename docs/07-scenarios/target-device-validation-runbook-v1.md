@@ -144,6 +144,14 @@ curl -s http://localhost:8787/api/v1/system/screen/context \
 ### 环境变量
 
 ```bash
+export TIKPAL_PLAYER_BACKEND=mpc
+export TIKPAL_MPD_HOST=127.0.0.1
+export TIKPAL_MPD_PORT=6600
+```
+
+若现场已有独立 HTTP 播放器桥接服务，再改用：
+
+```bash
 export TIKPAL_PLAYER_API_BASE=http://localhost:9001/player
 ```
 
@@ -153,7 +161,12 @@ export TIKPAL_PLAYER_API_BASE=http://localhost:9001/player
 ?playerApiBase=http://localhost:9001/player
 ```
 
-### 目标播放器 HTTP contract
+### 后端选择
+
+- 树莓派 / moOde 默认：`TIKPAL_PLAYER_BACKEND=mpc`
+- 外部兼容控制面：`TIKPAL_PLAYER_API_BASE=http://...`
+
+### HTTP bridge contract（仅外部桥接时需要）
 
 - `GET /status`
 - `POST /actions`
@@ -174,7 +187,8 @@ export TIKPAL_PLAYER_API_BASE=http://localhost:9001/player
 
 - `toggle_play / set_volume / next_track / prev_track` 可从 portable 和主屏触发
 - `SystemState.playback` 显示真实播放器状态
-- 播放器不可达时，系统退回本地 fallback，不白屏、不阻断其他控制
+- 无用户操作时，曲目进度/自然切歌也会持续同步到 `SystemState.playback`
+- 播放器不可达时，系统保留 last-good playback，不白屏、不阻断其他控制
 
 记录：
 
@@ -184,6 +198,7 @@ export TIKPAL_PLAYER_API_BASE=http://localhost:9001/player
 | set_volume |  |  |  |
 | next_track |  |  |  |
 | prev_track |  |  |  |
+| passive sync (no action) |  |  |  |
 
 ---
 

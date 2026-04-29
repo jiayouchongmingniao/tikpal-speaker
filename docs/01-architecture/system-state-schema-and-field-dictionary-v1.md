@@ -199,6 +199,8 @@ type PlaybackState = {
   sampleRate?: number;
   bitDepth?: number;
   nextTrackTitle?: string;
+  currentTrackIndex?: number;
+  queueLength?: number;
   updatedAt?: string;
 };
 ```

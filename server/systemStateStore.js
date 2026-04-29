@@ -411,15 +411,24 @@ function mergePlayerState(playback, playerState = {}) {
     return playback;
   }
 
+  const has = (key) => Object.prototype.hasOwnProperty.call(playerState, key);
+
   return {
     ...playback,
-    state: playerState.state ?? playerState.playbackState ?? playback.state,
-    volume: playerState.volume ?? playback.volume,
-    trackTitle: playerState.trackTitle ?? playerState.title ?? playback.trackTitle,
-    artist: playerState.artist ?? playback.artist,
-    source: playerState.source ?? playback.source,
-    progress: playerState.progress ?? playback.progress,
-    nextTrackTitle: playerState.nextTrackTitle ?? playback.nextTrackTitle,
+    state: has("state") ? playerState.state : has("playbackState") ? playerState.playbackState : playback.state,
+    volume: has("volume") ? playerState.volume : playback.volume,
+    trackTitle: has("trackTitle") ? playerState.trackTitle : has("title") ? playerState.title : playback.trackTitle,
+    artist: has("artist") ? playerState.artist : playback.artist,
+    album: has("album") ? playerState.album : playback.album,
+    source: has("source") ? playerState.source : playback.source,
+    progress: has("progress") ? playerState.progress : playback.progress,
+    durationSec: has("durationSec") ? playerState.durationSec : playback.durationSec,
+    format: has("format") ? playerState.format : playback.format,
+    sampleRate: has("sampleRate") ? playerState.sampleRate : playback.sampleRate,
+    bitDepth: has("bitDepth") ? playerState.bitDepth : playback.bitDepth,
+    nextTrackTitle: has("nextTrackTitle") ? playerState.nextTrackTitle : playback.nextTrackTitle,
+    currentTrackIndex: has("currentTrackIndex") ? playerState.currentTrackIndex : playback.currentTrackIndex,
+    queueLength: has("queueLength") ? playerState.queueLength : playback.queueLength,
   };
 }
 
@@ -1286,6 +1295,28 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
     );
 
     return toFlowSnapshot(state);
+  }
+
+  function patchPlaybackState(playerState = {}, source = "player_sync") {
+    const liveState = getNormalizedState();
+    const nextPlayback = mergePlayerState(liveState.playback, playerState);
+
+    return updateState(
+      {
+        ...liveState,
+        playback: nextPlayback,
+        flow: {
+          ...liveState.flow,
+          audioMetrics: {
+            ...liveState.flow.audioMetrics,
+            volumeNormalized: nextPlayback.volume / 100,
+            isPlaying: nextPlayback.state === "play",
+          },
+        },
+      },
+      source,
+      "patch_playback_state",
+    );
   }
 
   function patchIntegration(name, patch = {}, source = "system") {
@@ -2418,6 +2449,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       return toFlowSnapshot(state);
     },
     patchFlowState,
+    patchPlaybackState,
     patchIntegration,
     getIntegrationStatuses,
     hasIntegrationCredential,

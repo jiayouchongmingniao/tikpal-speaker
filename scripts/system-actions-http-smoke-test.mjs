@@ -54,12 +54,29 @@ function sleep(ms) {
 
 const store = createSystemStateStore();
 const playerActions = [];
+const playerStatusReads = [];
 const server = await startServer({
   port: 0,
   host: "127.0.0.1",
   store,
   apiKey: API_KEY,
+  playerSyncIntervalMs: 40,
   playerAdapter: {
+    async getStatus() {
+      playerStatusReads.push({ at: Date.now() });
+      return {
+        state: "play",
+        volume: 61,
+        trackTitle: "Device status track",
+        artist: "moOde Artist",
+        album: "Device Album",
+        source: "moOde",
+        progress: 0.18,
+        nextTrackTitle: "Queued after status",
+        currentTrackIndex: 1,
+        queueLength: 4,
+      };
+    },
     async runAction(type, payload) {
       playerActions.push({ type, payload });
       if (type === "toggle_play") {
@@ -111,6 +128,21 @@ const address = server.address();
 const baseUrl = `http://127.0.0.1:${address.port}`;
 
 try {
+  await test("player sync loop seeds SystemState playback from the real adapter", async () => {
+    await sleep(80);
+    const response = await requestJson(`${baseUrl}/api/v1/system/state`, {
+      headers: { "X-Tikpal-Key": API_KEY },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.json.playback.trackTitle, "Device status track");
+    assert.equal(response.json.playback.album, "Device Album");
+    assert.equal(response.json.playback.nextTrackTitle, "Queued after status");
+    assert.equal(response.json.playback.currentTrackIndex, 1);
+    assert.equal(response.json.playback.queueLength, 4);
+    assert.equal(playerStatusReads.length > 0, true);
+  });
+
   await test("api descriptor exposes portable-facing endpoint links", async () => {
     const response = await requestJson(`${baseUrl}/api/v1/system`);
 
@@ -503,12 +535,32 @@ try {
 
   await test("player adapter failures reject playback actions without dropping the last good playback snapshot", async () => {
     const failingStore = createSystemStateStore();
+    let statusReadCount = 0;
     const failingServer = await startServer({
       port: 0,
       host: "127.0.0.1",
       store: failingStore,
       apiKey: API_KEY,
+      playerSyncIntervalMs: 30,
       playerAdapter: {
+        async getStatus(fallback = {}) {
+          statusReadCount += 1;
+          if (statusReadCount === 1) {
+            return {
+              ...fallback,
+              state: "play",
+              volume: 62,
+              trackTitle: "Recovered seed track",
+              artist: "moOde Artist",
+              source: "moOde",
+              progress: 0.2,
+            };
+          }
+
+          const error = new Error("Player request timed out after 1000ms");
+          error.code = "PLAYER_TIMEOUT";
+          throw error;
+        },
         async runAction() {
           const error = new Error("Player request timed out after 1000ms");
           error.code = "PLAYER_TIMEOUT";
@@ -520,10 +572,12 @@ try {
     const failingBaseUrl = `http://127.0.0.1:${failingAddress.port}`;
 
     try {
+      await sleep(60);
       const beforeResponse = await requestJson(`${failingBaseUrl}/api/v1/system/state`, {
         headers: { "X-Tikpal-Key": API_KEY },
       });
       const previousTrackTitle = beforeResponse.json.playback.trackTitle;
+      assert.equal(previousTrackTitle, "Recovered seed track");
 
       const actionResponse = await postAction(
         failingBaseUrl,
@@ -546,6 +600,11 @@ try {
       assert.equal(afterResponse.status, 200);
       assert.equal(afterResponse.json.playback.trackTitle, previousTrackTitle);
       assert.equal(afterResponse.json.playback.state, beforeResponse.json.playback.state);
+      await sleep(60);
+      const laterResponse = await requestJson(`${failingBaseUrl}/api/v1/system/state`, {
+        headers: { "X-Tikpal-Key": API_KEY },
+      });
+      assert.equal(laterResponse.json.playback.trackTitle, previousTrackTitle);
     } finally {
       await new Promise((resolve) => failingServer.close(resolve));
     }

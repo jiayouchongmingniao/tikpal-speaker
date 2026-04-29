@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHttpPlayerAdapter, normalizePlayerState } from "../server/playerAdapter.js";
+import { createHttpPlayerAdapter, createMpcPlayerAdapter, normalizePlayerState } from "../server/playerAdapter.js";
 
 function test(name, fn) {
   return Promise.resolve()
@@ -121,6 +121,112 @@ await test("server player adapter classifies network failures", async () => {
     () => adapter.runAction("toggle_play", {}, {}),
     (error) => error?.code === "PLAYER_NETWORK_ERROR",
   );
+});
+
+await test("native mpc adapter parses status, queue, and next track metadata", async () => {
+  const commands = [];
+  const adapter = createMpcPlayerAdapter({
+    host: "127.0.0.1",
+    port: 6600,
+    timeoutMs: 100,
+    execFileImpl: async (command, args) => {
+      commands.push({ command, args });
+      if (args.at(-1) === "status") {
+        return {
+          stdout: [
+            "Current Device Track\tDevice Artist\tNight Album",
+            "[playing] #2/4   1:20/4:00 (33%)",
+            "volume: 67%   repeat: off   random: off   single: off   consume: off",
+          ].join("\n"),
+        };
+      }
+
+      if (args.at(-1) === "playlist") {
+        return {
+          stdout: ["Intro", "Current Device Track", "Next Device Track", "After Hours"].join("\n"),
+        };
+      }
+
+      throw new Error(`Unexpected command: ${args.join(" ")}`);
+    },
+  });
+
+  const status = await adapter.getStatus();
+  assert.equal(status.state, "play");
+  assert.equal(status.volume, 67);
+  assert.equal(status.trackTitle, "Current Device Track");
+  assert.equal(status.artist, "Device Artist");
+  assert.equal(status.album, "Night Album");
+  assert.equal(status.source, "moOde");
+  assert.equal(status.progress, 1 / 3);
+  assert.equal(status.durationSec, 240);
+  assert.equal(status.nextTrackTitle, "Next Device Track");
+  assert.equal(status.currentTrackIndex, 1);
+  assert.equal(status.queueLength, 4);
+  assert.equal(commands.length, 2);
+});
+
+await test("native mpc adapter runs commands and refreshes status", async () => {
+  const commands = [];
+  const adapter = createMpcPlayerAdapter({
+    timeoutMs: 100,
+    execFileImpl: async (_command, args) => {
+      commands.push(args);
+      if (args.includes("toggle")) {
+        return { stdout: "" };
+      }
+
+      if (args.at(-1) === "status") {
+        return {
+          stdout: [
+            "Paused Track\tDevice Artist\tNight Album",
+            "[paused] #1/2   0:10/2:00 (8%)",
+            "volume: 44%   repeat: off   random: off   single: off   consume: off",
+          ].join("\n"),
+        };
+      }
+
+      if (args.at(-1) === "playlist") {
+        return {
+          stdout: ["Paused Track", "Wake Track"].join("\n"),
+        };
+      }
+
+      throw new Error(`Unexpected args: ${args.join(" ")}`);
+    },
+  });
+
+  const nextState = await adapter.runAction("toggle_play", {}, {});
+  assert.equal(nextState.state, "pause");
+  assert.equal(nextState.nextTrackTitle, "Wake Track");
+  assert.equal(commands.some((args) => args.includes("toggle")), true);
+  assert.equal(commands.filter((args) => args.at(-1) === "status").length, 1);
+});
+
+await test("native mpc adapter does not treat volume-only output as a fake track title", async () => {
+  const adapter = createMpcPlayerAdapter({
+    timeoutMs: 100,
+    execFileImpl: async (_command, args) => {
+      if (args.at(-1) === "status") {
+        return {
+          stdout: "volume: 50%   repeat: off   random: off   single: off   consume: off\n",
+        };
+      }
+
+      if (args.at(-1) === "playlist") {
+        return {
+          stdout: "",
+        };
+      }
+
+      throw new Error(`Unexpected args: ${args.join(" ")}`);
+    },
+  });
+
+  const status = await adapter.getStatus({ trackTitle: "Fallback title", queueLength: 3 });
+  assert.equal(status.trackTitle, null);
+  assert.equal(status.queueLength, 0);
+  assert.equal(status.source, "moOde");
 });
 
 console.log("Server player adapter smoke tests passed.");

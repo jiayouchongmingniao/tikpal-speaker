@@ -1,12 +1,13 @@
 import http from "node:http";
 import { fileURLToPath } from "node:url";
+import process from "node:process";
 import { createConnectorAdapterRegistry, exchangeConnectorAuthorizationCode } from "./connectorAdapters.js";
 import { createJsonFilePersistence } from "./localPersistence.js";
 import { createJsonFileSecretStore } from "./localSecretStore.js";
 import { createMockConnectorSyncService } from "./mockConnectorSyncService.js";
 import { createFileSystemOtaManager } from "./otaReleaseManager.js";
 import { combinedOpenApiDocument, flowOpenApiDocument, systemOpenApiDocument } from "./openapi.js";
-import { createHttpPlayerAdapter } from "./playerAdapter.js";
+import { createHttpPlayerAdapter, createMpcPlayerAdapter } from "./playerAdapter.js";
 import { createDefaultPowerAdapter } from "./powerActionAdapter.js";
 import { createScreenContext } from "./screenContextService.js";
 import { createSystemStateStore } from "./systemStateStore.js";
@@ -369,11 +370,26 @@ function createDefaultConnectorSyncService(store) {
 }
 
 function createDefaultPlayerAdapter() {
-  if (!process.env.TIKPAL_PLAYER_API_BASE) {
-    return null;
+  const backend = String(process.env.TIKPAL_PLAYER_BACKEND ?? "").trim().toLowerCase();
+  const hasMpdConfig = Boolean(process.env.TIKPAL_MPD_HOST || process.env.TIKPAL_MPD_PORT);
+
+  if (backend === "mpc") {
+    return createMpcPlayerAdapter();
   }
 
-  return createHttpPlayerAdapter();
+  if (backend === "http") {
+    return process.env.TIKPAL_PLAYER_API_BASE ? createHttpPlayerAdapter() : null;
+  }
+
+  if (process.env.TIKPAL_PLAYER_API_BASE) {
+    return createHttpPlayerAdapter();
+  }
+
+  if (hasMpdConfig) {
+    return createMpcPlayerAdapter();
+  }
+
+  return null;
 }
 
 function createSystemPowerAdapter() {
@@ -394,6 +410,7 @@ export function createAppServer({
       .map((value) => value.trim())
       .filter(Boolean),
   ),
+  playerSyncIntervalMs = Number(process.env.TIKPAL_PLAYER_SYNC_INTERVAL_MS ?? 5000),
 } = {}) {
   async function enrichPlaybackAction(type, payload = {}) {
     if (!playerAdapter || !["toggle_play", "set_volume", "next_track", "prev_track"].includes(type)) {
@@ -406,8 +423,7 @@ export function createAppServer({
       playerState,
     };
   }
-
-  return http.createServer(async (request, response) => {
+  const appServer = http.createServer(async (request, response) => {
     setCorsHeaders(request, response, allowedOrigins);
     let actionBody = null;
 
@@ -1122,6 +1138,43 @@ export function createAppServer({
       );
     }
   });
+
+  if (playerAdapter?.getStatus) {
+    let playerSyncTimer = null;
+    let syncing = false;
+
+    async function syncPlayerState() {
+      if (syncing) {
+        return;
+      }
+
+      syncing = true;
+      try {
+        const nextPlayback = await playerAdapter.getStatus({});
+        store.patchPlaybackState(nextPlayback, "player_sync");
+      } catch {
+        // Keep the last good playback snapshot until the adapter becomes reachable again.
+      } finally {
+        syncing = false;
+      }
+    }
+
+    void syncPlayerState();
+
+    if (playerSyncIntervalMs > 0) {
+      playerSyncTimer = setInterval(() => {
+        void syncPlayerState();
+      }, playerSyncIntervalMs);
+    }
+
+    appServer.on("close", () => {
+      if (playerSyncTimer) {
+        clearInterval(playerSyncTimer);
+      }
+    });
+  }
+
+  return appServer;
 }
 
 export function startServer({

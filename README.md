@@ -55,6 +55,14 @@ npm run test:player
 npm run test:player-server
 ```
 
+For Raspberry Pi / moOde direct integration, the System API can now read and control MPD locally with:
+
+```bash
+export TIKPAL_PLAYER_BACKEND=mpc
+export TIKPAL_MPD_HOST=127.0.0.1
+export TIKPAL_MPD_PORT=6600
+```
+
 Run HTTP-level smoke checks for `/api/v1/system/actions`:
 
 ```bash
@@ -276,6 +284,6 @@ Move from engineering scaffolds to target-device validation:
 Use [目标设备联调与验收记录 v1](./docs/07-scenarios/target-device-validation-runbook-v1.md) as the target-device runbook.
 
 1. Configure real Calendar/Todoist OAuth/token endpoints and validate `connect -> refresh -> sync -> ScreenContext`.
-2. Point the browser bridge at a moOde-compatible HTTP control surface with `?playerApiBase=...` or `window.__TIKPAL_PLAYER_API_BASE__`; point the System API at the same device with `TIKPAL_PLAYER_API_BASE=...` so portable playback actions update real device state while preserving the existing `playback` shape.
+2. For Raspberry Pi / moOde, prefer `TIKPAL_PLAYER_BACKEND=mpc` so the System API talks to local MPD directly and keeps `SystemState.playback` synced even when tracks advance naturally. Keep `?playerApiBase=...`, `window.__TIKPAL_PLAYER_API_BASE__`, and `TIKPAL_PLAYER_API_BASE=...` for external HTTP-compatible player bridges only.
 3. Validate the frontend performance sampler on Raspberry Pi 4 and tune `normal / reduced / safe` thresholds with real FPS traces using `npm run performance:trace`.
 4. Validate OTA apply/rollback on the target service using `TIKPAL_OTA_RESTART_COMMAND` and release `health.json` checks.
