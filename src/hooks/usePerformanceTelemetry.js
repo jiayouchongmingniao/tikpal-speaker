@@ -68,6 +68,11 @@ export function usePerformanceTelemetry({
         reportRef.current?.({
           ...summary,
           activeMode: activeModeRef.current,
+          rendererType: "canvas",
+          rendererFallbackCount: 0,
+          glInitErrorCount: 0,
+          glContextLostCount: 0,
+          rendererFallbackReason: null,
         });
         resetWindow(now);
       }
