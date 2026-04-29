@@ -9,11 +9,17 @@ import { useSystemController } from "../hooks/useSystemController";
 import {
   BLANK_TAP_HIDE_OVERLAY,
   BLANK_TAP_SHOW_OVERLAY,
+  getDoubleTouchFlowSwipeIntent,
+  getSingleTouchSwipeIntent,
   getBlankTapOverlayAction,
   getChromeTrackpadPinchIntent,
   getSafariGesturePinchIntent,
+  NEXT_MODE,
+  NEXT_FLOW_STATE,
+  PREV_MODE,
   RETURN_OVERVIEW,
 } from "../interactions/systemShellInput";
+import { FLOW_ORDER } from "../theme";
 import { FONT_PRESETS } from "../typography";
 import { getOtaStatusHint } from "../viewmodels/screenContextConsumers";
 
@@ -100,6 +106,12 @@ function getGestureDirection(delta) {
   return delta > 0 ? "right" : "left";
 }
 
+function getNextFlowState(currentState) {
+  const currentIndex = FLOW_ORDER.indexOf(currentState);
+  const baseIndex = currentIndex === -1 ? 0 : currentIndex;
+  return FLOW_ORDER[(baseIndex + 1) % FLOW_ORDER.length];
+}
+
 export function SystemShell({
   initialMode = "overview",
   initialFlowState = "focus",
@@ -125,6 +137,8 @@ export function SystemShell({
     startX: 0,
     startY: 0,
     moved: false,
+    interactive: false,
+    swipeIntent: null,
   });
   const trackpadGestureRef = useRef({
     pinch: 0,
@@ -697,11 +711,13 @@ export function SystemShell({
     if (event.touches.length < 2) {
       const touch = event.touches[0];
       singleTouchTapRef.current = {
-        active: !isInteractiveTarget(event.target),
+        active: true,
         identifier: touch?.identifier ?? null,
         startX: touch?.clientX ?? 0,
         startY: touch?.clientY ?? 0,
         moved: false,
+        interactive: isInteractiveTarget(event.target),
+        swipeIntent: null,
       };
       return;
     }
@@ -709,23 +725,29 @@ export function SystemShell({
     singleTouchTapRef.current.active = false;
 
     const [firstTouch, secondTouch] = event.touches;
+    const isInteractiveStart = isInteractiveTarget(event.target);
     const startDistance = Math.hypot(
       (secondTouch?.clientX ?? 0) - (firstTouch?.clientX ?? 0),
       (secondTouch?.clientY ?? 0) - (firstTouch?.clientY ?? 0),
     );
+    const startCenterX = ((firstTouch?.clientX ?? 0) + (secondTouch?.clientX ?? 0)) / 2;
+    const startCenterY = ((firstTouch?.clientY ?? 0) + (secondTouch?.clientY ?? 0)) / 2;
 
     if (!startDistance) {
       return;
     }
 
     let didReturnOverview = false;
+    let didAdvanceFlowState = false;
 
     function onTouchMove(moveEvent) {
-      if (moveEvent.touches.length < 2 || didReturnOverview) {
+      if (moveEvent.touches.length < 2 || didReturnOverview || didAdvanceFlowState) {
         return;
       }
 
       const [nextFirstTouch, nextSecondTouch] = moveEvent.touches;
+      const nextCenterX = ((nextFirstTouch?.clientX ?? 0) + (nextSecondTouch?.clientX ?? 0)) / 2;
+      const nextCenterY = ((nextFirstTouch?.clientY ?? 0) + (nextSecondTouch?.clientY ?? 0)) / 2;
       const nextDistance = Math.hypot(
         (nextSecondTouch?.clientX ?? 0) - (nextFirstTouch?.clientX ?? 0),
         (nextSecondTouch?.clientY ?? 0) - (nextFirstTouch?.clientY ?? 0),
@@ -734,6 +756,24 @@ export function SystemShell({
       if (nextDistance / startDistance < 0.82) {
         didReturnOverview = true;
         controller.returnOverview();
+        return;
+      }
+
+      const flowSwipeIntent = getDoubleTouchFlowSwipeIntent({
+        activeMode: state.activeMode,
+        transitionStatus,
+        isInteractiveStart,
+        deltaX: nextCenterX - startCenterX,
+        deltaY: nextCenterY - startCenterY,
+        startDistance,
+        nextDistance,
+      });
+
+      if (flowSwipeIntent === NEXT_FLOW_STATE) {
+        didAdvanceFlowState = true;
+        reportInputDebug("touch double swipe next-flow-state");
+        moveEvent.preventDefault();
+        controller.setFlowState(getNextFlowState(state.flow.state));
       }
     }
 
@@ -768,6 +808,27 @@ export function SystemShell({
     ) {
       singleTouchTapRef.current.moved = true;
     }
+
+    if (singleTouchTapRef.current.swipeIntent) {
+      return;
+    }
+
+    const swipeIntent = getSingleTouchSwipeIntent({
+      activeMode: state.activeMode,
+      transitionStatus,
+      isInteractiveStart: singleTouchTapRef.current.interactive,
+      deltaX: touch.clientX - singleTouchTapRef.current.startX,
+      deltaY: touch.clientY - singleTouchTapRef.current.startY,
+    });
+
+    if (!swipeIntent) {
+      return;
+    }
+
+    singleTouchTapRef.current.swipeIntent = swipeIntent;
+    singleTouchTapRef.current.moved = true;
+    reportInputDebug(`touch swipe ${swipeIntent === NEXT_MODE ? "next" : "prev"}`);
+    event.preventDefault();
   }
 
   function onShellTouchEnd(event) {
@@ -781,14 +842,27 @@ export function SystemShell({
 
     const touch = Array.from(event.changedTouches).find((item) => item.identifier === singleTouchTapRef.current.identifier);
     const didTap = touch && !singleTouchTapRef.current.moved;
+    const swipeIntent = singleTouchTapRef.current.swipeIntent;
     singleTouchTapRef.current.active = false;
+    singleTouchTapRef.current.swipeIntent = null;
     if (didTap) {
       handleBlankTap();
+      return;
+    }
+
+    if (swipeIntent === NEXT_MODE) {
+      controller.nextMode();
+      return;
+    }
+
+    if (swipeIntent === PREV_MODE) {
+      controller.prevMode();
     }
   }
 
   function onShellTouchCancel() {
     singleTouchTapRef.current.active = false;
+    singleTouchTapRef.current.swipeIntent = null;
   }
 
   return (

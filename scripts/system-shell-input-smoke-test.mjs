@@ -4,7 +4,12 @@ import {
   BLANK_TAP_SHOW_OVERLAY,
   getBlankTapOverlayAction,
   getChromeTrackpadPinchIntent,
+  getDoubleTouchFlowSwipeIntent,
   getSafariGesturePinchIntent,
+  getSingleTouchSwipeIntent,
+  NEXT_FLOW_STATE,
+  NEXT_MODE,
+  PREV_MODE,
   RETURN_OVERVIEW,
 } from "../src/interactions/systemShellInput.js";
 import { getInitialModeFromLocation, getSurfaceFromLocation } from "../src/routing.js";
@@ -81,6 +86,130 @@ test("Safari gesture pinch keeps the shrink path and ignores pinch-out", () => {
   assert.equal(getSafariGesturePinchIntent({ activeMode: "listen", scale: 0.94 }), RETURN_OVERVIEW);
   assert.equal(getSafariGesturePinchIntent({ activeMode: "listen", scale: 1.04 }), null);
   assert.equal(getSafariGesturePinchIntent({ activeMode: "overview", scale: 0.94 }), null);
+});
+
+test("single-touch horizontal swipe maps left to next mode and right to previous mode", () => {
+  assert.equal(
+    getSingleTouchSwipeIntent({ activeMode: "listen", transitionStatus: "idle", deltaX: -88, deltaY: 12 }),
+    NEXT_MODE,
+  );
+  assert.equal(
+    getSingleTouchSwipeIntent({ activeMode: "screen", transitionStatus: "idle", deltaX: 86, deltaY: -10 }),
+    PREV_MODE,
+  );
+});
+
+test("single-touch swipe ignores vertical, short, interactive, and non-focus gestures", () => {
+  assert.equal(
+    getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: -54, deltaY: 8 }),
+    null,
+  );
+  assert.equal(
+    getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: -90, deltaY: 84 }),
+    null,
+  );
+  assert.equal(
+    getSingleTouchSwipeIntent({
+      activeMode: "flow",
+      transitionStatus: "idle",
+      isInteractiveStart: true,
+      deltaX: -120,
+      deltaY: 6,
+    }),
+    null,
+  );
+  assert.equal(
+    getSingleTouchSwipeIntent({ activeMode: "overview", transitionStatus: "idle", deltaX: -120, deltaY: 6 }),
+    null,
+  );
+  assert.equal(
+    getSingleTouchSwipeIntent({ activeMode: "listen", transitionStatus: "animating", deltaX: -120, deltaY: 6 }),
+    null,
+  );
+});
+
+test("double-touch downward swipe advances the flow state only in flow mode", () => {
+  assert.equal(
+    getDoubleTouchFlowSwipeIntent({
+      activeMode: "flow",
+      transitionStatus: "idle",
+      deltaX: 12,
+      deltaY: 104,
+      startDistance: 160,
+      nextDistance: 168,
+    }),
+    NEXT_FLOW_STATE,
+  );
+  assert.equal(
+    getDoubleTouchFlowSwipeIntent({
+      activeMode: "listen",
+      transitionStatus: "idle",
+      deltaX: 12,
+      deltaY: 104,
+      startDistance: 160,
+      nextDistance: 168,
+    }),
+    null,
+  );
+});
+
+test("double-touch flow swipe ignores pinch-like, short, horizontal, interactive, and transition gestures", () => {
+  assert.equal(
+    getDoubleTouchFlowSwipeIntent({
+      activeMode: "flow",
+      transitionStatus: "idle",
+      deltaX: 8,
+      deltaY: 60,
+      startDistance: 160,
+      nextDistance: 164,
+    }),
+    null,
+  );
+  assert.equal(
+    getDoubleTouchFlowSwipeIntent({
+      activeMode: "flow",
+      transitionStatus: "idle",
+      deltaX: 90,
+      deltaY: 96,
+      startDistance: 160,
+      nextDistance: 164,
+    }),
+    null,
+  );
+  assert.equal(
+    getDoubleTouchFlowSwipeIntent({
+      activeMode: "flow",
+      transitionStatus: "idle",
+      deltaX: 12,
+      deltaY: 104,
+      startDistance: 160,
+      nextDistance: 108,
+    }),
+    null,
+  );
+  assert.equal(
+    getDoubleTouchFlowSwipeIntent({
+      activeMode: "flow",
+      transitionStatus: "idle",
+      isInteractiveStart: true,
+      deltaX: 12,
+      deltaY: 104,
+      startDistance: 160,
+      nextDistance: 168,
+    }),
+    null,
+  );
+  assert.equal(
+    getDoubleTouchFlowSwipeIntent({
+      activeMode: "flow",
+      transitionStatus: "animating",
+      deltaX: 12,
+      deltaY: 104,
+      startDistance: 160,
+      nextDistance: 168,
+    }),
+    null,
+  );
 });
 
 console.log("SystemShell input smoke tests passed.");
