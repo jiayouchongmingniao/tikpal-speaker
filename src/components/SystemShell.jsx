@@ -1014,11 +1014,6 @@ export function SystemShell({
         />
       ) : null}
 
-      {debug ? (
-        <div className="shell-debug-badge">
-          {state.activeMode} · {transitionStatus} · {inputDebug}
-        </div>
-      ) : null}
     </div>
   );
 }

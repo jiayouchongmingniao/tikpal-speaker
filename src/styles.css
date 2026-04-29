@@ -250,10 +250,7 @@ textarea {
   right: 22px;
   bottom: 22px;
   z-index: 31;
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: flex-end;
-  gap: 12px;
+  display: block;
 }
 
 .shell-settings__trigger.is-active {
@@ -285,6 +282,9 @@ textarea {
 }
 
 .shell-power__panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
   width: min(420px, calc(100vw - 28px));
   max-height: min(64vh, 680px);
   overflow: auto;
@@ -536,21 +536,6 @@ textarea {
 .shell-button:disabled {
   opacity: 0.42;
   cursor: default;
-}
-
-.shell-debug-badge {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 30;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  opacity: 0.56;
-  pointer-events: none;
 }
 
 .portable-page {
@@ -1968,7 +1953,6 @@ textarea {
     right: 14px;
     bottom: 14px;
     left: 14px;
-    align-items: stretch;
   }
 
   .shell-settings__panel {
@@ -1977,6 +1961,8 @@ textarea {
   }
 
   .shell-power__panel {
+    right: 0;
+    bottom: calc(100% + 12px);
     width: 100%;
     max-height: min(58vh, 640px);
   }
