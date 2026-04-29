@@ -113,6 +113,20 @@ function getBearerToken(request) {
   return authHeader.slice(7);
 }
 
+function isLoopbackAddress(address = "") {
+  const normalized = String(address ?? "").trim();
+  return normalized === "127.0.0.1" || normalized === "::1" || normalized === "::ffff:127.0.0.1";
+}
+
+function isTrustedLocalUiRequest(request) {
+  const localUiHeader = String(request.headers["x-tikpal-local-ui"] ?? "").trim();
+  if (localUiHeader !== "1") {
+    return false;
+  }
+
+  return isLoopbackAddress(request.socket?.remoteAddress);
+}
+
 function resolveAuthContext(request, store, apiKey) {
   if (!apiKey) {
     return {
@@ -159,6 +173,15 @@ function resolveAuthContext(request, store, apiKey) {
       status: 401,
       code: "SESSION_INVALID",
       message: "Controller session is invalid or expired",
+    };
+  }
+
+  if (isTrustedLocalUiRequest(request)) {
+    return {
+      ok: true,
+      role: "admin",
+      kind: "trusted_local_ui",
+      session: null,
     };
   }
 

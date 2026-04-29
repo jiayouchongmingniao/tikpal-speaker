@@ -645,7 +645,8 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     return () => window.clearTimeout(timeoutId);
   }, [state.transition]);
 
-  async function dispatch(type, payload = {}, source = "speaker-ui") {
+  async function dispatch(type, payload = {}, source = "speaker-ui", options = {}) {
+    const { rethrowOnError = false } = options;
     pendingInitialModeRef.current = null;
     preferOverviewUntilActionRef.current = false;
     const optimisticState = applyLocalAction(stateRef.current, type, payload, source);
@@ -663,7 +664,11 @@ export function useSystemController({ initialMode = "overview", initialFlowState
       setState(response);
       setScreenContext(deriveScreenContext(response));
       return response;
-    } catch {
+    } catch (error) {
+      if (rethrowOnError) {
+        throw error;
+      }
+
       return optimisticState;
     }
   }
@@ -727,6 +732,12 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     async setScreenFocusItem(title) {
       return dispatch("screen_set_focus_item", { title });
     },
+    async rebootSystem() {
+      return dispatch("system_reboot", {}, "speaker-ui-power", { rethrowOnError: true });
+    },
+    async shutdownSystem() {
+      return dispatch("system_shutdown", {}, "speaker-ui-power", { rethrowOnError: true });
+    },
     async submitVoiceCapture(payload) {
       return dispatch("voice_capture_submit", payload);
     },
@@ -750,6 +761,9 @@ export function useSystemController({ initialMode = "overview", initialFlowState
       } catch {
         return null;
       }
+    },
+    hasAdminApiKey() {
+      return Boolean(systemApi.apiKey);
     },
   };
 }

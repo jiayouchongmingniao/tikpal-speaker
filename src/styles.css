@@ -232,6 +232,21 @@ textarea {
     radial-gradient(circle at bottom right, rgba(255, 125, 184, 0.12), transparent 28%),
     #05070d;
   overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+.system-shell button,
+.system-shell input,
+.system-shell select,
+.system-shell textarea,
+.system-shell label,
+.system-shell a {
+  touch-action: manipulation;
+}
+
+.system-shell input[type="range"] {
+  touch-action: pan-x;
 }
 
 .shell-settings {
@@ -1196,6 +1211,7 @@ textarea {
   transition:
     opacity 260ms ease,
     transform 260ms ease;
+  overscroll-behavior: none;
 }
 
 .overview-page {
@@ -1206,6 +1222,12 @@ textarea {
 .page-layer {
   opacity: 0;
   pointer-events: none;
+}
+
+.flow-page,
+.overview-page,
+.mode-page {
+  touch-action: none;
 }
 
 .page-layer.is-active,

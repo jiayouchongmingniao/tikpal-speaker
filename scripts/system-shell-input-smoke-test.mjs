@@ -11,6 +11,7 @@ import {
   NEXT_MODE,
   PREV_MODE,
   RETURN_OVERVIEW,
+  shouldHandleSingleTouchTap,
 } from "../src/interactions/systemShellInput.js";
 import { getInitialModeFromLocation, getSurfaceFromLocation } from "../src/routing.js";
 
@@ -57,6 +58,12 @@ test("blank tap toggles focus overlay without acting during overview or transiti
     getBlankTapOverlayAction({ isFocusMode: true, overlayVisible: false, transitionStatus: "animating" }),
     null,
   );
+});
+
+test("interactive single-touch taps do not trigger blank-shell handling", () => {
+  assert.equal(shouldHandleSingleTouchTap({ didTap: true, isInteractiveStart: false }), true);
+  assert.equal(shouldHandleSingleTouchTap({ didTap: true, isInteractiveStart: true }), false);
+  assert.equal(shouldHandleSingleTouchTap({ didTap: false, isInteractiveStart: false }), false);
 });
 
 test("Chrome ctrl wheel pinch returns from focus mode after either delta direction crosses threshold", () => {

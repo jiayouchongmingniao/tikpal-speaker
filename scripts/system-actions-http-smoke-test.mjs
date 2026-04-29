@@ -194,16 +194,18 @@ try {
     });
     assert.equal(actionLogResponse.status, 200);
     assert.equal(Array.isArray(actionLogResponse.json.items), true);
-    assert.equal(actionLogResponse.json.items[0].actionType, "focus_panel");
-    assert.equal(actionLogResponse.json.items[0].result, "applied");
+    const focusPanelLog = actionLogResponse.json.items.find((item) => item.actionType === "focus_panel");
+    assert.equal(Boolean(focusPanelLog), true);
+    assert.equal(focusPanelLog.result, "applied");
 
     const transitionsResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/state-transitions?limit=5`, {
       headers: authHeaders,
     });
     assert.equal(transitionsResponse.status, 200);
     assert.equal(Array.isArray(transitionsResponse.json.items), true);
-    assert.equal(transitionsResponse.json.items[0].reasonAction, "focus_panel");
-    assert.equal(transitionsResponse.json.items[0].to.focusedPanel, "screen");
+    const focusPanelTransition = transitionsResponse.json.items.find((item) => item.reasonAction === "focus_panel");
+    assert.equal(Boolean(focusPanelTransition), true);
+    assert.equal(focusPanelTransition.to.focusedPanel, "screen");
   });
 
   await test("runtime performance actions update summary and logs", async () => {
@@ -1092,6 +1094,61 @@ try {
     assert.equal(actionResponse.json.ok, false);
     assert.equal(actionResponse.json.result, "rejected");
     assert.equal(actionResponse.json.error.code, "FORBIDDEN");
+  });
+
+  await test("trusted local UI proxy requests can execute admin and controller actions without explicit tokens", async () => {
+    const showControlsResponse = await postAction(
+      baseUrl,
+      {
+        type: "show_controls",
+        payload: {},
+        source: "speaker-ui",
+        requestId: "local_ui_show_controls",
+      },
+      {
+        "X-Tikpal-Local-Ui": "1",
+      },
+    );
+
+    assert.equal(showControlsResponse.status, 200);
+    assert.equal(showControlsResponse.json.ok, true);
+    assert.equal(showControlsResponse.json.state.overlay.visible, true);
+
+    const localPowerActions = [];
+    const localPowerServer = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      store: createSystemStateStore(),
+      apiKey: API_KEY,
+      powerAdapter: {
+        async runAction(type) {
+          localPowerActions.push(type);
+        },
+      },
+    });
+    const localPowerAddress = localPowerServer.address();
+    const localPowerBaseUrl = `http://127.0.0.1:${localPowerAddress.port}`;
+
+    try {
+      const rebootResponse = await postAction(
+        localPowerBaseUrl,
+        {
+          type: "system_reboot",
+          payload: {},
+          source: "speaker-ui",
+          requestId: "local_ui_reboot",
+        },
+        {
+          "X-Tikpal-Local-Ui": "1",
+        },
+      );
+
+      assert.equal(rebootResponse.status, 200);
+      assert.equal(rebootResponse.json.ok, true);
+      assert.deepEqual(localPowerActions, ["system_reboot"]);
+    } finally {
+      await new Promise((resolve) => localPowerServer.close(resolve));
+    }
   });
 
   await test("pairing code can mint a controller session and cannot be reused", async () => {

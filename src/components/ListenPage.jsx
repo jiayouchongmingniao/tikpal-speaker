@@ -14,6 +14,9 @@ export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSe
   const queueLength = Math.max(1, Number(state.playback.queueLength ?? 1));
   const currentTrackIndex = Math.max(0, Number(state.playback.currentTrackIndex ?? 0));
   const nextTrackTitle = state.playback.nextTrackTitle ?? "To be announced";
+  const stopShellGesture = (event) => {
+    event.stopPropagation();
+  };
 
   return (
     <main className={`mode-page mode-page--listen ${className}`.trim()} role="application" aria-label="Listen mode">
@@ -42,7 +45,13 @@ export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSe
           </aside>
         </div>
 
-        <div className="listen-controls listen-controls--inline">
+        <div
+          className="listen-controls listen-controls--inline"
+          onPointerDown={stopShellGesture}
+          onTouchStart={stopShellGesture}
+          onTouchMove={stopShellGesture}
+          onTouchEnd={stopShellGesture}
+        >
           <button className="shell-button shell-button--ghost" type="button" onClick={onPrevTrack}>
             Prev
           </button>

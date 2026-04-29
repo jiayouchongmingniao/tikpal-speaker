@@ -18,6 +18,7 @@ import {
   NEXT_FLOW_STATE,
   PREV_MODE,
   RETURN_OVERVIEW,
+  shouldHandleSingleTouchTap,
 } from "../interactions/systemShellInput";
 import { FLOW_ORDER } from "../theme";
 import { FONT_PRESETS } from "../typography";
@@ -175,6 +176,7 @@ export function SystemShell({
           : null
       : null;
   const otaStatusHint = getOtaStatusHint(state.system);
+  const hasAdminApiKey = controller.hasAdminApiKey();
 
   usePerformanceTelemetry({
     activeMode: state.activeMode,
@@ -287,7 +289,11 @@ export function SystemShell({
 
     setPowerBusy(true);
     try {
-      await controller.dispatch(type, {}, "speaker-ui-power");
+      if (type === "system_reboot") {
+        await controller.rebootSystem();
+      } else {
+        await controller.shutdownSystem();
+      }
       setPowerNotice(type === "system_reboot" ? "Restart requested. The UI may disconnect in a moment." : "Shutdown requested. The UI may disconnect in a moment.");
       setPendingPowerAction("");
       setPowerPanelOpen(false);
@@ -842,10 +848,11 @@ export function SystemShell({
 
     const touch = Array.from(event.changedTouches).find((item) => item.identifier === singleTouchTapRef.current.identifier);
     const didTap = touch && !singleTouchTapRef.current.moved;
+    const isInteractiveTap = singleTouchTapRef.current.interactive;
     const swipeIntent = singleTouchTapRef.current.swipeIntent;
     singleTouchTapRef.current.active = false;
     singleTouchTapRef.current.swipeIntent = null;
-    if (didTap) {
+    if (shouldHandleSingleTouchTap({ didTap, isInteractiveStart: isInteractiveTap })) {
       handleBlankTap();
       return;
     }
@@ -981,6 +988,12 @@ export function SystemShell({
               Close
             </button>
           </div>
+
+          {!hasAdminApiKey ? (
+            <p className="shell-power__message shell-power__message--error">
+              Admin API key required. Open this UI with `?apiKey=...` or save the key before using reboot or shutdown.
+            </p>
+          ) : null}
 
           <p className="shell-settings__intro">
             Use a second tap to confirm. These actions affect the whole device.

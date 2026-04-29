@@ -21,6 +21,10 @@ export function getBlankTapOverlayAction({ isFocusMode, overlayVisible, transiti
   return overlayVisible ? BLANK_TAP_HIDE_OVERLAY : BLANK_TAP_SHOW_OVERLAY;
 }
 
+export function shouldHandleSingleTouchTap({ didTap = false, isInteractiveStart = false }) {
+  return Boolean(didTap && !isInteractiveStart);
+}
+
 export function getChromeTrackpadPinchIntent({ activeMode, accumulatedDeltaY = 0, deltaY = 0 }) {
   const nextDeltaY = accumulatedDeltaY + Number(deltaY ?? 0);
 
