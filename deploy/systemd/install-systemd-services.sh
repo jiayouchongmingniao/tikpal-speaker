@@ -105,6 +105,7 @@ verify_environment() {
   check_path "server entry" "$APP_DIR/server/index.js" || failures=$((failures + 1))
   check_path "dist" "$APP_DIR/dist" || failures=$((failures + 1))
   check_path "kiosk launcher" "$APP_DIR/deploy/chromium/launch-tikpal-kiosk.sh" || failures=$((failures + 1))
+  check_path "kiosk xsession" "$APP_DIR/deploy/chromium/start-tikpal-kiosk-session.sh" || failures=$((failures + 1))
   check_path "kiosk flags" "$kiosk_flags_file" || failures=$((failures + 1))
   check_path "kiosk policy source" "$APP_DIR/deploy/chromium/managed-policies.json" || failures=$((failures + 1))
 
@@ -146,6 +147,13 @@ verify_environment() {
     echo "ok: npm $(npm --version)"
   else
     echo "missing: npm"
+    failures=$((failures + 1))
+  fi
+
+  if command -v startx >/dev/null 2>&1; then
+    echo "ok: startx available"
+  else
+    echo "missing: startx"
     failures=$((failures + 1))
   fi
 
@@ -199,6 +207,12 @@ mkdir -p "$CHROMIUM_POLICY_DIR"
 install -m 0644 "$APP_DIR/deploy/chromium/managed-policies.json" "$CHROMIUM_POLICY_DIR/$CHROMIUM_POLICY_BASENAME"
 
 systemctl daemon-reload
+
+if systemctl list-unit-files kiosk.service >/dev/null 2>&1; then
+  systemctl stop kiosk.service >/dev/null 2>&1 || true
+  systemctl disable kiosk.service >/dev/null 2>&1 || true
+fi
+
 systemctl enable tikpal-api.service tikpal-web.service tikpal-kiosk.service
 systemctl restart tikpal-api.service tikpal-web.service tikpal-kiosk.service
 

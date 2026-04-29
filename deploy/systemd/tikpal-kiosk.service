@@ -9,7 +9,8 @@ User=@SERVICE_USER@
 Group=@SERVICE_GROUP@
 WorkingDirectory=@APP_DIR@
 EnvironmentFile=-@APP_DIR@/.env.kiosk
-ExecStart=/usr/bin/env bash @APP_DIR@/deploy/chromium/launch-tikpal-kiosk.sh
+Environment=XAUTHORITY=/home/@SERVICE_USER@/.Xauthority
+ExecStart=/usr/bin/env bash -lc 'APP_DIR="@APP_DIR@" /usr/bin/startx "@APP_DIR@/deploy/chromium/start-tikpal-kiosk-session.sh" -- :0 -br -nocursor'
 Restart=always
 RestartSec=5
 

@@ -160,7 +160,7 @@ await test("systemd dry-run includes kiosk service template", async () => {
   const code = await new Promise((resolve) => child.on("close", resolve));
   assert.equal(code, 0);
   assert.match(stdout, /# tikpal-kiosk\.service/);
-  assert.match(stdout, /ExecStart=\/usr\/bin\/env bash .*deploy\/chromium\/launch-tikpal-kiosk\.sh/);
+  assert.match(stdout, /ExecStart=\/usr\/bin\/env bash -lc 'APP_DIR=".*" \/usr\/bin\/startx ".*deploy\/chromium\/start-tikpal-kiosk-session\.sh" -- :0 -br -nocursor'/);
 });
 
 await test("kiosk launcher check reports missing dependencies clearly", async () => {

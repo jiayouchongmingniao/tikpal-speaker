@@ -23,6 +23,8 @@ POLICY_FILE="$TIKPAL_CHROMIUM_POLICY_DIR/$TIKPAL_CHROMIUM_POLICY_BASENAME"
 PID_FILE="$TIKPAL_KIOSK_LOG_DIR/chromium.pid"
 LOG_FILE="$TIKPAL_KIOSK_LOG_DIR/chromium.log"
 POLICY_SOURCE="$APP_DIR/deploy/chromium/managed-policies.json"
+PREFERENCES_FILE="$TIKPAL_CHROMIUM_PROFILE_DIR/Default/Preferences"
+LOCAL_STATE_FILE="$TIKPAL_CHROMIUM_PROFILE_DIR/Local State"
 
 log() {
   mkdir -p "$TIKPAL_KIOSK_LOG_DIR"
@@ -69,6 +71,41 @@ clean_profile() {
     "$TIKPAL_CHROMIUM_PROFILE_DIR/Default/Last Session" \
     "$TIKPAL_CHROMIUM_PROFILE_DIR/Default/Last Tabs"
   touch "$TIKPAL_CHROMIUM_PROFILE_DIR/First Run"
+
+  TIKPAL_CHROMIUM_PROFILE_DIR="$TIKPAL_CHROMIUM_PROFILE_DIR" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+profile_dir = Path(os.environ["TIKPAL_CHROMIUM_PROFILE_DIR"])
+targets = [
+    profile_dir / "Default" / "Preferences",
+    profile_dir / "Local State",
+]
+
+for path in targets:
+    if path.exists():
+        try:
+            data = json.loads(path.read_text())
+        except Exception:
+            data = {}
+    else:
+        data = {}
+
+    profile = data.setdefault("profile", {})
+    profile["exit_type"] = "Normal"
+    profile["exited_cleanly"] = True
+
+    session = data.setdefault("session", {})
+    if session.get("restore_on_startup") not in (4, "4"):
+        session["restore_on_startup"] = 4
+
+    browser = data.setdefault("browser", {})
+    browser["has_seen_welcome_page"] = True
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, separators=(",", ":")))
+PY
 }
 
 build_args() {
