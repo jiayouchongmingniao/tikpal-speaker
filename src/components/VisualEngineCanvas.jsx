@@ -280,6 +280,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
         width,
         height,
         ratio: viewportRef.current.ratio,
+        desiredLayerCount,
         layerCount,
         phase: livePhase,
       };

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { deriveFlowRenderDiagnostics } from "../src/viewmodels/flowRenderDiagnostics.js";
 import {
   derivePerformanceTierFromFps,
   getPerformanceDebugViewModel,
@@ -97,6 +98,73 @@ test("debug view model combines runtime metrics with render budget", () => {
   assert.equal(viewModel.budget.maxWaveLayers, 1);
   assert.equal(viewModel.budgetLabel.includes("particles 24%"), true);
   assert.equal(viewModel.tierDecisionReason, "pending_degrade_1/2");
+});
+
+test("flow render diagnostics explain full budget, budget-limited, and transition states", () => {
+  const fullBudget = deriveFlowRenderDiagnostics({
+    systemState: {
+      activeMode: "flow",
+      overlay: { visible: false },
+      transition: { status: "idle", from: "flow", to: "flow" },
+      flow: { state: "flow" },
+      system: { performanceTier: "normal", renderProfile: "off" },
+    },
+    runtimeProfile: {
+      activeBudget: getPerformanceRenderBudget("normal", "off"),
+      activeTier: "normal",
+      renderProfile: "off",
+    },
+    canvasDebug: {
+      desiredLayerCount: 3,
+      layerCount: 3,
+    },
+  });
+  assert.equal(fullBudget.waveVisualMode, "multi-wave");
+  assert.equal(fullBudget.primaryReason, "full_flow_budget");
+
+  const budgetLimited = deriveFlowRenderDiagnostics({
+    systemState: {
+      activeMode: "flow",
+      overlay: { visible: false },
+      transition: { status: "idle", from: "flow", to: "flow" },
+      flow: { state: "flow" },
+      system: { performanceTier: "safe", renderProfile: "stable" },
+    },
+    runtimeProfile: {
+      activeBudget: getPerformanceRenderBudget("safe", "stable"),
+      activeTier: "safe",
+      renderProfile: "stable",
+    },
+    canvasDebug: {
+      desiredLayerCount: 3,
+      layerCount: 1,
+    },
+  });
+  assert.equal(budgetLimited.waveVisualMode, "single-wave");
+  assert.equal(budgetLimited.primaryReason, "performance_budget");
+  assert.equal(budgetLimited.backgroundLayeringActive, false);
+
+  const transitionLimited = deriveFlowRenderDiagnostics({
+    systemState: {
+      activeMode: "flow",
+      overlay: { visible: false },
+      transition: { status: "animating", from: "listen", to: "flow" },
+      flow: { state: "flow" },
+      system: { performanceTier: "normal", renderProfile: "balanced" },
+    },
+    runtimeProfile: {
+      activeBudget: getPerformanceRenderBudget("normal", "balanced"),
+      activeTier: "normal",
+      renderProfile: "balanced",
+    },
+    canvasDebug: {
+      desiredLayerCount: 1,
+      layerCount: 1,
+    },
+  });
+  assert.equal(transitionLimited.appPhase, "transitioning");
+  assert.equal(transitionLimited.primaryReason, "transition_phase");
+  assert.equal(transitionLimited.backgroundLayeringActive, true);
 });
 
 test("performance trace summary recommends a device tier from real samples", () => {

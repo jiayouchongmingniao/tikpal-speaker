@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createSystemServiceClient } from "../bridge/systemServiceClient";
+import { deriveFlowRenderDiagnostics } from "../viewmodels/flowRenderDiagnostics";
 import { getPerformanceDebugViewModel } from "../viewmodels/performance";
 
 const CONNECTORS = ["calendar", "todoist"];
@@ -87,6 +88,14 @@ function readInputDebugEvents() {
   } catch {
     return [];
   }
+}
+
+function readCanvasDebugSnapshot() {
+  if (!window.__TIKPAL_CANVAS_DEBUG__ || typeof window.__TIKPAL_CANVAS_DEBUG__ !== "object") {
+    return null;
+  }
+
+  return window.__TIKPAL_CANVAS_DEBUG__;
 }
 
 function ConnectorControlCard({
@@ -298,10 +307,16 @@ export function ConnectorDebugPage() {
   });
   const [playerEvidence, setPlayerEvidence] = useState({});
   const [inputEvents, setInputEvents] = useState(() => readInputDebugEvents());
+  const [canvasDebug, setCanvasDebug] = useState(() => readCanvasDebugSnapshot());
   const performanceDebug = getPerformanceDebugViewModel({
     system: state?.system,
     runtimeSummary,
     draftAvgFps: Number(performanceDraft.avgFps || 0),
+  });
+  const flowRenderDiagnostics = deriveFlowRenderDiagnostics({
+    systemState: state ?? {},
+    runtimeProfile,
+    canvasDebug,
   });
   const recentTierDecisions = performanceSamples
     .filter((item) => item?.tierDecisionReason)
@@ -315,6 +330,7 @@ export function ConnectorDebugPage() {
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setInputEvents(readInputDebugEvents());
+      setCanvasDebug(readCanvasDebugSnapshot());
     }, 1000);
     return () => window.clearInterval(intervalId);
   }, []);
@@ -900,6 +916,66 @@ export function ConnectorDebugPage() {
           </div>
           <pre>{prettyJson(runtimeProfile?.activeBudget ?? performanceDebug.budget)}</pre>
           <pre>{recentTierDecisions.join("\n") || "No tier decision history yet."}</pre>
+        </section>
+
+        <section className="debug-manual-focus">
+          <div className="debug-card__header">
+            <div>
+              <span className="debug-kicker">Flow Render</span>
+              <h2>Wave layer diagnostics</h2>
+            </div>
+            <div className={`debug-status debug-status--${flowRenderDiagnostics.waveVisualMode === "multi-wave" ? "ok" : "checking"}`}>
+              <strong>{flowRenderDiagnostics.waveVisualMode}</strong>
+              <span>{flowRenderDiagnostics.primaryReason}</span>
+            </div>
+          </div>
+          <div className="debug-meta-grid debug-meta-grid--inline">
+            <div>
+              <span>App phase</span>
+              <strong>{flowRenderDiagnostics.appPhase}</strong>
+            </div>
+            <div>
+              <span>Tier</span>
+              <strong>{flowRenderDiagnostics.performanceTier}</strong>
+            </div>
+            <div>
+              <span>Render profile</span>
+              <strong>{flowRenderDiagnostics.renderProfile}</strong>
+            </div>
+            <div>
+              <span>Desired layers</span>
+              <strong>{flowRenderDiagnostics.desiredLayerCount}</strong>
+            </div>
+            <div>
+              <span>Actual layers</span>
+              <strong>{flowRenderDiagnostics.actualLayerCount}</strong>
+            </div>
+            <div>
+              <span>Budget max</span>
+              <strong>{flowRenderDiagnostics.maxWaveLayers}</strong>
+            </div>
+            <div>
+              <span>Background layering</span>
+              <strong>{flowRenderDiagnostics.backgroundLayeringActive ? "active" : "subtle"}</strong>
+            </div>
+            <div>
+              <span>Next blend</span>
+              <strong>{flowRenderDiagnostics.ambientDiagnostics.nextLayerBlendMode}</strong>
+            </div>
+            <div>
+              <span>Next opacity</span>
+              <strong>{flowRenderDiagnostics.ambientDiagnostics.nextLayerOpacity.toFixed(2)}</strong>
+            </div>
+            <div>
+              <span>Next blur</span>
+              <strong>{flowRenderDiagnostics.ambientDiagnostics.nextLayerBlurPx}px</strong>
+            </div>
+          </div>
+          <p className="debug-notice">{flowRenderDiagnostics.explanation}</p>
+          <pre>{prettyJson({
+            diagnostics: flowRenderDiagnostics,
+            canvasDebug: canvasDebug ?? {},
+          })}</pre>
         </section>
 
         <section className="debug-manual-focus">

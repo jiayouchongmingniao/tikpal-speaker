@@ -4,27 +4,8 @@ import { StateTitle } from "./StateTitle";
 import { VisualEngineCanvas } from "./VisualEngineCanvas";
 import { FLOW_THEME } from "../theme";
 import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
+import { deriveFlowAppPhase, toFlowTransitionState } from "../viewmodels/flowRenderDiagnostics";
 import { getPerformanceRenderBudget, normalizeRenderProfile } from "../viewmodels/performance";
-
-function deriveAppPhase({ activeMode, overlayVisible, flowState, transitionStatus }) {
-  if (transitionStatus !== "idle") {
-    return "transitioning";
-  }
-
-  if (flowState === "sleep" && !overlayVisible) {
-    return "sleep_dimmed";
-  }
-
-  if (overlayVisible) {
-    return "controls_visible";
-  }
-
-  if (activeMode !== "flow") {
-    return "idle_preview";
-  }
-
-  return "immersive";
-}
 
 function createDerivedMetrics(playback, flow, creativeCare) {
   const metrics = flow.audioMetrics ?? {};
@@ -38,21 +19,6 @@ function createDerivedMetrics(playback, flow, creativeCare) {
     highEnergy: Math.max(0.04, Math.min(0.5, (metrics.highEnergy ?? 0.18) + intensity * 0.04)),
     beatConfidence: metrics.beatConfidence ?? 0.12,
     isPlaying: playback.state === "play",
-  };
-}
-
-function toFlowTransitionState(transition, currentState) {
-  if (!transition || transition.status === "idle") {
-    return null;
-  }
-
-  const fromState = FLOW_THEME[transition.from] ? transition.from : currentState;
-  const toState = FLOW_THEME[transition.to] ? transition.to : currentState;
-
-  return {
-    from: fromState,
-    to: toState,
-    startedAt: transition.startedAt,
   };
 }
 
@@ -70,7 +36,7 @@ export function FlowModePage({
   const theme = FLOW_THEME[currentState];
   const creativeCare = getCreativeCareViewModel(systemState);
   const careCopy = getFlowCareCopy(currentState);
-  const appPhase = deriveAppPhase({
+  const appPhase = deriveFlowAppPhase({
     activeMode: systemState.activeMode,
     overlayVisible: systemState.overlay.visible,
     flowState: currentState,
