@@ -23,6 +23,9 @@
 | Git commit |  |
 | API URL |  |
 | UI URL |  |
+| Flow renderer |  |
+| Chromium experiment |  |
+| Render profile |  |
 | 负责人 |  |
 
 ---
@@ -208,7 +211,19 @@ export TIKPAL_PLAYER_API_BASE=http://localhost:9001/player
 
 - 默认运行档：`RPI_RENDER_PROFILE=balanced`
 - 高温或高负载兜底：`RPI_RENDER_PROFILE=stable`
-- 目标：在无可见频闪前提下，校准阈值并固化发布门禁
+- 目标：在无可见频闪前提下，Pi4 Flow 真机采样 `p10Fps >= 30`
+- Flow renderer 实验入口：`flowRenderer=canvas|auto|webgl`
+- Chromium 预设实验入口：`TIKPAL_CHROMIUM_EXPERIMENT=baseline|pi4-gpu-balanced|pi4-gpu-conservative|pi4-low-memory`
+- 默认 kiosk 发布候选组合：`flowRenderer=webgl` + `TIKPAL_CHROMIUM_EXPERIMENT=pi4-gpu-balanced`
+- 当前 Pi4 宽屏默认输出：`TIKPAL_KIOSK_XRANDR_MODE=2560x720`
+- 原生 GPU 对照：`python3 scripts/native-flow-gpu-poc.py --width 2560 --height 720 --duration 30 --out ./native-flow-gpu-poc.json`
+
+每轮 Pi4 对比都必须记录四元组：
+
+- renderer lane
+- Chromium experiment
+- render profile
+- physical output mode
 
 ### 6.2 三个 5 分钟场景采样
 
@@ -261,7 +276,7 @@ npm run validation:rpi-report -- \
 
 通过标准：
 
-- `p10Fps >= 24`
+- `p10Fps >= 30`
 - `recommendedTier` 与主观体验一致
 - `tier` 在 10 分钟窗口内不频繁往返（默认阈值：每 10 分钟 <= 6 次切换）
 - 模式切换无可见白闪/亮闪，交互路径持续可用
@@ -346,4 +361,4 @@ export TIKPAL_OTA_RESTART_COMMAND='sudo systemctl restart tikpal-api tikpal-web'
 - [ ] 可进入长期试运行
 - [ ] 需要继续工程修复
 - [ ] 需要调整产品 / 交互假设
-- [ ] 触发 OpenGL PoC 门控（满足 A/B/C 任一条件）
+- [ ] 触发 GPU PoC 门控（WebGL 与原生 GPU 并行对照）

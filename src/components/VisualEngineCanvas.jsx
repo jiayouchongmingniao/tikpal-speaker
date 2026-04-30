@@ -8,7 +8,15 @@ function roundMetric(value, digits = 3) {
   return Math.round(value * 10 ** digits) / 10 ** digits;
 }
 
-export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase, renderBudget, flowDiagnosticMode = "off" }) {
+export function VisualEngineCanvas({
+  currentState,
+  theme,
+  audioMetrics,
+  appPhase,
+  renderBudget,
+  flowDiagnosticMode = "off",
+  rendererMetadata = null,
+}) {
   const canvasRef = useRef(null);
   const currentStateRef = useRef(currentState);
   const themeRef = useRef(theme);
@@ -16,6 +24,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
   const appPhaseRef = useRef(appPhase);
   const renderBudgetRef = useRef(renderBudget);
   const flowDiagnosticModeRef = useRef(flowDiagnosticMode);
+  const rendererMetadataRef = useRef(rendererMetadata);
   const resizeRequestedRef = useRef(false);
   const staticSceneDirtyRef = useRef(true);
   const canvasMetricsRef = useRef({
@@ -45,6 +54,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
     audioMetricsRef.current = audioMetrics;
     appPhaseRef.current = appPhase;
     flowDiagnosticModeRef.current = flowDiagnosticMode;
+    rendererMetadataRef.current = rendererMetadata;
     const previousBudget = renderBudgetRef.current ?? {};
     renderBudgetRef.current = renderBudget;
     if (
@@ -54,7 +64,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       resizeRequestedRef.current = true;
     }
     staticSceneDirtyRef.current = true;
-  }, [appPhase, audioMetrics, currentState, flowDiagnosticMode, renderBudget, theme]);
+  }, [appPhase, audioMetrics, currentState, flowDiagnosticMode, renderBudget, rendererMetadata, theme]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -111,15 +121,24 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
 
       const budget = renderBudgetRef.current ?? {};
       const step = budget.waveStep ?? 18;
-
-      for (let x = 0; x <= width; x += step) {
+      const getWaveY = (x) => {
         const normalized = x / width;
         const falloff = 1 - Math.pow(Math.abs(normalized - 0.5) * 1.8, 2);
-        const y =
+        return (
           midY +
           Math.sin(normalized * 8 + time * speed + layerIndex * 0.7) * amplitude * falloff +
-          Math.cos(normalized * 13 + time * speed * 0.7) * amplitude * 0.2 * falloff;
-        context.lineTo(x, y);
+          Math.cos(normalized * 13 + time * speed * 0.7) * amplitude * 0.2 * falloff
+        );
+      };
+      let lastX = 0;
+
+      for (let x = 0; x <= width; x += step) {
+        lastX = x;
+        context.lineTo(x, getWaveY(x));
+      }
+
+      if (lastX < width) {
+        context.lineTo(width, getWaveY(width));
       }
 
       context.lineTo(width, height);
@@ -245,8 +264,10 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       const isMinimalScene = diagnosticMode !== "static" && sceneMode === "minimal";
       const frameIntervalMs = Math.max(16, Number(budget.frameIntervalMs ?? 16));
       const isLowPowerBudget =
+        isMinimalScene ||
         Number(budget.pixelRatioCap ?? 1) <= 0.85 ||
-        Number(budget.particleMultiplier ?? 1) <= 0.08 ||
+        Number(budget.renderScale ?? 1) <= 0.4 ||
+        Number(budget.particleMultiplier ?? 1) <= 0.12 ||
         Number(budget.maxWaveLayers ?? 1) <= 1;
       if (lastRenderedAt && nowMs - lastRenderedAt < frameIntervalMs) {
         canvasMetricsRef.current.skippedRenderCount += 1;
@@ -282,6 +303,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
       const layerCount = Math.min(desiredLayerCount, budget.maxWaveLayers ?? desiredLayerCount);
 
       if (isStaticScene && !staticSceneDirtyRef.current) {
+        const liveRendererMetadata = rendererMetadataRef.current ?? {};
         window.__TIKPAL_CANVAS_DEBUG__ = {
           ...canvasMetricsRef.current,
           width,
@@ -296,6 +318,13 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
           lowPowerBudget: isLowPowerBudget,
           flowSceneMode: sceneMode,
           phase: livePhase,
+          rendererType: "canvas",
+          requestedRenderer: liveRendererMetadata.requestedRenderer ?? "canvas",
+          rendererFallbackCount: liveRendererMetadata.rendererFallbackCount ?? 0,
+          glInitErrorCount: liveRendererMetadata.glInitErrorCount ?? 0,
+          glContextLostCount: liveRendererMetadata.glContextLostCount ?? 0,
+          rendererFallbackReason: liveRendererMetadata.rendererFallbackReason ?? null,
+          chromiumExperiment: liveRendererMetadata.chromiumExperiment ?? "baseline",
         };
         frameId = window.requestAnimationFrame(render);
         return;
@@ -327,20 +356,20 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
         if (!isMinimalScene) {
           const particleScale =
             livePhase === "transitioning" ? 0.12 : livePhase === "sleep_dimmed" ? 0 : liveState === "flow" ? 0.92 : 0.78;
-          const primaryParticleScale = isLowPowerBudget ? particleScale * 0.42 : particleScale;
+          const primaryParticleScale = isLowPowerBudget ? particleScale * 0.42 : particleScale * 1.08;
           drawParticles(time, smoothedMetrics, primaryParticleScale, {
             alphaHex: livePhase === "transitioning" ? "18" : "36",
             driftMultiplier: isLowPowerBudget ? 10 : 14,
           });
           if (!isLowPowerBudget && livePhase !== "transitioning" && particleScale > 0) {
-            drawParticles(time + 11, smoothedMetrics, particleScale * 0.52, {
+            drawParticles(time + 11, smoothedMetrics, particleScale * 0.62, {
               alphaHex: "26",
               driftMultiplier: 8,
               verticalOffset: 0.23,
               radiusMultiplier: 0.72,
               horizontalSpread: 1.28,
             });
-            drawBloomMotes(time, smoothedMetrics, particleScale * 0.9);
+            drawBloomMotes(time, smoothedMetrics, particleScale);
           }
         }
       }
@@ -352,6 +381,7 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
         canvasMetricsRef.current.transitionFrameBudgetHits += 1;
       }
 
+      const liveRendererMetadata = rendererMetadataRef.current ?? {};
       window.__TIKPAL_CANVAS_DEBUG__ = {
         ...canvasMetricsRef.current,
         width,
@@ -366,6 +396,13 @@ export function VisualEngineCanvas({ currentState, theme, audioMetrics, appPhase
         lowPowerBudget: isLowPowerBudget,
         flowSceneMode: sceneMode,
         phase: livePhase,
+        rendererType: "canvas",
+        requestedRenderer: liveRendererMetadata.requestedRenderer ?? "canvas",
+        rendererFallbackCount: liveRendererMetadata.rendererFallbackCount ?? 0,
+        glInitErrorCount: liveRendererMetadata.glInitErrorCount ?? 0,
+        glContextLostCount: liveRendererMetadata.glContextLostCount ?? 0,
+        rendererFallbackReason: liveRendererMetadata.rendererFallbackReason ?? null,
+        chromiumExperiment: liveRendererMetadata.chromiumExperiment ?? "baseline",
       };
 
       frameId = window.requestAnimationFrame(render);

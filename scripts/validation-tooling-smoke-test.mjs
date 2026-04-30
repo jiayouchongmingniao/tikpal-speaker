@@ -222,6 +222,64 @@ await test("kiosk launcher check fails when managed policy is missing", async ()
   assert.match(stderr, /managed policy file not found/);
 });
 
+await test("kiosk launcher check exposes renderer and Chromium experiment tuning", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tikpal-kiosk-runtime-"));
+  const flagsPath = path.join(tempDir, "chromium-flags.conf");
+  const chromiumPath = path.join(tempDir, "chromium-browser");
+  const policyDir = path.join(tempDir, "policies");
+  const profileDir = path.join(tempDir, "profile");
+  const logDir = path.join(tempDir, "logs");
+  const policyPath = path.join(policyDir, "tikpal-kiosk-managed.json");
+  await fs.mkdir(policyDir, { recursive: true });
+  await fs.mkdir(profileDir, { recursive: true });
+  await fs.mkdir(logDir, { recursive: true });
+  await fs.writeFile(flagsPath, "--start-fullscreen\n");
+  await fs.writeFile(chromiumPath, "#!/usr/bin/env bash\nexit 0\n");
+  await fs.writeFile(policyPath, "{}\n");
+  await fs.chmod(chromiumPath, 0o755);
+
+  const child = spawn("bash", ["deploy/chromium/launch-tikpal-kiosk.sh", "--check"], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      APP_DIR: process.cwd(),
+      TIKPAL_CHROMIUM_BIN: chromiumPath,
+      TIKPAL_CHROMIUM_PROFILE_DIR: profileDir,
+      TIKPAL_CHROMIUM_FLAGS_FILE: flagsPath,
+      TIKPAL_CHROMIUM_POLICY_DIR: policyDir,
+      TIKPAL_KIOSK_LOG_DIR: logDir,
+      TIKPAL_KIOSK_DISPLAY: ":0",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  const code = await new Promise((resolve) => child.on("close", resolve));
+  assert.equal(code, 0);
+  assert.match(stdout, /flow_renderer=webgl/);
+  assert.match(stdout, /chromium_experiment=pi4-gpu-balanced/);
+  assert.match(stdout, /flowRenderer=webgl/);
+  assert.match(stdout, /chromiumExperiment=pi4-gpu-balanced/);
+});
+
+await test("native Flow GPU PoC exposes CLI help without target GPU libraries", async () => {
+  const child = spawn("python3", ["scripts/native-flow-gpu-poc.py", "--help"], {
+    cwd: process.cwd(),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  const code = await new Promise((resolve) => child.on("close", resolve));
+  assert.equal(code, 0);
+  assert.match(stdout, /native Flow GPU PoC/i);
+  assert.match(stdout, /--width/);
+  assert.match(stdout, /--swap-interval/);
+});
+
 await test("rpi calibration report renders scenario and soak sections", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tikpal-rpi-report-"));
   const loopPath = path.join(tempDir, "loop.json");
@@ -262,7 +320,7 @@ await test("rpi calibration report renders scenario and soak sections", async ()
   assert.match(result.stdout, /Raspberry Pi Calibration Report/);
   assert.match(result.stdout, /Scenario Summary/);
   assert.match(result.stdout, /30 min Soak/);
-  assert.match(result.stdout, /OpenGL Gate/);
+  assert.match(result.stdout, /GPU PoC Gate/);
 });
 
 console.log("Validation tooling smoke tests passed.");

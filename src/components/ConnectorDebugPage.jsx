@@ -876,6 +876,18 @@ export function ConnectorDebugPage() {
               <strong>{runtimeProfile?.renderProfile ?? performanceDebug.renderProfile}</strong>
             </div>
             <div>
+              <span>Renderer</span>
+              <strong>{runtimeProfile?.rendererType ?? performanceDebug.rendererType}</strong>
+            </div>
+            <div>
+              <span>Requested renderer</span>
+              <strong>{runtimeProfile?.requestedRenderer ?? performanceDebug.requestedRenderer}</strong>
+            </div>
+            <div>
+              <span>Chromium experiment</span>
+              <strong>{runtimeProfile?.chromiumExperiment ?? performanceDebug.chromiumExperiment}</strong>
+            </div>
+            <div>
               <span>Suggested</span>
               <strong>{performanceDebug.suggestedTier}</strong>
             </div>
@@ -892,8 +904,24 @@ export function ConnectorDebugPage() {
               <strong>{performanceDebug.budgetLabel}</strong>
             </div>
             <div>
+              <span>Fallbacks</span>
+              <strong>{performanceDebug.rendererFallbackCount}</strong>
+            </div>
+            <div>
+              <span>GL init errors</span>
+              <strong>{performanceDebug.glInitErrorCount}</strong>
+            </div>
+            <div>
+              <span>GL context lost</span>
+              <strong>{performanceDebug.glContextLostCount}</strong>
+            </div>
+            <div>
               <span>Degrade reason</span>
               <strong>{performanceDebug.lastDegradeReason ?? "none"}</strong>
+            </div>
+            <div>
+              <span>Fallback reason</span>
+              <strong>{runtimeProfile?.rendererFallbackReason ?? performanceDebug.rendererFallbackReason ?? "none"}</strong>
             </div>
             <div>
               <span>Tier decision</span>

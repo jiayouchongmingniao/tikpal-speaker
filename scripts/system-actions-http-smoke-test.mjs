@@ -229,7 +229,20 @@ try {
       baseUrl,
       {
         type: "runtime_report_performance",
-        payload: { avgFps: 22, interactionLatencyMs: 44, memoryUsageMb: 128, activeMode: "flow", reason: "fps" },
+        payload: {
+          avgFps: 22,
+          interactionLatencyMs: 44,
+          memoryUsageMb: 128,
+          activeMode: "flow",
+          reason: "fps",
+          rendererType: "webgl",
+          requestedRenderer: "auto",
+          chromiumExperiment: "pi4-gpu-balanced",
+          rendererFallbackCount: 1,
+          glInitErrorCount: 1,
+          glContextLostCount: 0,
+          rendererFallbackReason: "webgl_init_error",
+        },
         source: "api",
         requestId: "runtime_report_perf_1",
       },
@@ -251,7 +264,7 @@ try {
     );
     assert.equal(secondReportResponse.status, 200);
     assert.equal(secondReportResponse.json.state.system.performanceTier, "safe");
-    assert.equal(secondReportResponse.json.state.system.performance.tierDecisionReason, "degrade_fps_below_24_x2");
+    assert.equal(secondReportResponse.json.state.system.performance.tierDecisionReason, "degrade_fps_below_30_x2");
 
     const runtimeSummaryResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/summary`, {
       headers: authHeaders,
@@ -259,6 +272,12 @@ try {
     assert.equal(runtimeSummaryResponse.status, 200);
     assert.equal(runtimeSummaryResponse.json.performanceTier, "safe");
     assert.equal(runtimeSummaryResponse.json.avgFps, 22);
+    assert.equal(runtimeSummaryResponse.json.rendererType, "webgl");
+    assert.equal(runtimeSummaryResponse.json.requestedRenderer, "auto");
+    assert.equal(runtimeSummaryResponse.json.chromiumExperiment, "pi4-gpu-balanced");
+    assert.equal(runtimeSummaryResponse.json.rendererFallbackCount, 1);
+    assert.equal(runtimeSummaryResponse.json.glInitErrorCount, 1);
+    assert.equal(runtimeSummaryResponse.json.rendererFallbackReason, "webgl_init_error");
     assert.equal(runtimeSummaryResponse.json.lastDegradeReason, "fps");
     assert.equal(typeof runtimeSummaryResponse.json.tierCooldownRemainingMs, "number");
 
@@ -267,6 +286,9 @@ try {
     });
     assert.equal(runtimeProfileResponse.status, 200);
     assert.equal(runtimeProfileResponse.json.activeTier, "safe");
+    assert.equal(runtimeProfileResponse.json.rendererType, "webgl");
+    assert.equal(runtimeProfileResponse.json.requestedRenderer, "auto");
+    assert.equal(runtimeProfileResponse.json.chromiumExperiment, "pi4-gpu-balanced");
     assert.equal(typeof runtimeProfileResponse.json.activeBudget, "object");
 
     const samplesResponse = await requestJson(`${baseUrl}/api/v1/system/runtime/performance-samples?limit=3`, {
@@ -275,10 +297,13 @@ try {
     assert.equal(samplesResponse.status, 200);
     assert.equal(samplesResponse.json.items[0].avgFps, 22);
     assert.equal(samplesResponse.json.items[0].tier, "safe");
-    assert.equal(samplesResponse.json.items[0].tierDecisionReason, "degrade_fps_below_24_x2");
+    assert.equal(samplesResponse.json.items[0].tierDecisionReason, "degrade_fps_below_30_x2");
     assert.equal(samplesResponse.json.items[0].activeMode, "flow");
     assert.equal(samplesResponse.json.items[0].interactionLatencyMs, 46);
     assert.equal(samplesResponse.json.items[0].memoryUsageMb, 130);
+    assert.equal(samplesResponse.json.items[1].rendererType, "webgl");
+    assert.equal(samplesResponse.json.items[1].requestedRenderer, "auto");
+    assert.equal(samplesResponse.json.items[1].chromiumExperiment, "pi4-gpu-balanced");
   });
 
   await test("ota check, apply, and rollback expose a verifiable update lifecycle", async () => {

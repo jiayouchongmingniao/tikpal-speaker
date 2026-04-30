@@ -72,6 +72,17 @@ export function usePerformanceTelemetry({
                       ? "minimal"
                       : "animated",
                 phase: String(window.__TIKPAL_CANVAS_DEBUG__.phase ?? ""),
+                rendererType: String(window.__TIKPAL_CANVAS_DEBUG__.rendererType ?? "canvas"),
+                requestedRenderer: String(window.__TIKPAL_CANVAS_DEBUG__.requestedRenderer ?? "canvas"),
+                rendererFallbackCount: Number(window.__TIKPAL_CANVAS_DEBUG__.rendererFallbackCount ?? 0),
+                glInitErrorCount: Number(window.__TIKPAL_CANVAS_DEBUG__.glInitErrorCount ?? 0),
+                glContextLostCount: Number(window.__TIKPAL_CANVAS_DEBUG__.glContextLostCount ?? 0),
+                rendererFallbackReason:
+                  window.__TIKPAL_CANVAS_DEBUG__.rendererFallbackReason === null ||
+                  window.__TIKPAL_CANVAS_DEBUG__.rendererFallbackReason === undefined
+                    ? null
+                    : String(window.__TIKPAL_CANVAS_DEBUG__.rendererFallbackReason),
+                chromiumExperiment: String(window.__TIKPAL_CANVAS_DEBUG__.chromiumExperiment ?? "baseline"),
               }
             : null;
         const summary = summarizeFrameWindow({
@@ -86,11 +97,13 @@ export function usePerformanceTelemetry({
           ...summary,
           activeMode: activeModeRef.current,
           flowDiagnosticMode: diagnostics?.flowDiagnosticMode ?? "off",
-          rendererType: "canvas",
-          rendererFallbackCount: 0,
-          glInitErrorCount: 0,
-          glContextLostCount: 0,
-          rendererFallbackReason: null,
+          rendererType: diagnostics?.rendererType ?? "canvas",
+          requestedRenderer: diagnostics?.requestedRenderer ?? "canvas",
+          rendererFallbackCount: diagnostics?.rendererFallbackCount ?? 0,
+          glInitErrorCount: diagnostics?.glInitErrorCount ?? 0,
+          glContextLostCount: diagnostics?.glContextLostCount ?? 0,
+          rendererFallbackReason: diagnostics?.rendererFallbackReason ?? null,
+          chromiumExperiment: diagnostics?.chromiumExperiment ?? "baseline",
         });
         resetWindow(now);
       }

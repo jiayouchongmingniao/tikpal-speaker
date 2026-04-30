@@ -1,10 +1,11 @@
 import { AmbientBackground } from "./AmbientBackground";
+import { FlowVisualRenderer } from "./FlowVisualRenderer";
 import { SideInfoPanel } from "./SideInfoPanel";
 import { StateTitle } from "./StateTitle";
-import { VisualEngineCanvas } from "./VisualEngineCanvas";
 import { FLOW_THEME } from "../theme";
 import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
 import { deriveFlowAppPhase, toFlowTransitionState } from "../viewmodels/flowRenderDiagnostics";
+import { getFlowRendererRuntimeConfig } from "../viewmodels/flowRenderer";
 import {
   getPerformanceRenderBudget,
   isMinimalFlowRenderBudget,
@@ -61,6 +62,7 @@ export function FlowModePage({
   const renderProfile = normalizeRenderProfile(systemState.system?.renderProfile ?? "off");
   const flowDiagnosticMode = systemState.system?.flowDiagnosticMode === "static" ? "static" : "off";
   const renderBudget = getPerformanceRenderBudget(performanceTier, renderProfile);
+  const runtimeRendererConfig = getFlowRendererRuntimeConfig(window.location);
   const isStaticFlowBudget = isStaticFlowRenderBudget(renderBudget);
   const isMinimalFlowBudget = isMinimalFlowRenderBudget(renderBudget);
 
@@ -82,13 +84,15 @@ export function FlowModePage({
         renderProfile={renderProfile}
         flowDiagnosticMode={flowDiagnosticMode}
       />
-      <VisualEngineCanvas
+      <FlowVisualRenderer
         currentState={currentState}
         theme={theme}
         audioMetrics={audioMetrics}
         appPhase={appPhase}
         renderBudget={renderBudget}
         flowDiagnosticMode={flowDiagnosticMode}
+        rendererPreference={runtimeRendererConfig.flowRenderer}
+        chromiumExperiment={runtimeRendererConfig.chromiumExperiment}
       />
       <section className="flow-page__content">
         <div className="flow-care-stack">

@@ -5,9 +5,11 @@ import {
   getPerformanceDebugViewModel,
   getPerformanceRenderBudget,
   isStaticFlowRenderBudget,
+  PI4_TARGET_FRAME_INTERVAL_MS,
   summarizeFrameWindow,
   summarizePerformanceTrace,
 } from "../src/viewmodels/performance.js";
+import { getFlowRendererRuntimeConfig, normalizeChromiumExperiment, normalizeFlowRenderer } from "../src/viewmodels/flowRenderer.js";
 
 function test(name, fn) {
   try {
@@ -21,9 +23,11 @@ function test(name, fn) {
 
 test("performance tier thresholds match runtime telemetry policy", () => {
   assert.equal(derivePerformanceTierFromFps(60), "normal");
-  assert.equal(derivePerformanceTierFromFps(30), "normal");
-  assert.equal(derivePerformanceTierFromFps(29.9), "reduced");
-  assert.equal(derivePerformanceTierFromFps(24), "reduced");
+  assert.equal(derivePerformanceTierFromFps(36), "normal");
+  assert.equal(derivePerformanceTierFromFps(35.9), "reduced");
+  assert.equal(derivePerformanceTierFromFps(30), "reduced");
+  assert.equal(derivePerformanceTierFromFps(29.9), "safe");
+  assert.equal(derivePerformanceTierFromFps(32), "reduced");
   assert.equal(derivePerformanceTierFromFps(23.9), "safe");
   assert.equal(derivePerformanceTierFromFps(Number.NaN, "reduced"), "reduced");
 });
@@ -50,11 +54,23 @@ test("rpi render profiles tighten budgets while desktop defaults stay unchanged"
 
   assert.equal(desktop.pixelRatioCap > balanced.pixelRatioCap, true);
   assert.equal(balanced.pixelRatioCap > stable.pixelRatioCap, true);
-  assert.equal(desktop.maxWaveLayers > balanced.maxWaveLayers, true);
+  assert.equal(desktop.renderScale > balanced.renderScale, true);
+  assert.equal(balanced.maxWaveLayers >= stable.maxWaveLayers, true);
   assert.equal(balanced.particleMultiplier > stable.particleMultiplier, true);
-  assert.equal(stableSafe.renderScale, 0.24);
+  assert.equal(stableSafe.renderScale, 0.2);
   assert.equal(isStaticFlowRenderBudget(stableSafe), false);
   assert.equal(stableSafe.flowSceneMode, "minimal");
+
+  for (const profile of ["balanced", "stable"]) {
+    for (const tier of ["normal", "reduced", "safe"]) {
+      const budget = getPerformanceRenderBudget(tier, profile);
+      assert.equal(
+        budget.frameIntervalMs <= PI4_TARGET_FRAME_INTERVAL_MS,
+        true,
+        `${profile}/${tier} must not throttle below the Pi4 30fps target`,
+      );
+    }
+  }
 });
 
 test("frame window summary reports fps, latency, and optional memory", () => {
@@ -91,6 +107,13 @@ test("debug view model combines runtime metrics with render budget", () => {
         interactionLatencyMs: 38,
         memoryUsageMb: 96,
         lastDegradeReason: "fps",
+        rendererType: "webgl",
+        requestedRenderer: "auto",
+        chromiumExperiment: "pi4-gpu-balanced",
+        rendererFallbackCount: 2,
+        glInitErrorCount: 1,
+        glContextLostCount: 0,
+        rendererFallbackReason: "webgl_init_error",
         tierDecisionReason: "pending_degrade_1/2",
         tierCooldownRemainingMs: 0,
       },
@@ -99,12 +122,33 @@ test("debug view model combines runtime metrics with render budget", () => {
 
   assert.equal(viewModel.tier, "reduced");
   assert.equal(viewModel.renderProfile, "balanced");
-  assert.equal(viewModel.suggestedTier, "reduced");
-  assert.equal(viewModel.budget.maxWaveLayers, 1);
-  assert.equal(viewModel.budget.renderScale, 1);
-  assert.equal(viewModel.budgetLabel.includes("particles 24%"), true);
-  assert.equal(viewModel.budgetLabel.includes("scale 100%"), true);
+  assert.equal(viewModel.suggestedTier, "safe");
+  assert.equal(viewModel.budget.maxWaveLayers, 2);
+  assert.equal(viewModel.budget.renderScale, 0.5);
+  assert.equal(viewModel.rendererType, "webgl");
+  assert.equal(viewModel.requestedRenderer, "auto");
+  assert.equal(viewModel.chromiumExperiment, "pi4-gpu-balanced");
+  assert.equal(viewModel.rendererFallbackCount, 2);
+  assert.equal(viewModel.glInitErrorCount, 1);
+  assert.equal(viewModel.rendererFallbackReason, "webgl_init_error");
+  assert.equal(viewModel.budgetLabel.includes("particles 12%"), true);
+  assert.equal(viewModel.budgetLabel.includes("scale 50%"), true);
+  assert.equal(viewModel.budgetLabel.includes("30fps"), true);
   assert.equal(viewModel.tierDecisionReason, "pending_degrade_1/2");
+});
+
+test("flow renderer runtime config normalizes query params", () => {
+  assert.equal(normalizeFlowRenderer("webgl"), "webgl");
+  assert.equal(normalizeFlowRenderer("gl"), "webgl");
+  assert.equal(normalizeFlowRenderer("unknown"), "canvas");
+  assert.equal(normalizeChromiumExperiment(" Pi4 GPU Balanced "), "pi4-gpu-balanced");
+  assert.deepEqual(
+    getFlowRendererRuntimeConfig({ search: "?flowRenderer=auto&chromiumExperiment=Pi4+GPU+Balanced" }),
+    {
+      flowRenderer: "auto",
+      chromiumExperiment: "pi4-gpu-balanced",
+    },
+  );
 });
 
 test("flow render diagnostics explain full budget, budget-limited, and transition states", () => {

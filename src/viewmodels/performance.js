@@ -28,62 +28,64 @@ export const PERFORMANCE_RENDER_BUDGETS = {
   },
 };
 
+export const PI4_TARGET_FRAME_INTERVAL_MS = 33;
+
 export const RPI_RENDER_PROFILE_OVERRIDES = {
   balanced: {
     normal: {
-      pixelRatioCap: 1.4,
-      renderScale: 1,
-      waveStep: 24,
-      maxWaveLayers: 2,
-      particleMultiplier: 0.5,
-      frameIntervalMs: 33,
+      pixelRatioCap: 1.2,
+      renderScale: 0.82,
+      waveStep: 26,
+      maxWaveLayers: 3,
+      particleMultiplier: 0.42,
+      frameIntervalMs: PI4_TARGET_FRAME_INTERVAL_MS,
       flowSceneMode: "animated",
     },
     reduced: {
-      pixelRatioCap: 1.15,
-      renderScale: 1,
-      waveStep: 28,
-      maxWaveLayers: 1,
-      particleMultiplier: 0.24,
-      frameIntervalMs: 42,
+      pixelRatioCap: 0.9,
+      renderScale: 0.5,
+      waveStep: 46,
+      maxWaveLayers: 2,
+      particleMultiplier: 0.12,
+      frameIntervalMs: PI4_TARGET_FRAME_INTERVAL_MS,
       flowSceneMode: "animated",
     },
     safe: {
-      pixelRatioCap: 0.68,
-      renderScale: 0.36,
-      waveStep: 72,
+      pixelRatioCap: 0.56,
+      renderScale: 0.28,
+      waveStep: 96,
       maxWaveLayers: 1,
       particleMultiplier: 0,
-      frameIntervalMs: 90,
+      frameIntervalMs: PI4_TARGET_FRAME_INTERVAL_MS,
       flowSceneMode: "minimal",
     },
   },
   stable: {
     normal: {
-      pixelRatioCap: 1,
-      renderScale: 1,
-      waveStep: 30,
-      maxWaveLayers: 1,
-      particleMultiplier: 0.18,
-      frameIntervalMs: 42,
+      pixelRatioCap: 0.82,
+      renderScale: 0.5,
+      waveStep: 40,
+      maxWaveLayers: 2,
+      particleMultiplier: 0.16,
+      frameIntervalMs: PI4_TARGET_FRAME_INTERVAL_MS,
       flowSceneMode: "animated",
     },
     reduced: {
-      pixelRatioCap: 0.72,
-      renderScale: 0.5,
-      waveStep: 48,
+      pixelRatioCap: 0.62,
+      renderScale: 0.36,
+      waveStep: 80,
       maxWaveLayers: 1,
-      particleMultiplier: 0,
-      frameIntervalMs: 66,
-      flowSceneMode: "animated",
+      particleMultiplier: 0.04,
+      frameIntervalMs: PI4_TARGET_FRAME_INTERVAL_MS,
+      flowSceneMode: "minimal",
     },
     safe: {
-      pixelRatioCap: 0.5,
-      renderScale: 0.24,
-      waveStep: 120,
+      pixelRatioCap: 0.45,
+      renderScale: 0.2,
+      waveStep: 132,
       maxWaveLayers: 1,
       particleMultiplier: 0,
-      frameIntervalMs: 120,
+      frameIntervalMs: PI4_TARGET_FRAME_INTERVAL_MS,
       flowSceneMode: "minimal",
     },
   },
@@ -119,11 +121,11 @@ export function derivePerformanceTierFromFps(avgFps, fallbackTier = "normal") {
     return fallbackTier;
   }
 
-  if (avgFps < 24) {
+  if (avgFps < 30) {
     return "safe";
   }
 
-  if (avgFps < 30) {
+  if (avgFps < 36) {
     return "reduced";
   }
 
@@ -184,10 +186,10 @@ export function summarizePerformanceTrace(samples = []) {
   const recommendedTier = derivePerformanceTierFromFps(Math.min(avgFps ?? 60, p10Fps ?? avgFps ?? 60));
   const reasons = [];
 
-  if (p10Fps !== null && p10Fps < 24) {
-    reasons.push("p10_fps_below_24");
-  } else if (p10Fps !== null && p10Fps < 30) {
+  if (p10Fps !== null && p10Fps < 30) {
     reasons.push("p10_fps_below_30");
+  } else if (p10Fps !== null && p10Fps < 36) {
+    reasons.push("p10_fps_below_36");
   }
 
   if (maxInteractionLatencyMs !== null && maxInteractionLatencyMs > 80) {
@@ -221,10 +223,17 @@ export function getPerformanceDebugViewModel({ system = {}, runtimeSummary = nul
     tier,
     suggestedTier: derivePerformanceTierFromFps(avgFps, tier),
     renderProfile,
+    rendererType: runtimeSummary?.rendererType ?? performance.rendererType ?? "canvas",
+    requestedRenderer: runtimeSummary?.requestedRenderer ?? performance.requestedRenderer ?? "canvas",
+    chromiumExperiment: runtimeSummary?.chromiumExperiment ?? performance.chromiumExperiment ?? "baseline",
     avgFps,
     interactionLatencyMs: runtimeSummary?.interactionLatencyMs ?? performance.interactionLatencyMs ?? null,
     memoryUsageMb: runtimeSummary?.memoryUsageMb ?? performance.memoryUsageMb ?? null,
     lastDegradeReason: runtimeSummary?.lastDegradeReason ?? performance.lastDegradeReason ?? null,
+    rendererFallbackCount: runtimeSummary?.rendererFallbackCount ?? performance.rendererFallbackCount ?? 0,
+    glInitErrorCount: runtimeSummary?.glInitErrorCount ?? performance.glInitErrorCount ?? 0,
+    glContextLostCount: runtimeSummary?.glContextLostCount ?? performance.glContextLostCount ?? 0,
+    rendererFallbackReason: runtimeSummary?.rendererFallbackReason ?? performance.rendererFallbackReason ?? null,
     tierDecisionReason,
     tierCooldownUntil,
     tierCooldownRemainingMs,

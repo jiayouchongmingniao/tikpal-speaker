@@ -40,22 +40,26 @@ export function deriveAmbientBackgroundDiagnostics({
   transitionState,
   appPhase = "immersive",
   renderProfile = "off",
+  performanceTier = "normal",
+  flowDiagnosticMode = "off",
 } = {}) {
   const normalizedProfile = normalizeRenderProfile(renderProfile);
   const isTransitioning = appPhase === "transitioning";
   const isStableProfile = normalizedProfile === "balanced" || normalizedProfile === "stable";
+  const isLowPowerTier = performanceTier === "safe" || (normalizedProfile === "stable" && performanceTier !== "normal");
+  const isStaticDiagnostic = flowDiagnosticMode === "static";
   const rawNextOpacity = isTransitioning
     ? 0.52
     : normalizedProfile === "stable"
-      ? 0.4
+      ? 0.22
       : isStableProfile
         ? 0.48
         : 0.58;
   const nextLayerOpacity = transitionState ? rawNextOpacity : rawNextOpacity * 0.82;
-  const nextLayerBlendMode = normalizedProfile === "stable" ? "screen" : isStableProfile ? "soft-light" : "screen";
-  const nextLayerBlurPx = normalizedProfile === "stable" ? 5 : isStableProfile ? 8 : 12;
-  const backgroundLayeringActive = nextLayerOpacity >= 0.42;
-  const profileSuppressed = normalizedProfile === "stable" || normalizedProfile === "balanced";
+  const nextLayerBlendMode = isStaticDiagnostic || normalizedProfile === "stable" || isLowPowerTier ? "normal" : isStableProfile ? "soft-light" : "screen";
+  const nextLayerBlurPx = normalizedProfile === "stable" || isStaticDiagnostic || isLowPowerTier ? 0 : isStableProfile ? 8 : 12;
+  const profileSuppressed = normalizedProfile === "stable" || isLowPowerTier || isStaticDiagnostic;
+  const backgroundLayeringActive = !profileSuppressed || nextLayerOpacity >= 0.42;
 
   return {
     backgroundLayeringActive,
@@ -98,6 +102,8 @@ export function deriveFlowRenderDiagnostics({
     transitionState,
     appPhase,
     renderProfile,
+    performanceTier,
+    flowDiagnosticMode: systemState.system?.flowDiagnosticMode ?? "off",
   });
   const waveVisualMode = actualLayerCount <= 1 ? "single-wave" : "multi-wave";
   const budgetLimited = actualLayerCount < desiredLayerCount;

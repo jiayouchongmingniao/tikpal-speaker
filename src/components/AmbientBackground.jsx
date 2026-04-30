@@ -15,25 +15,32 @@ export function AmbientBackground({
       : baseTheme;
   const isTransitioning = appPhase === "transitioning";
   const isStableProfile = renderProfile === "balanced" || renderProfile === "stable";
-  const isLowPowerTier = performanceTier === "safe";
+  const isPiStableProfile = renderProfile === "stable";
+  const isLowPowerTier = performanceTier === "safe" || (isPiStableProfile && performanceTier !== "normal");
   const isStaticDiagnostic = flowDiagnosticMode === "static";
+  const suppressDepthLayers = isLowPowerTier || isStaticDiagnostic || isPiStableProfile;
   const nextOpacity = isStaticDiagnostic
     ? 0.34
     : isTransitioning
       ? 0.52
       : renderProfile === "stable"
-        ? 0.4
+        ? 0.22
         : isStableProfile
           ? 0.48
           : 0.58;
   const nextBlur =
-    isStaticDiagnostic || renderProfile === "stable" || isLowPowerTier ? "blur(4px)" : isStableProfile ? "blur(8px)" : "blur(12px)";
+    isPiStableProfile || isStaticDiagnostic || isLowPowerTier ? "none" : isStableProfile ? "blur(8px)" : "blur(12px)";
   const nextBlendMode =
     isStaticDiagnostic || renderProfile === "stable" || isLowPowerTier ? "normal" : isStableProfile ? "soft-light" : "screen";
   const baseOpacity = isTransitioning ? 0.98 : 0.92;
   const auraOpacity = isTransitioning ? 0.16 : renderProfile === "stable" ? 0.24 : isStableProfile ? 0.3 : 0.38;
   const auraBlur = renderProfile === "stable" ? "blur(22px)" : isStableProfile ? "blur(28px)" : "blur(34px)";
   const contourOpacity = isTransitioning ? 0.12 : renderProfile === "stable" ? 0.16 : isStableProfile ? 0.2 : 0.24;
+  const nextLayerBackground = isPiStableProfile
+    ? `radial-gradient(ellipse at 42% 44%, ${nextTheme.glow}38 0%, transparent 46%),
+      radial-gradient(ellipse at 18% 28%, ${baseTheme.accent}22 0%, transparent 40%)`
+    : `radial-gradient(circle at 72% 40%, ${nextTheme.glow} 0%, transparent 38%),
+      linear-gradient(160deg, ${nextTheme.bgGradient.join(", ")})`;
 
   return (
     <div className="ambient-bg" aria-hidden="true">
@@ -48,14 +55,13 @@ export function AmbientBackground({
       <div
         className="ambient-bg__layer ambient-bg__layer--next"
         style={{
-          background: `radial-gradient(circle at 72% 40%, ${nextTheme.glow} 0%, transparent 38%),
-            linear-gradient(160deg, ${nextTheme.bgGradient.join(", ")})`,
+          background: nextLayerBackground,
           opacity: transitionState ? nextOpacity : nextOpacity * 0.82,
           filter: nextBlur,
           mixBlendMode: nextBlendMode,
         }}
       />
-      {!isLowPowerTier && !isStaticDiagnostic ? (
+      {!suppressDepthLayers ? (
         <div
           className="ambient-bg__layer ambient-bg__layer--depth"
           style={{
@@ -68,7 +74,7 @@ export function AmbientBackground({
           }}
         />
       ) : null}
-      {!isLowPowerTier && !isStaticDiagnostic ? (
+      {!suppressDepthLayers ? (
         <div
           className="ambient-bg__layer ambient-bg__layer--contour"
           style={{

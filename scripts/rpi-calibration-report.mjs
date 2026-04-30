@@ -3,6 +3,7 @@ import { execSync } from "node:child_process";
 import { summarizePerformanceTrace } from "../src/viewmodels/performance.js";
 
 const DEFAULT_SWITCHES_PER_10_MIN_LIMIT = 6;
+const TARGET_P10_FPS = 30;
 
 function parseArgs(argv) {
   const args = {
@@ -144,7 +145,7 @@ function summarizeTierStability(samples) {
 function summarizeScenario(name, samples, switchesPer10MinLimit) {
   const trace = summarizePerformanceTrace(samples);
   const stability = summarizeTierStability(samples);
-  const performancePass = typeof trace.p10Fps === "number" && trace.p10Fps >= 24;
+  const performancePass = typeof trace.p10Fps === "number" && trace.p10Fps >= TARGET_P10_FPS;
   const stabilityPass =
     stability.switchesPer10Min === null ? true : stability.switchesPer10Min <= switchesPer10MinLimit;
 
@@ -184,7 +185,7 @@ function renderScenarioRow(item) {
 
 function renderReport(args, scenarios, soakScenario) {
   const commit = args.commit || safeExec("git rev-parse --short HEAD");
-  const openglGateByData = scenarios.some((item) => typeof item.p10Fps === "number" && item.p10Fps < 24);
+  const gpuPocGateByData = scenarios.some((item) => typeof item.p10Fps === "number" && item.p10Fps < TARGET_P10_FPS);
   const allScenarioPass = scenarios.every((item) => item.performancePass && item.stabilityPass);
   const soakPass = soakScenario ? soakScenario.performancePass && soakScenario.stabilityPass : null;
   const releaseGatePass = allScenarioPass && (soakPass === null ? true : soakPass);
@@ -226,24 +227,24 @@ ${scenarios.map(renderScenarioRow).join("\n")}
 
 | Gate | Result | Notes |
 | --- | --- | --- |
-| Performance (p10Fps >= 24) | ${statusLabel(scenarios.every((item) => item.performancePass))} | Scenario-level automatic check |
+| Performance (p10Fps >= ${TARGET_P10_FPS}) | ${statusLabel(scenarios.every((item) => item.performancePass))} | Scenario-level automatic check |
 | Stability (tier switches controlled) | ${statusLabel(scenarios.every((item) => item.stabilityPass))} | Uses configured switch limit |
 | 30 min soak | ${soakPass === null ? "SKIPPED" : statusLabel(soakPass)} | Recommended before release |
 | Visual no-flicker (manual) | TODO | Confirm no white/brightness flash while switching modes |
 | Interaction continuity (manual) | TODO | Confirm flow playback and screen pomodoro remain responsive |
 
-## OpenGL Gate
+## GPU PoC Gate
 
 | Condition | Result |
 | --- | --- |
 | A) Visible flicker still exists (manual) | TODO |
-| B) Data gate: p10Fps < 24 or severe transition instability | ${statusLabel(openglGateByData)} |
+| B) Data gate: p10Fps < ${TARGET_P10_FPS} or severe transition instability | ${statusLabel(gpuPocGateByData)} |
 | C) Critical interaction frame drops unacceptable (manual) | TODO |
 
 ## Recommendation
 
-${releaseGatePass ? "- Keep current Web/Canvas path; no OpenGL PoC needed for this round." : "- Hold release and perform light threshold tuning (upgrade threshold/cooldown first)."}
-${openglGateByData ? "- OpenGL PoC gate B is triggered by current data. Prepare Flow-only PoC scope." : "- OpenGL PoC remains deferred unless manual gates A/C are triggered."}
+${releaseGatePass ? "- Keep current WebGL path as the release candidate while preserving Canvas fallback and native GPU evidence." : "- Hold release and continue WebGL/native GPU PoC comparison before treating the current path as shippable."}
+${gpuPocGateByData ? "- GPU PoC gate B is triggered by current data. Run both Flow WebGL and native X11/EGL/GLES lanes at the same physical output." : "- GPU PoC remains a parallel validation lane unless manual gates A/C are triggered."}
 `;
 }
 

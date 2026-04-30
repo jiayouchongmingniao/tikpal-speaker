@@ -131,17 +131,42 @@ Kiosk-specific environment lives in `.env.kiosk`:
 - `TIKPAL_KIOSK_URL=http://localhost:4173/flow/`
 - `TIKPAL_KIOSK_WINDOW=2560x720`
 - `TIKPAL_KIOSK_DISPLAY=:0`
+- `TIKPAL_KIOSK_XRANDR_MODE=2560x720`
+- `TIKPAL_KIOSK_XRANDR_RATE=`
+- `TIKPAL_KIOSK_XRANDR_OUTPUT=auto`
 - `TIKPAL_CHROMIUM_BIN=/usr/lib/chromium-browser/chromium-browser`
 - `TIKPAL_CHROMIUM_PROFILE_DIR=/home/moode/.config/tikpal-chromium-kiosk`
 - `TIKPAL_CHROMIUM_FLAGS_FILE=/home/moode/code/tikpal-speaker/deploy/chromium/chromium-flags.conf`
 - `TIKPAL_CHROMIUM_POLICY_DIR=/etc/chromium/policies/managed`
 - `TIKPAL_CHROMIUM_POLICY_BASENAME=tikpal-kiosk-managed.json`
+- `TIKPAL_FLOW_RENDERER=webgl`
+- `TIKPAL_CHROMIUM_EXPERIMENT=pi4-gpu-balanced`
+- `TIKPAL_KIOSK_APPEND_QUERY=1`
 
 The Chromium launcher validates its dependencies without opening a browser:
 
 ```bash
 APP_DIR=/home/moode/code/tikpal-speaker bash deploy/chromium/launch-tikpal-kiosk.sh --check
 ```
+
+Pi4 tuning stays outside the Chromium source tree. The default kiosk profile targets a measured `p10Fps >= 30` on Raspberry Pi 4 while preserving the physical `2560x720` output:
+
+- `TIKPAL_KIOSK_XRANDR_MODE=2560x720` keeps the real panel output at full width. Lower internal render cost with `renderScale`, not by shrinking the physical display mode.
+- `TIKPAL_FLOW_RENDERER=canvas|auto|webgl` appends `flowRenderer=...` to the kiosk URL so Flow can compare Canvas vs Flow-only WebGL without forking the browser.
+- `TIKPAL_CHROMIUM_EXPERIMENT=baseline|pi4-gpu-balanced|pi4-gpu-conservative|pi4-low-memory` applies repeatable flag presets around the stock Chromium package.
+- Keep durable flags in `deploy/chromium/chromium-flags.conf`; treat unsupported or no-op flags as experiment artifacts until Pi traces show they help.
+- Native GPU comparison uses `python3 scripts/native-flow-gpu-poc.py --width 2560 --height 720 --duration 30 --out ./native-flow-gpu-poc.json` from the Pi X session.
+
+Suggested Pi4 experiment matrix:
+
+| Renderer | Chromium experiment | Intended tradeoff |
+| --- | --- | --- |
+| `canvas` | `baseline` | Release-gate baseline |
+| `webgl` | `pi4-gpu-balanced` | Default Pi4 release candidate for measured `p10Fps >= 30` at physical 2560x720 |
+| `canvas` | `pi4-gpu-balanced` | Fallback path if WebGL init or context stability regresses |
+| `webgl` | `baseline` | Measure Flow-only WebGL without extra browser tuning |
+| `auto` | `pi4-low-memory` | Validate fallback behavior under tighter raster pressure |
+| native X11/EGL/GLES | n/a | Native GPU ceiling at the same physical output |
 
 Systemd deployment defaults for in-app power actions:
 
