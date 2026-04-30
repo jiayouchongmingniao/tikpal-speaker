@@ -156,6 +156,7 @@ export function SystemShell({
   const [powerNotice, setPowerNotice] = useState("");
   const [powerError, setPowerError] = useState("");
   const [powerBusy, setPowerBusy] = useState(false);
+  const stateRef = useRef(state);
   const transitionStatus = state.transition?.status ?? "idle";
   const transition = state.transition ?? { status: "idle", from: state.activeMode, to: state.activeMode };
   const isFocusMode = state.activeMode !== "overview";
@@ -182,6 +183,10 @@ export function SystemShell({
     activeMode: state.activeMode,
     reportPerformance: controller.reportPerformance,
   });
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   function clearOverlayTimer() {
     if (overlayTimerRef.current) {

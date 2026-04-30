@@ -59,6 +59,21 @@ body {
   touch-action: manipulation;
 }
 
+body.app-shell-locked {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+body.app-shell-locked input,
+body.app-shell-locked textarea,
+body.app-shell-locked select,
+body.app-shell-locked [contenteditable="true"],
+body.app-shell-locked [contenteditable=""] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .flow-page {
   position: fixed;
   inset: 0;

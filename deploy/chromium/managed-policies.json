@@ -9,10 +9,19 @@
   "ImportBookmarks": false,
   "ImportHistory": false,
   "ImportSavedPasswords": false,
+  "IncognitoModeAvailability": 1,
   "MetricsReportingEnabled": false,
   "PasswordManagerEnabled": false,
   "PromotionalTabsEnabled": false,
   "RestoreOnStartup": 4,
+  "SavingBrowserHistoryDisabled": true,
   "SyncDisabled": true,
+  "URLAllowlist": [
+    "http://localhost:4173/*",
+    "http://127.0.0.1:4173/*"
+  ],
+  "URLBlocklist": [
+    "*"
+  ],
   "TranslateEnabled": false
 }
