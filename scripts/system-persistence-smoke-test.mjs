@@ -26,6 +26,32 @@ const persistence = createJsonFilePersistence(persistencePath);
 const secretStore = createJsonFileSecretStore(secretPath);
 
 try {
+  await test("configured render profile overrides stale persisted profile", () => {
+    const previousProfile = process.env.RPI_RENDER_PROFILE;
+    process.env.RPI_RENDER_PROFILE = "balanced";
+    persistence.write({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: {
+        system: {
+          renderProfile: "stable",
+        },
+      },
+    });
+
+    try {
+      const store = createSystemStateStore({ persistence, secretStore });
+      assert.equal(store.getSnapshot().system.renderProfile, "balanced");
+      assert.equal(store.getRuntimeProfile().renderProfile, "balanced");
+    } finally {
+      if (previousProfile === undefined) {
+        delete process.env.RPI_RENDER_PROFILE;
+      } else {
+        process.env.RPI_RENDER_PROFILE = previousProfile;
+      }
+    }
+  });
+
   await test("flow diagnostic mode restores from persisted state", () => {
     persistence.write({
       version: 1,

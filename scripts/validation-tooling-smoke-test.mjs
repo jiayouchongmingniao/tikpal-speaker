@@ -258,10 +258,10 @@ await test("kiosk launcher check exposes renderer and Chromium experiment tuning
   });
   const code = await new Promise((resolve) => child.on("close", resolve));
   assert.equal(code, 0);
-  assert.match(stdout, /flow_renderer=canvas/);
-  assert.match(stdout, /chromium_experiment=pi4-gpu-conservative/);
-  assert.match(stdout, /flowRenderer=canvas/);
-  assert.match(stdout, /chromiumExperiment=pi4-gpu-conservative/);
+  assert.match(stdout, /flow_renderer=webgl/);
+  assert.match(stdout, /chromium_experiment=pi4-gpu-balanced/);
+  assert.match(stdout, /flowRenderer=webgl/);
+  assert.match(stdout, /chromiumExperiment=pi4-gpu-balanced/);
 });
 
 await test("native Flow GPU PoC exposes CLI help without target GPU libraries", async () => {

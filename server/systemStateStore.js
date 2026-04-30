@@ -937,6 +937,7 @@ function mergePersistedState(defaultState, persistedState) {
     return defaultState;
   }
 
+  const hasConfiguredRenderProfile = Object.prototype.hasOwnProperty.call(process.env, "RPI_RENDER_PROFILE");
   const mergedFlow = normalizeFlowSurface({
     ...defaultState.flow,
     ...(persistedState.flow ?? {}),
@@ -987,7 +988,11 @@ function mergePersistedState(defaultState, persistedState) {
       ...defaultState.system,
       ...(persistedState.system ?? {}),
       performanceTier: normalizePerformanceTier(persistedState.system?.performanceTier ?? defaultState.system.performanceTier),
-      renderProfile: normalizeRenderProfile(persistedState.system?.renderProfile ?? defaultState.system.renderProfile ?? "off"),
+      renderProfile: normalizeRenderProfile(
+        hasConfiguredRenderProfile
+          ? defaultState.system.renderProfile
+          : persistedState.system?.renderProfile ?? defaultState.system.renderProfile ?? "off",
+      ),
       flowDiagnosticMode: normalizeFlowDiagnosticMode(
         persistedState.system?.flowDiagnosticMode ?? defaultState.system.flowDiagnosticMode ?? "off",
       ),
