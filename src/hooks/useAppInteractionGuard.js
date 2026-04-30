@@ -109,9 +109,24 @@ export function useAppInteractionGuard({ debug = false } = {}) {
       event.preventDefault();
     }
 
+    function onPointerDown(event) {
+      if (event.button === 2) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+
+    function onMouseDown(event) {
+      if (event.button === 2) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+
     function onAuxClick(event) {
       if (event.button === 1 || event.button === 2) {
         event.preventDefault();
+        event.stopPropagation();
       }
     }
 
@@ -176,6 +191,8 @@ export function useAppInteractionGuard({ debug = false } = {}) {
     document.addEventListener("mousewheel", preventBrowserZoomOnWheel, { passive: false });
     document.addEventListener("touchmove", preventMultiTouchBrowserPanZoom, { passive: false });
     document.addEventListener("contextmenu", onContextMenu);
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("mousedown", onMouseDown, true);
     document.addEventListener("auxclick", onAuxClick);
     document.addEventListener("dragstart", onDragStart);
     document.addEventListener("selectstart", onSelectStart);
@@ -195,6 +212,8 @@ export function useAppInteractionGuard({ debug = false } = {}) {
       document.removeEventListener("mousewheel", preventBrowserZoomOnWheel);
       document.removeEventListener("touchmove", preventMultiTouchBrowserPanZoom);
       document.removeEventListener("contextmenu", onContextMenu);
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("mousedown", onMouseDown, true);
       document.removeEventListener("auxclick", onAuxClick);
       document.removeEventListener("dragstart", onDragStart);
       document.removeEventListener("selectstart", onSelectStart);
