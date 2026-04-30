@@ -71,12 +71,17 @@ export function FlowModePage({
   const isMinimalFlowBudget = isMinimalFlowRenderBudget(renderBudget);
 
   useEffect(() => {
+    if (renderProfile === "stable") {
+      return undefined;
+    }
+
     const nextScene = scenes[(currentScene.index + 1) % scenes.length];
     [currentScene.artwork, nextScene.artwork].forEach((src) => {
       const image = new Image();
       image.src = src;
     });
-  }, [currentScene.artwork, currentScene.index, scenes]);
+    return undefined;
+  }, [currentScene.artwork, currentScene.index, renderProfile, scenes]);
 
   return (
     <main
