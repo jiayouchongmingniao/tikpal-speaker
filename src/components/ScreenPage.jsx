@@ -24,97 +24,118 @@ export function ScreenPage({
   const creativeCare = getCreativeCareViewModel(state);
   const { duration, remaining, progressPercent, isRunning, isPaused, focusTitle, boundTask, currentBlockTitle, nextTitle, remainingTasks, remainingEvents, syncStatus, pomodoroState } =
     viewModel;
-  const primaryLabel = isRunning ? "Restart timer" : isPaused ? "Resume timer" : "Start timer";
+  const primaryLabel = isRunning ? "Restart" : isPaused ? "Resume" : "Start";
+  const elapsedMinutes = Math.max(0, Math.round((duration - remaining) / 60));
   const currentTime = new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date());
+  const contextLabel = syncStatus === "mock" ? "Local fallback" : syncStatus === "stale" ? "Context stale" : "Connected";
+  const stopShellGesture = (event) => {
+    event.stopPropagation();
+  };
 
   return (
     <main className={`mode-page mode-page--screen ${className}`.trim()} role="application" aria-label="Screen mode">
       <section className="mode-panel mode-panel--surface mode-panel--screen-surface">
-        <div className="screen-layout">
-          <div className="screen-hero">
-            <span className="mode-kicker">Session Compass</span>
-            <h1>{creativeCare.intention}</h1>
-            <p>{creativeCare.nextGentleAction}</p>
-            <div className="screen-timer">
-              <strong>{formatPomodoro(remaining)} left</strong>
-              <div className="screen-timer__rail">
-                <div className="screen-timer__fill" style={{ width: `${progressPercent}%` }} />
-              </div>
-              <span>{pomodoroState}</span>
+        <div className="screen-stage">
+          <header className="screen-header">
+            <div>
+              <span className="mode-kicker">Session Compass</span>
+              <strong>{contextLabel}</strong>
             </div>
-            <p className="screen-focus-binding">Bound to {boundTask ?? focusTitle ?? "no task"} · {state.screen.completedPomodoros ?? 0} sessions done</p>
-            <div className="listen-controls listen-controls--inline">
-              <button className="shell-button" onClick={isPaused ? onResumePomodoro : onStartPomodoro} type="button">
-                {primaryLabel}
+            <nav
+              className="screen-nav"
+              aria-label="Mode switcher"
+              onPointerDown={stopShellGesture}
+              onTouchStart={stopShellGesture}
+              onTouchMove={stopShellGesture}
+              onTouchEnd={stopShellGesture}
+            >
+              <button className="screen-nav__button" onClick={onReturnOverview} type="button">
+                Overview
               </button>
-              <button className="shell-button shell-button--ghost" onClick={onPausePomodoro} type="button" disabled={!isRunning}>
-                Pause
+              <button className="screen-nav__button" onClick={() => onOpenMode("listen")} type="button">
+                Listen
               </button>
-              <button className="shell-button shell-button--ghost" onClick={onResetPomodoro} type="button">
-                Reset
+              <button className="screen-nav__button" onClick={() => onOpenMode("flow")} type="button">
+                Flow
               </button>
-              <button className="shell-button shell-button--ghost" onClick={onCompleteTask} type="button">
-                Complete
-              </button>
-            </div>
-          </div>
+            </nav>
+          </header>
 
-          <aside className="screen-sidebar">
-            <div className="screen-sidebar__panel">
-              <span className="mode-kicker">Now</span>
+          <div className="screen-focus-grid">
+            <div className="screen-clock">
+              <span>Now</span>
               <strong>{currentTime}</strong>
-              <p>{focusTitle} · {syncStatus === "mock" ? "Local fallback context" : syncStatus === "stale" ? "Context stale" : "Connected context"}</p>
+              <p>{creativeCare.nextGentleAction}</p>
             </div>
-            <div className="screen-sidebar__panel screen-sidebar__panel--care">
-              <span className="mode-kicker">Mood</span>
-              <strong>{creativeCare.moodText}</strong>
-              <p>{creativeCare.flowLabel} · {creativeCare.insightSentence}</p>
-            </div>
-            <div className="screen-sidebar__panel">
-              <span className="mode-kicker">Next</span>
-              <strong>{nextTitle}</strong>
-              <p>{remainingTasks} tasks left today</p>
-            </div>
-            <div className="screen-sidebar__panel">
-              <span className="mode-kicker">Jump</span>
-              <div className="screen-nav">
-                <button className="shell-button shell-button--ghost" onClick={onReturnOverview} type="button">
-                  Overview
-                </button>
-                <button className="shell-button shell-button--ghost" onClick={() => onOpenMode("listen")} type="button">
-                  Listen
-                </button>
-                <button className="shell-button shell-button--ghost" onClick={() => onOpenMode("flow")} type="button">
-                  Flow
-                </button>
+
+            <div className="screen-task">
+              <span className="mode-kicker">Focus Item</span>
+              <h1>{focusTitle}</h1>
+              <p>{creativeCare.intention}</p>
+              <div className="screen-task__context">
+                <span>Current block</span>
+                <strong>{currentBlockTitle}</strong>
+                <span>Next</span>
+                <strong>{nextTitle}</strong>
               </div>
             </div>
-          </aside>
-        </div>
 
-        <div className="mode-meta-strip" role="list" aria-label="Screen details">
-          <div className="mode-metric" role="listitem">
-            <span>Next</span>
-            <strong>{nextTitle}</strong>
+            <div className="screen-timer" style={{ "--timer-progress": `${progressPercent}%` }}>
+              <div className="screen-timer__ring" aria-hidden="true">
+                <div className="screen-timer__inner">
+                  <span>{pomodoroState}</span>
+                  <strong>{formatPomodoro(remaining)}</strong>
+                </div>
+              </div>
+              <p className="screen-focus-binding">Bound to {boundTask ?? focusTitle ?? "no task"}</p>
+            </div>
           </div>
-          <div className="mode-metric" role="listitem">
-            <span>Today</span>
-            <strong>{remainingTasks} tasks left</strong>
+
+          <div
+            className="screen-command-row"
+            onPointerDown={stopShellGesture}
+            onTouchStart={stopShellGesture}
+            onTouchMove={stopShellGesture}
+            onTouchEnd={stopShellGesture}
+          >
+            <button className="screen-command screen-command--primary" onClick={isPaused ? onResumePomodoro : onStartPomodoro} type="button">
+              {primaryLabel}
+            </button>
+            <button className="screen-command" onClick={onPausePomodoro} type="button" disabled={!isRunning}>
+              Pause
+            </button>
+            <button className="screen-command" onClick={onResetPomodoro} type="button">
+              Reset
+            </button>
+            <button className="screen-command" onClick={onCompleteTask} type="button">
+              Complete
+            </button>
           </div>
-          <div className="mode-metric" role="listitem">
-            <span>Calendar</span>
-            <strong>{remainingEvents} events left</strong>
-          </div>
-          <div className="mode-metric" role="listitem">
-            <span>Block</span>
-            <strong>{currentBlockTitle}</strong>
-          </div>
-          <div className="mode-metric" role="listitem">
-            <span>Sync</span>
-            <strong>{syncStatus}</strong>
+
+          <div className="screen-metrics" role="list" aria-label="Screen details">
+            <div role="listitem">
+              <span>Elapsed</span>
+              <strong>{elapsedMinutes} min</strong>
+            </div>
+            <div role="listitem">
+              <span>Today</span>
+              <strong>{remainingTasks} tasks</strong>
+            </div>
+            <div role="listitem">
+              <span>Calendar</span>
+              <strong>{remainingEvents} events</strong>
+            </div>
+            <div role="listitem">
+              <span>Mood</span>
+              <strong>{creativeCare.moodText}</strong>
+            </div>
+            <div role="listitem">
+              <span>Care</span>
+              <strong>{creativeCare.flowLabel}</strong>
+            </div>
           </div>
         </div>
       </section>
