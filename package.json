@@ -28,7 +28,8 @@
     "test:smoke": "node scripts/system-state-smoke-test.mjs",
     "preview": "vite preview",
     "start": "vite",
-    "start:api": "node server/index.js"
+    "start:api": "node server/index.js",
+    "start:web": "node server/staticUiServer.js"
   },
   "dependencies": {
     "react": "^19.1.1",

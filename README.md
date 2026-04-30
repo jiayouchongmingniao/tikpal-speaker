@@ -95,7 +95,7 @@ npm run test:persistence
 
 ## Run As Services
 
-The repo includes `systemd` templates for the API (`8787`), web preview (`4173`), and an app-specific Chromium kiosk.
+The repo includes `systemd` templates for the API (`8787`), a production static web service (`4173`), and an app-specific Chromium kiosk.
 
 Default deployment layout:
 
@@ -111,6 +111,8 @@ npm run build
 cp .env.kiosk.example .env.kiosk
 sudo APP_DIR=/home/moode/code/tikpal-speaker SERVICE_USER=moode bash deploy/systemd/install-systemd-services.sh
 ```
+
+The web service serves the built `dist/` bundle directly and proxies `/api/v1/*` to the local API with the loopback UI trust header, so the kiosk no longer depends on `vite preview` in production.
 
 Service names:
 

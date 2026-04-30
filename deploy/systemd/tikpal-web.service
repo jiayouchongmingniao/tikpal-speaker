@@ -9,7 +9,7 @@ User=@SERVICE_USER@
 Group=@SERVICE_GROUP@
 WorkingDirectory=@APP_DIR@
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/env npm run preview -- --host 0.0.0.0 --port 4173
+ExecStart=/usr/bin/env npm run start:web
 Restart=always
 RestartSec=3
 
