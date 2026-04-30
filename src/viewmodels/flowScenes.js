@@ -402,6 +402,20 @@ export function getFlowSceneById(sceneId) {
   return FLOW_SCENE_LOOKUP.get(sceneId) ?? null;
 }
 
+export function getFlowSceneAudioLibraryPath(scene, libraryRoot = "Codex/flow-scenes-audio") {
+  const audioUrl = scene?.audioUrl ?? "";
+  const fileName = String(audioUrl).split("/").filter(Boolean).at(-1) ?? "";
+  if (!fileName) {
+    return null;
+  }
+
+  const normalizedRoot = String(libraryRoot ?? "")
+    .trim()
+    .replace(/^\/+|\/+$/g, "");
+
+  return normalizedRoot ? `${normalizedRoot}/${fileName}` : fileName;
+}
+
 export function normalizeFlowScenesByState(value) {
   const defaults = createDefaultFlowScenesByState();
   if (!value || typeof value !== "object") {

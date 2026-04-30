@@ -19,8 +19,9 @@ export function AmbientBackground({
   const isPiStableProfile = renderProfile === "stable";
   const isLowPowerTier = performanceTier === "safe" || (isPiStableProfile && performanceTier !== "normal");
   const isStaticDiagnostic = flowDiagnosticMode === "static";
+  const hasSceneArtwork = Boolean(scene?.artwork);
   const suppressDepthLayers = isLowPowerTier || isStaticDiagnostic || isPiStableProfile;
-  const nextOpacity = isStaticDiagnostic
+  const nextOpacityBase = isStaticDiagnostic
     ? 0.34
     : isTransitioning
       ? 0.52
@@ -29,26 +30,29 @@ export function AmbientBackground({
         : isStableProfile
           ? 0.48
           : 0.58;
+  const nextOpacity = hasSceneArtwork ? nextOpacityBase * 0.62 : nextOpacityBase;
   const nextBlur =
     isPiStableProfile || isStaticDiagnostic || isLowPowerTier ? "none" : isStableProfile ? "blur(8px)" : "blur(12px)";
   const nextBlendMode =
     isStaticDiagnostic || renderProfile === "stable" || isLowPowerTier ? "normal" : isStableProfile ? "soft-light" : "screen";
-  const baseOpacity = isTransitioning ? 0.98 : 0.92;
-  const auraOpacity = isTransitioning ? 0.16 : renderProfile === "stable" ? 0.24 : isStableProfile ? 0.3 : 0.38;
+  const baseOpacity = hasSceneArtwork ? (isTransitioning ? 0.42 : 0.34) : isTransitioning ? 0.98 : 0.92;
+  const auraOpacityBase = isTransitioning ? 0.16 : renderProfile === "stable" ? 0.24 : isStableProfile ? 0.3 : 0.38;
+  const auraOpacity = hasSceneArtwork ? auraOpacityBase * 0.38 : auraOpacityBase;
   const auraBlur = renderProfile === "stable" ? "blur(22px)" : isStableProfile ? "blur(28px)" : "blur(34px)";
-  const contourOpacity = isTransitioning ? 0.12 : renderProfile === "stable" ? 0.16 : isStableProfile ? 0.2 : 0.24;
+  const contourOpacityBase = isTransitioning ? 0.12 : renderProfile === "stable" ? 0.16 : isStableProfile ? 0.2 : 0.24;
+  const contourOpacity = hasSceneArtwork ? contourOpacityBase * 0.34 : contourOpacityBase;
   const nextLayerBackground = isPiStableProfile
     ? `radial-gradient(ellipse at 42% 44%, ${nextTheme.glow}38 0%, transparent 46%),
       radial-gradient(ellipse at 18% 28%, ${baseTheme.accent}22 0%, transparent 40%)`
     : `radial-gradient(circle at 72% 40%, ${nextTheme.glow} 0%, transparent 38%),
       linear-gradient(160deg, ${nextTheme.bgGradient.join(", ")})`;
-  const sceneOpacity = isStaticDiagnostic ? 0.3 : isPiStableProfile ? 0.46 : isStableProfile ? 0.58 : 0.72;
+  const sceneOpacity = isStaticDiagnostic ? 0.42 : isPiStableProfile ? 0.74 : isStableProfile ? 0.82 : 0.9;
   const sceneFilter = isStaticDiagnostic
-    ? "saturate(0.88) contrast(1.02)"
+    ? "saturate(0.96) contrast(1.04)"
     : isPiStableProfile
-      ? "saturate(0.94) contrast(1.04)"
-      : "saturate(1.02) contrast(1.08)";
-  const sceneVignetteOpacity = isStaticDiagnostic ? 0.5 : isPiStableProfile ? 0.46 : isStableProfile ? 0.42 : 0.36;
+      ? "saturate(1.02) contrast(1.06) brightness(1.04)"
+      : "saturate(1.08) contrast(1.1) brightness(1.05)";
+  const sceneVignetteOpacity = isStaticDiagnostic ? 0.28 : isPiStableProfile ? 0.24 : isStableProfile ? 0.2 : 0.16;
 
   return (
     <div className="ambient-bg" aria-hidden="true">

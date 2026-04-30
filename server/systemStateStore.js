@@ -1929,6 +1929,9 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
           sceneId: liveState.flow.sceneId,
           scenesByState: liveState.flow.scenesByState,
         });
+        const nextPlayback = payload.playerState
+          ? mergePlayerState(applyFlowSceneToPlayback(liveState.playback, sceneSelection), payload.playerState)
+          : applyFlowSceneToPlayback(liveState.playback, sceneSelection);
         return finalize(
           updateState(
             {
@@ -1943,7 +1946,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
                 sceneIndex: sceneSelection.sceneIndex,
                 scenesByState: sceneSelection.scenesByState,
               },
-              playback: applyFlowSceneToPlayback(liveState.playback, sceneSelection),
+              playback: nextPlayback,
             },
             source,
             type,
@@ -1964,6 +1967,9 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
           sceneIndex: payload.sceneIndex,
           scenesByState: liveState.flow.scenesByState,
         });
+        const nextPlayback = payload.playerState
+          ? mergePlayerState(applyFlowSceneToPlayback(liveState.playback, sceneSelection), payload.playerState)
+          : applyFlowSceneToPlayback(liveState.playback, sceneSelection);
         return finalize(
           updateState(
             {
@@ -1978,7 +1984,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
                 sceneIndex: sceneSelection.sceneIndex,
                 scenesByState: sceneSelection.scenesByState,
               },
-              playback: applyFlowSceneToPlayback(liveState.playback, sceneSelection),
+              playback: nextPlayback,
             },
             source,
             type,

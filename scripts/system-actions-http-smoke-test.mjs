@@ -63,6 +63,7 @@ const server = await startServer({
   apiKey: API_KEY,
   playerSyncIntervalMs: 40,
   playerAdapter: {
+    mode: "mpc",
     async getStatus() {
       playerStatusReads.push({ at: Date.now() });
       return {
@@ -99,6 +100,19 @@ const server = await startServer({
           artist: "moOde Artist",
           source: "moOde",
           progress: 0.33,
+        };
+      }
+
+      if (type === "play_media") {
+        return {
+          state: "play",
+          volume: 58,
+          trackTitle: getFlowSceneById("sleep-eyes-closed")?.audioLabel,
+          artist: "moOde Artist",
+          source: "moOde",
+          progress: 0,
+          currentTrackIndex: 0,
+          queueLength: 1,
         };
       }
 
@@ -240,6 +254,7 @@ try {
       setSceneResponse.json.state.playback.trackTitle,
       getFlowSceneById("sleep-eyes-closed")?.audioLabel,
     );
+    assert.equal(playerActions.some((action) => action.type === "play_media"), true);
   });
 
   await test("runtime performance actions update summary and logs", async () => {

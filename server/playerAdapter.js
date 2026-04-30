@@ -296,6 +296,32 @@ export function createMpcPlayerAdapter({
           timeoutMs: normalizedTimeoutMs,
           execFileImpl,
         });
+      } else if (type === "play_media") {
+        const mediaPath = String(payload.mediaPath ?? "")
+          .trim()
+          .replace(/^\/+/, "");
+        if (!mediaPath) {
+          throw createPlayerError("PLAYER_MEDIA_PATH_MISSING", "mediaPath is required for play_media");
+        }
+
+        await execMpcCommand(["clear"], {
+          host,
+          port: normalizedPort,
+          timeoutMs: normalizedTimeoutMs,
+          execFileImpl,
+        });
+        await execMpcCommand(["add", mediaPath], {
+          host,
+          port: normalizedPort,
+          timeoutMs: normalizedTimeoutMs,
+          execFileImpl,
+        });
+        await execMpcCommand(["play"], {
+          host,
+          port: normalizedPort,
+          timeoutMs: normalizedTimeoutMs,
+          execFileImpl,
+        });
       } else {
         throw createPlayerError("PLAYER_UNSUPPORTED_ACTION", `Unsupported player action: ${type}`);
       }

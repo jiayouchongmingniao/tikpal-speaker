@@ -11,6 +11,13 @@ import { createHttpPlayerAdapter, createMpcPlayerAdapter } from "./playerAdapter
 import { createDefaultPowerAdapter } from "./powerActionAdapter.js";
 import { createScreenContext } from "./screenContextService.js";
 import { createSystemStateStore } from "./systemStateStore.js";
+import {
+  getFlowSceneAudioLibraryPath,
+  getFlowSceneById,
+  getNextFlowSceneSelection,
+  normalizeFlowState,
+  resolveFlowSceneSelection,
+} from "../src/viewmodels/flowScenes.js";
 
 function sendJson(response, statusCode, payload, extraHeaders = {}) {
   response.writeHead(statusCode, {
@@ -423,6 +430,42 @@ function createSystemPowerAdapter() {
   return createDefaultPowerAdapter();
 }
 
+function resolveFlowSceneActionMedia(type, payload = {}, snapshot, libraryRoot = process.env.TIKPAL_FLOW_SCENE_AUDIO_ROOT ?? "Codex/flow-scenes-audio") {
+  if (!snapshot?.flow) {
+    return null;
+  }
+
+  if (type === "next_flow_scene") {
+    const nextFlowState = normalizeFlowState(payload.state ?? snapshot.flow.state);
+    const selection = getNextFlowSceneSelection({
+      flowState: nextFlowState,
+      sceneId: snapshot.flow.sceneId,
+      scenesByState: snapshot.flow.scenesByState,
+    });
+    return {
+      scene: selection.scene,
+      mediaPath: getFlowSceneAudioLibraryPath(selection.scene, libraryRoot),
+    };
+  }
+
+  if (type === "set_flow_scene") {
+    const explicitScene = payload.sceneId ? getFlowSceneById(payload.sceneId) : null;
+    const nextFlowState = normalizeFlowState(explicitScene?.state ?? payload.state ?? snapshot.flow.state);
+    const selection = resolveFlowSceneSelection({
+      flowState: nextFlowState,
+      sceneId: explicitScene?.id ?? payload.sceneId ?? null,
+      sceneIndex: payload.sceneIndex,
+      scenesByState: snapshot.flow.scenesByState,
+    });
+    return {
+      scene: selection.scene,
+      mediaPath: getFlowSceneAudioLibraryPath(selection.scene, libraryRoot),
+    };
+  }
+
+  return null;
+}
+
 export function createAppServer({
   store = createDefaultSystemStateStore(),
   connectorSyncService = createDefaultConnectorSyncService(store),
@@ -440,14 +483,32 @@ export function createAppServer({
   playerSyncIntervalMs = Number(process.env.TIKPAL_PLAYER_SYNC_INTERVAL_MS ?? 5000),
 } = {}) {
   async function enrichPlaybackAction(type, payload = {}) {
-    if (!playerAdapter || !["toggle_play", "set_volume", "next_track", "prev_track"].includes(type)) {
+    if (!playerAdapter) {
       return payload;
     }
 
-    const playerState = await playerAdapter.runAction(type, payload, store.getSnapshot().playback);
+    const snapshot = store.getSnapshot();
+    if (["toggle_play", "set_volume", "next_track", "prev_track"].includes(type)) {
+      const playerState = await playerAdapter.runAction(type, payload, snapshot.playback);
+      return {
+        ...payload,
+        playerState,
+      };
+    }
+
+    if (playerAdapter.mode === "mpc" && ["next_flow_scene", "set_flow_scene"].includes(type)) {
+      const flowSceneMedia = resolveFlowSceneActionMedia(type, payload, snapshot);
+      if (flowSceneMedia?.mediaPath) {
+        const playerState = await playerAdapter.runAction("play_media", { mediaPath: flowSceneMedia.mediaPath }, snapshot.playback);
+        return {
+          ...payload,
+          playerState,
+        };
+      }
+    }
+
     return {
       ...payload,
-      playerState,
     };
   }
   const appServer = http.createServer(async (request, response) => {
