@@ -1,9 +1,8 @@
 export const BLANK_TAP_SHOW_OVERLAY = "show-overlay";
 export const BLANK_TAP_HIDE_OVERLAY = "hide-overlay";
 export const RETURN_OVERVIEW = "return-overview";
-export const NEXT_MODE = "next_mode";
-export const PREV_MODE = "prev_mode";
 export const NEXT_FLOW_STATE = "next-flow-state";
+export const NEXT_FLOW_SCENE = "next-flow-scene";
 
 const SAFARI_PINCH_RETURN_SCALE = 0.97;
 const CHROME_PINCH_RETURN_DELTA = 60;
@@ -51,7 +50,7 @@ export function getSingleTouchSwipeIntent({
   deltaX = 0,
   deltaY = 0,
 }) {
-  if (activeMode === "overview" || transitionStatus !== "idle" || isInteractiveStart) {
+  if (activeMode !== "flow" || transitionStatus !== "idle" || isInteractiveStart) {
     return null;
   }
 
@@ -60,15 +59,15 @@ export function getSingleTouchSwipeIntent({
   const absHorizontal = Math.abs(horizontalDelta);
   const absVertical = Math.abs(verticalDelta);
 
-  if (absHorizontal < SINGLE_TOUCH_SWIPE_DELTA) {
+  if (verticalDelta < SINGLE_TOUCH_SWIPE_DELTA) {
     return null;
   }
 
-  if (absHorizontal <= absVertical * SINGLE_TOUCH_SWIPE_AXIS_RATIO) {
+  if (absVertical <= absHorizontal * SINGLE_TOUCH_SWIPE_AXIS_RATIO) {
     return null;
   }
 
-  return horizontalDelta < 0 ? NEXT_MODE : PREV_MODE;
+  return NEXT_FLOW_SCENE;
 }
 
 export function getDoubleTouchFlowSwipeIntent({

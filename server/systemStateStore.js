@@ -1,3 +1,15 @@
+import {
+  applyFlowSceneToPlayback,
+  createDefaultFlowScenesByState,
+  createFlowSceneState,
+  getFlowSceneById,
+  getFlowScenesForState,
+  getNextFlowSceneSelection,
+  normalizeFlowScenesByState,
+  normalizeFlowState,
+  resolveFlowSceneSelection,
+} from "../src/viewmodels/flowScenes.js";
+
 const MODE_ORDER = ["listen", "flow", "screen"];
 const FLOW_ORDER = ["focus", "flow", "relax", "sleep"];
 const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
@@ -29,6 +41,8 @@ const ACTION_ROLE_REQUIREMENTS = {
   next_track: "controller",
   set_volume: "controller",
   set_flow_state: "controller",
+  next_flow_scene: "controller",
+  set_flow_scene: "controller",
   screen_start_pomodoro: "controller",
   screen_resume_pomodoro: "controller",
   screen_pause_pomodoro: "controller",
@@ -511,6 +525,25 @@ function deriveFlowStateFromCareMode(careMode) {
   return careMode === "flow" ? "flow" : "focus";
 }
 
+function normalizeFlowSurface(flow = {}) {
+  const nextState = normalizeFlowState(flow.state ?? "focus");
+  const sceneSelection = resolveFlowSceneSelection({
+    flowState: nextState,
+    sceneId: flow.sceneId,
+    sceneIndex: flow.sceneIndex,
+    scenesByState: flow.scenesByState ?? createDefaultFlowScenesByState(),
+  });
+
+  return {
+    ...flow,
+    state: nextState,
+    subtitle: deriveFlowSubtitle(nextState),
+    sceneId: sceneSelection.sceneId,
+    sceneIndex: sceneSelection.sceneIndex,
+    scenesByState: sceneSelection.scenesByState,
+  };
+}
+
 function createInsightSentence(transcript, fallback) {
   const normalized = String(transcript ?? "").replace(/\s+/g, " ").trim();
   if (!normalized) {
@@ -555,6 +588,7 @@ function summarizeRuntimeState(state) {
     overlay: state.overlay?.state ?? (state.overlay?.visible ? "controls" : "hidden"),
     playbackState: state.playback?.state ?? null,
     flowState: state.flow?.state ?? null,
+    flowSceneId: state.flow?.sceneId ?? null,
     pomodoroState: state.screen?.pomodoroState ?? null,
     screenTask: state.screen?.currentTask ?? null,
     creativeMood: state.creativeCare?.moodLabel ?? null,
@@ -585,6 +619,18 @@ function summarizeActionPayload(type, payload = {}) {
   }
 
   if (type === "set_flow_state") {
+    return { state: payload.state ?? null };
+  }
+
+  if (type === "set_flow_scene") {
+    return {
+      sceneId: payload.sceneId ?? null,
+      sceneIndex: payload.sceneIndex ?? null,
+      state: payload.state ?? null,
+    };
+  }
+
+  if (type === "next_flow_scene") {
     return { state: payload.state ?? null };
   }
 
@@ -635,6 +681,13 @@ function summarizeActionPayload(type, payload = {}) {
 function createInitialState() {
   const renderProfile = normalizeRenderProfile(process.env.RPI_RENDER_PROFILE ?? "off");
   const flowDiagnosticMode = normalizeFlowDiagnosticMode(process.env.TIKPAL_FLOW_DIAGNOSTIC_MODE ?? "off");
+  const flowState = "focus";
+  const flowSceneState = createFlowSceneState(flowState);
+  const flowSceneSelection = resolveFlowSceneSelection({
+    flowState,
+    sceneId: flowSceneState.sceneId,
+    scenesByState: flowSceneState.scenesByState,
+  });
   return {
     activeMode: "overview",
     focusedPanel: null,
@@ -653,13 +706,20 @@ function createInitialState() {
     playback: {
       state: "play",
       volume: 58,
-      currentTrackIndex: 0,
-      queueLength: MOCK_QUEUE.length,
-      ...getQueueTrack(0),
+      format: "Built-in ambient",
+      ...applyFlowSceneToPlayback(
+        {
+          currentTrackIndex: 0,
+          queueLength: getFlowScenesForState(flowState).length,
+          ...getQueueTrack(0),
+        },
+        flowSceneSelection,
+      ),
     },
     flow: {
-      state: "focus",
+      state: flowState,
       subtitle: "Steady the next thought",
+      ...flowSceneState,
       audioMetrics: {
         volumeNormalized: 0.58,
         lowEnergy: 0.28,
@@ -836,6 +896,10 @@ function toFlowSnapshot(state) {
 
   return {
     currentState: state.flow.state,
+    currentScene: {
+      sceneId: state.flow.sceneId,
+      sceneIndex: state.flow.sceneIndex,
+    },
     uiVisible: overlayVisible,
     appPhase,
     playerState: {
@@ -873,6 +937,11 @@ function mergePersistedState(defaultState, persistedState) {
     return defaultState;
   }
 
+  const mergedFlow = normalizeFlowSurface({
+    ...defaultState.flow,
+    ...(persistedState.flow ?? {}),
+  });
+
   return {
     ...defaultState,
     ...persistedState,
@@ -885,10 +954,7 @@ function mergePersistedState(defaultState, persistedState) {
       ...defaultState.playback,
       ...(persistedState.playback ?? {}),
     },
-    flow: {
-      ...defaultState.flow,
-      ...(persistedState.flow ?? {}),
-    },
+    flow: mergedFlow,
     screen: {
       ...defaultState.screen,
       ...(persistedState.screen ?? {}),
@@ -1172,11 +1238,19 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
     cleanupExpiredSessions();
     const normalizedTransition = normalizeTransition(state.transition);
     const normalizedScreen = normalizeScreenTimer(state.screen);
-    if (normalizedTransition !== state.transition || normalizedScreen !== state.screen) {
+    const normalizedFlow = normalizeFlowSurface(state.flow);
+    const didFlowChange =
+      state.flow?.state !== normalizedFlow.state ||
+      state.flow?.subtitle !== normalizedFlow.subtitle ||
+      state.flow?.sceneId !== normalizedFlow.sceneId ||
+      state.flow?.sceneIndex !== normalizedFlow.sceneIndex ||
+      JSON.stringify(normalizeFlowScenesByState(state.flow?.scenesByState)) !== JSON.stringify(normalizedFlow.scenesByState);
+    if (normalizedTransition !== state.transition || normalizedScreen !== state.screen || didFlowChange) {
       state = {
         ...state,
         transition: normalizedTransition,
         screen: normalizedScreen,
+        flow: normalizedFlow,
       };
       persistNow();
     }
@@ -1255,8 +1329,19 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
     return {
       modes: ["overview", "listen", "flow", "screen"],
       flowStates: FLOW_ORDER,
+      flowScenes: FLOW_ORDER.map((flowState) => ({
+        state: flowState,
+        items: getFlowScenesForState(flowState).map((scene) => ({
+          id: scene.id,
+          index: scene.index,
+          label: scene.label,
+          subtitle: scene.subtitle,
+          ritualLabelZh: scene.ritualLabelZh,
+        })),
+      })),
       touch: {
         multiTouch: true,
+        singleTouchDownInFlow: "next_flow_scene",
       },
       screenFeatures: {
         tasks: true,
@@ -1623,7 +1708,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
 
       if (
         liveState.transition.status !== "idle" &&
-        ["set_mode", "return_overview", "set_flow_state", "next_mode", "prev_mode"].includes(type)
+        ["set_mode", "return_overview", "set_flow_state", "next_flow_scene", "set_flow_scene", "next_mode", "prev_mode"].includes(type)
       ) {
         return finalize(liveState);
       }
@@ -1719,6 +1804,31 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
 
       if (type === "prev_track" || type === "next_track") {
         const step = type === "next_track" ? 1 : -1;
+        if (!payload.playerState && liveState.activeMode === "flow") {
+          const sceneSelection = getNextFlowSceneSelection({
+            flowState: liveState.flow.state,
+            sceneId: liveState.flow.sceneId,
+            scenesByState: liveState.flow.scenesByState,
+            step,
+          });
+          return finalize(
+            updateState(
+              {
+                ...liveState,
+                flow: {
+                  ...liveState.flow,
+                  sceneId: sceneSelection.sceneId,
+                  sceneIndex: sceneSelection.sceneIndex,
+                  scenesByState: sceneSelection.scenesByState,
+                },
+                playback: applyFlowSceneToPlayback(liveState.playback, sceneSelection),
+              },
+              source,
+              type,
+            ),
+          );
+        }
+
         const nextIndex = (Number(liveState.playback.currentTrackIndex ?? 0) + step + MOCK_QUEUE.length) % MOCK_QUEUE.length;
         const nextPlayback = payload.playerState
           ? {
@@ -1778,6 +1888,11 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
         }
 
         const nextFlowState = FLOW_ORDER.includes(payload.state) ? payload.state : liveState.flow.state;
+        const sceneSelection = resolveFlowSceneSelection({
+          flowState: nextFlowState,
+          sceneId: liveState.flow.state === nextFlowState ? liveState.flow.sceneId : null,
+          scenesByState: liveState.flow.scenesByState,
+        });
         return finalize(
           updateState(
             {
@@ -1795,7 +1910,75 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
                 ...liveState.flow,
                 state: nextFlowState,
                 subtitle: deriveFlowSubtitle(nextFlowState),
+                sceneId: sceneSelection.sceneId,
+                sceneIndex: sceneSelection.sceneIndex,
+                scenesByState: sceneSelection.scenesByState,
               },
+              playback: applyFlowSceneToPlayback(liveState.playback, sceneSelection),
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "next_flow_scene") {
+        const nextFlowState = normalizeFlowState(payload.state ?? liveState.flow.state);
+        const sceneSelection = getNextFlowSceneSelection({
+          flowState: nextFlowState,
+          sceneId: liveState.flow.sceneId,
+          scenesByState: liveState.flow.scenesByState,
+        });
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              activeMode: "flow",
+              focusedPanel: "flow",
+              flow: {
+                ...liveState.flow,
+                state: nextFlowState,
+                subtitle: deriveFlowSubtitle(nextFlowState),
+                sceneId: sceneSelection.sceneId,
+                sceneIndex: sceneSelection.sceneIndex,
+                scenesByState: sceneSelection.scenesByState,
+              },
+              playback: applyFlowSceneToPlayback(liveState.playback, sceneSelection),
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "set_flow_scene") {
+        const explicitScene = payload.sceneId ? getFlowSceneById(payload.sceneId) : null;
+        if (payload.sceneId && !explicitScene) {
+          throw createRejectedError("INVALID_FLOW_SCENE", `Unsupported flow scene: ${payload.sceneId}`);
+        }
+
+        const nextFlowState = normalizeFlowState(explicitScene?.state ?? payload.state ?? liveState.flow.state);
+        const sceneSelection = resolveFlowSceneSelection({
+          flowState: nextFlowState,
+          sceneId: explicitScene?.id ?? payload.sceneId ?? null,
+          sceneIndex: payload.sceneIndex,
+          scenesByState: liveState.flow.scenesByState,
+        });
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              activeMode: "flow",
+              focusedPanel: "flow",
+              flow: {
+                ...liveState.flow,
+                state: nextFlowState,
+                subtitle: deriveFlowSubtitle(nextFlowState),
+                sceneId: sceneSelection.sceneId,
+                sceneIndex: sceneSelection.sceneIndex,
+                scenesByState: sceneSelection.scenesByState,
+              },
+              playback: applyFlowSceneToPlayback(liveState.playback, sceneSelection),
             },
             source,
             type,

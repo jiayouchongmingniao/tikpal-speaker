@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createSystemStateStore } from "../server/systemStateStore.js";
 import { startServer } from "../server/index.js";
+import { getFlowSceneById } from "../src/viewmodels/flowScenes.js";
 
 const API_KEY = "test-api-key";
 
@@ -206,6 +207,39 @@ try {
     const focusPanelTransition = transitionsResponse.json.items.find((item) => item.reasonAction === "focus_panel");
     assert.equal(Boolean(focusPanelTransition), true);
     assert.equal(focusPanelTransition.to.focusedPanel, "screen");
+  });
+
+  await test("Flow scene actions update scene state and playback identity through HTTP", async () => {
+    const authHeaders = { "X-Tikpal-Key": API_KEY };
+
+    const nextSceneResponse = await postAction(
+      baseUrl,
+      {
+        type: "next_flow_scene",
+        source: "portable_controller",
+      },
+      authHeaders,
+    );
+    assert.equal(nextSceneResponse.status, 200);
+    assert.equal(nextSceneResponse.json.state.activeMode, "flow");
+    assert.equal(nextSceneResponse.json.state.flow.sceneIndex, 1);
+
+    const setSceneResponse = await postAction(
+      baseUrl,
+      {
+        type: "set_flow_scene",
+        payload: { sceneId: "sleep-eyes-closed" },
+        source: "portable_controller",
+      },
+      authHeaders,
+    );
+    assert.equal(setSceneResponse.status, 200);
+    assert.equal(setSceneResponse.json.state.flow.state, "sleep");
+    assert.equal(setSceneResponse.json.state.flow.sceneId, "sleep-eyes-closed");
+    assert.equal(
+      setSceneResponse.json.state.playback.trackTitle,
+      getFlowSceneById("sleep-eyes-closed")?.audioLabel,
+    );
   });
 
   await test("runtime performance actions update summary and logs", async () => {

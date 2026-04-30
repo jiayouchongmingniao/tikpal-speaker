@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { AmbientBackground } from "./AmbientBackground";
 import { FlowVisualRenderer } from "./FlowVisualRenderer";
 import { SideInfoPanel } from "./SideInfoPanel";
 import { StateTitle } from "./StateTitle";
 import { FLOW_THEME } from "../theme";
 import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
+import { getFlowScenesForState } from "../viewmodels/flowScenes";
 import { deriveFlowAppPhase, toFlowTransitionState } from "../viewmodels/flowRenderDiagnostics";
 import { getFlowRendererRuntimeConfig } from "../viewmodels/flowRenderer";
 import {
@@ -42,6 +44,8 @@ export function FlowModePage({
   const theme = FLOW_THEME[currentState];
   const creativeCare = getCreativeCareViewModel(systemState);
   const careCopy = getFlowCareCopy(currentState);
+  const scenes = getFlowScenesForState(currentState);
+  const currentScene = scenes.find((scene) => scene.id === systemState.flow.sceneId) ?? scenes[0];
   const appPhase = deriveFlowAppPhase({
     activeMode: systemState.activeMode,
     overlayVisible: systemState.overlay.visible,
@@ -66,6 +70,14 @@ export function FlowModePage({
   const isStaticFlowBudget = isStaticFlowRenderBudget(renderBudget);
   const isMinimalFlowBudget = isMinimalFlowRenderBudget(renderBudget);
 
+  useEffect(() => {
+    const nextScene = scenes[(currentScene.index + 1) % scenes.length];
+    [currentScene.artwork, nextScene.artwork].forEach((src) => {
+      const image = new Image();
+      image.src = src;
+    });
+  }, [currentScene.artwork, currentScene.index, scenes]);
+
   return (
     <main
       className={`flow-page phase-${appPhase} tone-${theme.uiTone} care-${creativeCare.currentCareMode} render-profile-${renderProfile} ${
@@ -78,6 +90,7 @@ export function FlowModePage({
     >
       <AmbientBackground
         currentState={currentState}
+        scene={currentScene}
         transitionState={transitionState}
         appPhase={appPhase}
         performanceTier={performanceTier}
@@ -96,6 +109,12 @@ export function FlowModePage({
       />
       <section className="flow-page__content">
         <div className="flow-care-stack">
+          <div className="flow-scene-card">
+            <span className="flow-scene-card__kicker">{careCopy.label} Scene {currentScene.index + 1}/5</span>
+            <strong>{currentScene.label}</strong>
+            <p>{currentScene.subtitle}</p>
+            {currentScene.ritualLabelZh ? <span className="flow-scene-card__meta">{currentScene.ritualLabelZh}</span> : null}
+          </div>
           <StateTitle title={careCopy.label} subtitle={careCopy.subtitle} appPhase={appPhase} />
           <p className="flow-care-insight">{creativeCare.insightSentence}</p>
         </div>

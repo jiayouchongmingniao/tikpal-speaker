@@ -344,6 +344,10 @@ function createSystemApiDescriptor() {
       otaApply: "/api/v1/system/ota/apply",
       otaRollback: "/api/v1/system/ota/rollback",
       actions: "/api/v1/system/actions",
+      flowSceneActions: {
+        nextScene: "POST /api/v1/system/actions next_flow_scene",
+        setScene: "POST /api/v1/system/actions set_flow_scene",
+      },
       creativeCareActions: {
         submitVoiceCapture: "POST /api/v1/system/actions voice_capture_submit",
         setMood: "POST /api/v1/system/actions voice_mood_set",

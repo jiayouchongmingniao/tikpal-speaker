@@ -1,4 +1,5 @@
 import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
+import { getFlowScenesForState } from "../viewmodels/flowScenes";
 import { getOverlayScreenViewModel, getOverlayStatusHint } from "../viewmodels/screenContextConsumers";
 
 function formatPomodoro(remainingSec) {
@@ -92,7 +93,9 @@ function ListenControls({ state, onPrevTrack, onTogglePlay, onNextTrack }) {
   );
 }
 
-function FlowControls({ state, onSetFlowState }) {
+function FlowControls({ state, onSetFlowState, onNextFlowScene, onSetFlowScene }) {
+  const scenes = getFlowScenesForState(state.flow.state);
+  const currentScene = scenes.find((scene) => scene.id === state.flow.sceneId) ?? scenes[0];
   return (
     <div className="global-overlay__section global-overlay__section--mode" role="group" aria-label="Flow controls">
       <span className="global-overlay__label">Flow</span>
@@ -106,6 +109,32 @@ function FlowControls({ state, onSetFlowState }) {
             onClick={() => onSetFlowState(item)}
           >
             {getFlowCareCopy(item).label}
+          </button>
+        ))}
+      </div>
+      <div className="global-overlay__row global-overlay__row--scene">
+        <button
+          type="button"
+          className="global-overlay__button"
+          data-overlay-action="flow-scene-next"
+          onClick={onNextFlowScene}
+        >
+          Next scene
+        </button>
+        <span className="global-overlay__hint global-overlay__hint--scene">
+          {currentScene.label} · {currentScene.subtitle}
+        </span>
+      </div>
+      <div className="global-overlay__row">
+        {scenes.map((scene) => (
+          <button
+            key={scene.id}
+            type="button"
+            className={`global-overlay__chip ${state.flow.sceneId === scene.id ? "is-active" : ""}`}
+            data-overlay-action={`flow-scene-${scene.index + 1}`}
+            onClick={() => onSetFlowScene(scene.id, scene.index)}
+          >
+            {scene.index + 1}
           </button>
         ))}
       </div>
@@ -126,6 +155,8 @@ export function GlobalOverlay({
   onNextTrack,
   onSetVolume,
   onSetFlowState,
+  onNextFlowScene,
+  onSetFlowScene,
   onStartPomodoro,
   onResumePomodoro,
   onPausePomodoro,
@@ -204,7 +235,14 @@ export function GlobalOverlay({
         {state.activeMode === "listen" ? (
           <ListenControls state={state} onPrevTrack={onPrevTrack} onTogglePlay={onTogglePlay} onNextTrack={onNextTrack} />
         ) : null}
-        {state.activeMode === "flow" ? <FlowControls state={state} onSetFlowState={onSetFlowState} /> : null}
+        {state.activeMode === "flow" ? (
+          <FlowControls
+            state={state}
+            onSetFlowState={onSetFlowState}
+            onNextFlowScene={onNextFlowScene}
+            onSetFlowScene={onSetFlowScene}
+          />
+        ) : null}
         {state.activeMode === "screen" ? (
           <ScreenControls
             state={state}

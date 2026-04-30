@@ -19,6 +19,23 @@ const commonSchemas = {
     type: "string",
     enum: ["focus", "flow", "relax", "sleep"],
   },
+  FlowSceneSelection: {
+    type: "object",
+    properties: {
+      sceneId: { type: "string" },
+      sceneIndex: { type: "number" },
+    },
+  },
+  FlowSceneItem: {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+      index: { type: "number" },
+      label: { type: "string" },
+      subtitle: { type: "string" },
+      ritualLabelZh: { type: ["string", "null"] },
+    },
+  },
   CreativeMood: {
     type: "string",
     enum: ["clear", "scattered", "stuck", "tired", "calm", "energized"],
@@ -66,6 +83,7 @@ export const flowOpenApiDocument = {
         type: "object",
         properties: {
           currentState: { $ref: "#/components/schemas/FlowState" },
+          currentScene: { $ref: "#/components/schemas/FlowSceneSelection" },
           uiVisible: { type: "boolean" },
           appPhase: { type: "string" },
           playerState: { $ref: "#/components/schemas/PlayerState" },
@@ -279,7 +297,20 @@ export const systemOpenApiDocument = {
           },
           overlay: { type: "object" },
           playback: { type: "object" },
-          flow: { type: "object" },
+          flow: {
+            type: "object",
+            properties: {
+              state: { $ref: "#/components/schemas/FlowState" },
+              subtitle: { type: "string" },
+              sceneId: { type: "string" },
+              sceneIndex: { type: "number" },
+              scenesByState: {
+                type: "object",
+                additionalProperties: { type: "string" },
+              },
+              audioMetrics: { type: "object" },
+            },
+          },
           screen: { $ref: "#/components/schemas/ScreenState" },
           creativeCare: { $ref: "#/components/schemas/CreativeCareState" },
           system: { type: "object" },
@@ -574,6 +605,8 @@ export const systemOpenApiDocument = {
               "next_track",
               "set_volume",
               "set_flow_state",
+              "next_flow_scene",
+              "set_flow_scene",
               "screen_start_pomodoro",
               "screen_resume_pomodoro",
               "screen_pause_pomodoro",
@@ -635,6 +668,19 @@ export const systemOpenApiDocument = {
           flowStates: {
             type: "array",
             items: { $ref: "#/components/schemas/FlowState" },
+          },
+          flowScenes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                state: { $ref: "#/components/schemas/FlowState" },
+                items: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/FlowSceneItem" },
+                },
+              },
+            },
           },
           touch: { type: "object" },
           screenFeatures: { type: "object" },

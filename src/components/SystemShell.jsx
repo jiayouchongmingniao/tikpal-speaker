@@ -14,9 +14,8 @@ import {
   getBlankTapOverlayAction,
   getChromeTrackpadPinchIntent,
   getSafariGesturePinchIntent,
-  NEXT_MODE,
+  NEXT_FLOW_SCENE,
   NEXT_FLOW_STATE,
-  PREV_MODE,
   RETURN_OVERVIEW,
   shouldHandleSingleTouchTap,
 } from "../interactions/systemShellInput";
@@ -838,7 +837,7 @@ export function SystemShell({
 
     singleTouchTapRef.current.swipeIntent = swipeIntent;
     singleTouchTapRef.current.moved = true;
-    reportInputDebug(`touch swipe ${swipeIntent === NEXT_MODE ? "next" : "prev"}`);
+    reportInputDebug("touch swipe next-flow-scene");
     event.preventDefault();
   }
 
@@ -862,13 +861,8 @@ export function SystemShell({
       return;
     }
 
-    if (swipeIntent === NEXT_MODE) {
-      controller.nextMode();
-      return;
-    }
-
-    if (swipeIntent === PREV_MODE) {
-      controller.prevMode();
+    if (swipeIntent === NEXT_FLOW_SCENE) {
+      controller.nextFlowScene();
     }
   }
 
@@ -1096,6 +1090,8 @@ export function SystemShell({
           onNextTrack={controller.nextTrack}
           onSetVolume={controller.setVolume}
           onSetFlowState={controller.setFlowState}
+          onNextFlowScene={controller.nextFlowScene}
+          onSetFlowScene={controller.setFlowScene}
           onStartPomodoro={controller.startPomodoro}
           onResumePomodoro={controller.resumePomodoro}
           onPausePomodoro={controller.pausePomodoro}

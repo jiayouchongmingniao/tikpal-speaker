@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createScreenContext } from "../server/screenContextService.js";
 import { createSystemStateStore } from "../server/systemStateStore.js";
 import { getCreativeCareViewModel, getFlowCareCopy } from "../src/viewmodels/creativeCare.js";
+import { getFlowSceneById } from "../src/viewmodels/flowScenes.js";
 
 function test(name, fn) {
   try {
@@ -122,6 +123,39 @@ test("voice mood and explicit care mode update Flow recommendation", () => {
   const sleepState = store.runAction("voice_care_mode_set", { careMode: "sleep" }, "portable_controller");
   assert.equal(sleepState.creativeCare.currentCareMode, "sleep");
   assert.equal(sleepState.creativeCare.suggestedFlowState, "sleep");
+});
+
+test("flow scenes cycle within the current mode and remember per-mode selection", () => {
+  const store = createStore();
+  const first = store.getSnapshot();
+  const second = store.runAction("next_flow_scene", {}, "touch");
+
+  assert.equal(second.activeMode, "flow");
+  assert.equal(second.flow.state, "focus");
+  assert.notEqual(second.flow.sceneId, first.flow.sceneId);
+  assert.equal(second.flow.sceneIndex, 1);
+
+  settleTransition(store);
+  const deepFlow = store.runAction("set_flow_state", { state: "flow" }, "touch");
+  assert.equal(deepFlow.flow.state, "flow");
+  assert.equal(deepFlow.flow.sceneIndex, 0);
+
+  settleTransition(store);
+  store.runAction("next_flow_scene", {}, "touch");
+  settleTransition(store);
+  const backToFocus = store.runAction("set_flow_state", { state: "focus" }, "touch");
+  assert.equal(backToFocus.flow.state, "focus");
+  assert.equal(backToFocus.flow.sceneIndex, 1);
+});
+
+test("set_flow_scene accepts explicit scene ids and aligns the top-level Flow state", () => {
+  const store = createStore();
+  const state = store.runAction("set_flow_scene", { sceneId: "sleep-between-meetings" }, "portable_controller");
+  const scene = getFlowSceneById("sleep-between-meetings");
+
+  assert.equal(state.flow.state, "sleep");
+  assert.equal(state.flow.sceneId, "sleep-between-meetings");
+  assert.equal(state.playback.trackTitle, scene?.audioLabel);
 });
 
 test("creative care view models fall back safely without voice context", () => {

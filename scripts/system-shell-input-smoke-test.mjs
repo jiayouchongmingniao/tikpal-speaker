@@ -7,9 +7,8 @@ import {
   getDoubleTouchFlowSwipeIntent,
   getSafariGesturePinchIntent,
   getSingleTouchSwipeIntent,
+  NEXT_FLOW_SCENE,
   NEXT_FLOW_STATE,
-  NEXT_MODE,
-  PREV_MODE,
   RETURN_OVERVIEW,
   shouldHandleSingleTouchTap,
 } from "../src/interactions/systemShellInput.js";
@@ -95,24 +94,20 @@ test("Safari gesture pinch keeps the shrink path and ignores pinch-out", () => {
   assert.equal(getSafariGesturePinchIntent({ activeMode: "overview", scale: 0.94 }), null);
 });
 
-test("single-touch horizontal swipe maps left to next mode and right to previous mode", () => {
+test("single-touch downward swipe advances the current Flow scene", () => {
   assert.equal(
-    getSingleTouchSwipeIntent({ activeMode: "listen", transitionStatus: "idle", deltaX: -88, deltaY: 12 }),
-    NEXT_MODE,
-  );
-  assert.equal(
-    getSingleTouchSwipeIntent({ activeMode: "screen", transitionStatus: "idle", deltaX: 86, deltaY: -10 }),
-    PREV_MODE,
+    getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: 8, deltaY: 96 }),
+    NEXT_FLOW_SCENE,
   );
 });
 
-test("single-touch swipe ignores vertical, short, interactive, and non-focus gestures", () => {
+test("single-touch swipe ignores horizontal, short, interactive, non-flow, and transition gestures", () => {
   assert.equal(
-    getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: -54, deltaY: 8 }),
+    getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: 8, deltaY: 54 }),
     null,
   );
   assert.equal(
-    getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: -90, deltaY: 84 }),
+    getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: 96, deltaY: 84 }),
     null,
   );
   assert.equal(
@@ -120,17 +115,17 @@ test("single-touch swipe ignores vertical, short, interactive, and non-focus ges
       activeMode: "flow",
       transitionStatus: "idle",
       isInteractiveStart: true,
-      deltaX: -120,
-      deltaY: 6,
+      deltaX: 6,
+      deltaY: 120,
     }),
     null,
   );
   assert.equal(
-    getSingleTouchSwipeIntent({ activeMode: "overview", transitionStatus: "idle", deltaX: -120, deltaY: 6 }),
+    getSingleTouchSwipeIntent({ activeMode: "overview", transitionStatus: "idle", deltaX: 6, deltaY: 120 }),
     null,
   );
   assert.equal(
-    getSingleTouchSwipeIntent({ activeMode: "listen", transitionStatus: "animating", deltaX: -120, deltaY: 6 }),
+    getSingleTouchSwipeIntent({ activeMode: "listen", transitionStatus: "animating", deltaX: 6, deltaY: 120 }),
     null,
   );
 });

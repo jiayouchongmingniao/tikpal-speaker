@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePortableController } from "../hooks/usePortableController";
 import { CREATIVE_CARE_MOODS, CREATIVE_CARE_MODES, getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativeCare";
+import { getFlowScenesForState } from "../viewmodels/flowScenes";
 import { getPortableScreenCardViewModel } from "../viewmodels/screenContextConsumers";
 
 const FLOW_STATES = ["focus", "flow", "relax", "sleep"];
@@ -181,6 +182,8 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
   const playbackState = state?.playback?.state ?? "pause";
   const playbackVolume = state?.playback?.volume ?? 58;
   const flowState = state?.flow?.state ?? "focus";
+  const flowScenes = getFlowScenesForState(flowState);
+  const currentFlowScene = flowScenes.find((scene) => scene.id === state?.flow?.sceneId) ?? flowScenes[0];
   const creativeCare = getCreativeCareViewModel(state);
   const screenCard = getPortableScreenCardViewModel(state, screenContext);
   const pomodoroState = screenCard.pomodoroState;
@@ -350,7 +353,7 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
           <article className="portable-card">
             <span className="portable-card__label">Flow</span>
             <h2>{getFlowCareCopy(flowState).label}</h2>
-            <p>{creativeCare.insightSentence}</p>
+            <p>{currentFlowScene.label} · {currentFlowScene.subtitle}</p>
             <div className="portable-mode-row">
               {FLOW_STATES.map((item) => (
                 <button
@@ -364,6 +367,31 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
                 </button>
               ))}
             </div>
+            <div className="portable-control-row">
+              <button
+                type="button"
+                className="portable-button"
+                disabled={!hasWriteAccess}
+                onClick={() => controller.sendAction("next_flow_scene")}
+              >
+                Next scene
+              </button>
+              <strong>{state?.flow?.sceneIndex != null ? `Scene ${Number(state.flow.sceneIndex) + 1}/5` : "Scene 1/5"}</strong>
+            </div>
+            <div className="portable-mode-row">
+              {flowScenes.map((scene) => (
+                <button
+                  key={scene.id}
+                  type="button"
+                  className={`portable-chip ${state?.flow?.sceneId === scene.id ? "is-active" : ""}`}
+                  disabled={!hasWriteAccess}
+                  onClick={() => controller.sendAction("set_flow_scene", { sceneId: scene.id, sceneIndex: scene.index })}
+                >
+                  {scene.index + 1}
+                </button>
+              ))}
+            </div>
+            {currentFlowScene.ritualLabelZh ? <p>{currentFlowScene.ritualLabelZh}</p> : <p>{creativeCare.insightSentence}</p>}
           </article>
 
           <article className="portable-card portable-card--voice">

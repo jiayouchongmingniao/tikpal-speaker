@@ -2,6 +2,7 @@ import { FLOW_THEME } from "../theme";
 
 export function AmbientBackground({
   currentState,
+  scene = null,
   transitionState,
   appPhase = "immersive",
   performanceTier = "normal",
@@ -41,6 +42,13 @@ export function AmbientBackground({
       radial-gradient(ellipse at 18% 28%, ${baseTheme.accent}22 0%, transparent 40%)`
     : `radial-gradient(circle at 72% 40%, ${nextTheme.glow} 0%, transparent 38%),
       linear-gradient(160deg, ${nextTheme.bgGradient.join(", ")})`;
+  const sceneOpacity = isStaticDiagnostic ? 0.3 : isPiStableProfile ? 0.46 : isStableProfile ? 0.58 : 0.72;
+  const sceneFilter = isStaticDiagnostic
+    ? "saturate(0.88) contrast(1.02)"
+    : isPiStableProfile
+      ? "saturate(0.94) contrast(1.04)"
+      : "saturate(1.02) contrast(1.08)";
+  const sceneVignetteOpacity = isStaticDiagnostic ? 0.5 : isPiStableProfile ? 0.46 : isStableProfile ? 0.42 : 0.36;
 
   return (
     <div className="ambient-bg" aria-hidden="true">
@@ -61,6 +69,27 @@ export function AmbientBackground({
           mixBlendMode: nextBlendMode,
         }}
       />
+      {scene?.artwork ? (
+        <>
+          <div
+            className="ambient-bg__layer ambient-bg__layer--scene-art"
+            style={{
+              backgroundImage: `url("${scene.artwork}")`,
+              opacity: sceneOpacity,
+              filter: sceneFilter,
+            }}
+          />
+          <div
+            className="ambient-bg__layer ambient-bg__layer--scene-vignette"
+            style={{
+              opacity: sceneVignetteOpacity,
+              background: `linear-gradient(180deg, rgba(5, 7, 14, 0.2) 0%, rgba(5, 7, 14, 0.12) 24%, rgba(5, 7, 14, 0.54) 72%, rgba(5, 7, 14, 0.72) 100%),
+                radial-gradient(circle at 76% 18%, ${nextTheme.glow}20 0%, transparent 24%),
+                radial-gradient(circle at 24% 84%, ${baseTheme.accent}18 0%, transparent 28%)`,
+            }}
+          />
+        </>
+      ) : null}
       {!suppressDepthLayers ? (
         <div
           className="ambient-bg__layer ambient-bg__layer--depth"

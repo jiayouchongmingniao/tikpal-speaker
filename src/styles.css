@@ -112,6 +112,18 @@ body.app-shell-locked [contenteditable=""] {
   filter: blur(12px);
 }
 
+.ambient-bg__layer--scene-art {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  mix-blend-mode: normal;
+  transform: scale(1.02);
+}
+
+.ambient-bg__layer--scene-vignette {
+  mix-blend-mode: multiply;
+}
+
 .visual-canvas {
   z-index: 1;
   opacity: 1;
@@ -211,6 +223,45 @@ body.app-shell-locked [contenteditable=""] {
 
 .flow-care-stack {
   align-self: center;
+}
+
+.flow-scene-card {
+  width: min(560px, calc(100vw - 240px));
+  margin: 0 0 28px 120px;
+  padding: 18px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(9, 13, 24, 0.34), rgba(9, 13, 24, 0.12));
+  backdrop-filter: blur(16px);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.2);
+}
+
+.flow-scene-card__kicker,
+.flow-scene-card__meta {
+  display: inline-flex;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 11px;
+  opacity: 0.72;
+}
+
+.flow-scene-card strong {
+  display: block;
+  margin-top: 10px;
+  font-size: clamp(20px, 1.8vw, 28px);
+  font-weight: 600;
+}
+
+.flow-scene-card p {
+  margin: 10px 0 0;
+  max-width: 460px;
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.78;
+}
+
+.flow-scene-card__meta {
+  margin-top: 12px;
 }
 
 .flow-care-stack .state-title {
@@ -2401,6 +2452,10 @@ body.app-shell-locked [contenteditable=""] {
   justify-content: space-between;
 }
 
+.global-overlay__row--scene {
+  justify-content: space-between;
+}
+
 .global-overlay__button,
 .global-overlay__chip {
   border: 0;
@@ -2483,6 +2538,11 @@ body.app-shell-locked [contenteditable=""] {
   font-size: 14px;
   line-height: 1.4;
   opacity: 0.66;
+}
+
+.global-overlay__hint--scene {
+  flex: 1;
+  margin: 0 0 0 12px;
 }
 
 @media (max-aspect-ratio: 16/9) {

@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createSystemServiceClient } from "../bridge/systemServiceClient";
+import {
+  applyFlowSceneToPlayback,
+  createFlowSceneState,
+  getNextFlowSceneSelection,
+  getFlowSceneById,
+  normalizeFlowState,
+  resolveFlowSceneSelection,
+} from "../viewmodels/flowScenes";
 
 const MODE_ORDER = ["listen", "flow", "screen"];
 const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
@@ -78,6 +86,21 @@ function deriveFlowStateFromCareMode(careMode) {
   }
 
   return careMode === "flow" ? "flow" : "focus";
+}
+
+function applyFlowSceneSelectionToState(liveState, flowState, selection) {
+  return {
+    ...liveState,
+    playback: applyFlowSceneToPlayback(liveState.playback, selection),
+    flow: {
+      ...liveState.flow,
+      state: flowState,
+      subtitle: deriveFlowSubtitle(flowState),
+      sceneId: selection.sceneId,
+      sceneIndex: selection.sceneIndex,
+      scenesByState: selection.scenesByState,
+    },
+  };
 }
 
 function createInsightSentence(transcript, fallback) {
@@ -228,9 +251,15 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
   }
 
   if (type === "set_flow_state") {
-    const nextFlowState = payload.state ?? liveState.flow?.state ?? "focus";
+    const nextFlowState = normalizeFlowState(payload.state ?? liveState.flow?.state ?? "focus");
+    const selection = resolveFlowSceneSelection({
+      flowState: nextFlowState,
+      scenesByState: liveState.flow?.scenesByState,
+      sceneId: liveState.flow?.state === nextFlowState ? liveState.flow?.sceneId : null,
+    });
+    const nextState = applyFlowSceneSelectionToState(liveState, nextFlowState, selection);
     return {
-      ...liveState,
+      ...nextState,
       activeMode: "flow",
       focusedPanel: "flow",
       transition: {
@@ -240,11 +269,43 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
         startedAt: nowIso(),
         lockedUntil: Date.now() + FLOW_TRANSITION_MS,
       },
-      flow: {
-        ...liveState.flow,
-        state: nextFlowState,
-        subtitle: deriveFlowSubtitle(nextFlowState),
-      },
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "next_flow_scene") {
+    const nextFlowState = normalizeFlowState(payload.state ?? liveState.flow?.state ?? "focus");
+    const selection = getNextFlowSceneSelection({
+      flowState: nextFlowState,
+      sceneId: liveState.flow?.sceneId,
+      scenesByState: liveState.flow?.scenesByState,
+      step: 1,
+    });
+    const nextState = applyFlowSceneSelectionToState(liveState, nextFlowState, selection);
+    return {
+      ...nextState,
+      activeMode: "flow",
+      focusedPanel: "flow",
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "set_flow_scene") {
+    const explicitScene = getFlowSceneById(payload.sceneId);
+    const nextFlowState = normalizeFlowState(explicitScene?.state ?? payload.state ?? liveState.flow?.state ?? "focus");
+    const selection = resolveFlowSceneSelection({
+      flowState: nextFlowState,
+      sceneId: explicitScene?.id ?? payload.sceneId ?? null,
+      sceneIndex: payload.sceneIndex,
+      scenesByState: liveState.flow?.scenesByState,
+    });
+    const nextState = applyFlowSceneSelectionToState(liveState, nextFlowState, selection);
+    return {
+      ...nextState,
+      activeMode: "flow",
+      focusedPanel: "flow",
       lastSource: source,
       lastUpdatedAt: nowIso(),
     };
@@ -432,6 +493,25 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
 }
 
 function createFallbackState(initialMode = "overview", initialFlowState = "focus") {
+  const nextFlowState = normalizeFlowState(initialFlowState);
+  const initialSceneState = createFlowSceneState(nextFlowState);
+  const playback = applyFlowSceneToPlayback(
+    {
+      state: "play",
+      volume: 58,
+      trackTitle: "Low Light Corridor",
+      artist: "tikpal",
+      source: "Mock Stream",
+      progress: 0.63,
+      format: "FLAC 24/96",
+      nextTrackTitle: "Night Window",
+    },
+    resolveFlowSceneSelection({
+      flowState: nextFlowState,
+      sceneId: initialSceneState.sceneId,
+      scenesByState: initialSceneState.scenesByState,
+    }),
+  );
   return {
     activeMode: initialMode,
     focusedPanel: initialMode === "overview" ? null : initialMode,
@@ -446,19 +526,11 @@ function createFallbackState(initialMode = "overview", initialFlowState = "focus
       state: "hidden",
       visible: false,
     },
-    playback: {
-      state: "play",
-      volume: 58,
-      trackTitle: "Low Light Corridor",
-      artist: "tikpal",
-      source: "Mock Stream",
-      progress: 0.63,
-      format: "FLAC 24/96",
-      nextTrackTitle: "Night Window",
-    },
+    playback,
     flow: {
-      state: initialFlowState,
-      subtitle: deriveFlowSubtitle(initialFlowState),
+      state: nextFlowState,
+      subtitle: deriveFlowSubtitle(nextFlowState),
+      ...initialSceneState,
     },
     screen: {
       currentTask: "Write Ambient OS Spec",
@@ -721,6 +793,12 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     },
     async setFlowState(nextState) {
       return dispatch("set_flow_state", { state: nextState });
+    },
+    async nextFlowScene() {
+      return dispatch("next_flow_scene");
+    },
+    async setFlowScene(sceneId, sceneIndex = null) {
+      return dispatch("set_flow_scene", { sceneId, sceneIndex });
     },
     async startPomodoro(durationSec = 1500) {
       return dispatch("screen_start_pomodoro", { durationSec });
