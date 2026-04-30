@@ -87,8 +87,7 @@ body.app-shell-locked [contenteditable=""] {
 }
 
 .ambient-bg,
-.ambient-bg__layer,
-.visual-canvas {
+.ambient-bg__layer {
   position: absolute;
   inset: 0;
 }
@@ -120,14 +119,12 @@ body.app-shell-locked [contenteditable=""] {
   transform: scale(1.02);
 }
 
-.ambient-bg__layer--scene-vignette {
-  mix-blend-mode: multiply;
+.ambient-bg__layer--scene-art-direct {
+  transform: none;
 }
 
-.visual-canvas {
-  z-index: 1;
-  opacity: 1;
-  will-change: contents;
+.ambient-bg__layer--scene-vignette {
+  mix-blend-mode: multiply;
 }
 
 .flow-page.render-profile-balanced .ambient-bg__layer,
@@ -148,6 +145,13 @@ body.app-shell-locked [contenteditable=""] {
 
 .flow-page.render-profile-stable .ambient-bg__layer--next {
   opacity: 0.38;
+}
+
+.flow-page--image-background .ambient-bg__layer {
+  animation: none;
+  transform: none;
+  transition: opacity 280ms ease;
+  will-change: auto;
 }
 
 .flow-page--static-budget .ambient-bg__layer {
@@ -355,8 +359,44 @@ body.app-shell-locked [contenteditable=""] {
     radial-gradient(circle at bottom right, rgba(255, 125, 184, 0.12), transparent 28%),
     #05070d;
   overflow: hidden;
+  isolation: isolate;
   touch-action: none;
   overscroll-behavior: none;
+}
+
+.system-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 22;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(2, 4, 10, 0.08), rgba(2, 4, 10, 0.66));
+  will-change: opacity;
+}
+
+.system-shell.transition-animating.transition-kind-mode::before {
+  animation: shell-mode-brightness-veil 680ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes shell-mode-brightness-veil {
+  0% {
+    opacity: 0;
+  }
+
+  32% {
+    opacity: 0.72;
+  }
+
+  58% {
+    opacity: 0.34;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
 
 .system-shell button,
@@ -1343,6 +1383,7 @@ body.app-shell-locked [contenteditable=""] {
 }
 
 .page-layer {
+  z-index: 1;
   opacity: 0;
   pointer-events: none;
 }
@@ -1376,15 +1417,15 @@ body.app-shell-locked [contenteditable=""] {
 
 .overview-page.page-layer {
   transition:
-    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .mode-page.page-layer,
 .flow-page.page-layer {
   transition:
-    opacity 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .overview-page.page-layer.is-exiting {
@@ -1465,7 +1506,7 @@ body.app-shell-locked [contenteditable=""] {
 
 .system-shell.transition-animating .mode-page.page-layer,
 .system-shell.transition-animating .flow-page.page-layer {
-  transition-duration: 320ms;
+  transition-duration: 620ms;
 }
 
 .system-shell.transition-animating .flow-page.page-layer {

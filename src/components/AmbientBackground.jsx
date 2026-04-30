@@ -3,11 +3,13 @@ import { FLOW_THEME } from "../theme";
 export function AmbientBackground({
   currentState,
   scene = null,
+  previousScene = null,
   transitionState,
   appPhase = "immersive",
   performanceTier = "normal",
   renderProfile = "off",
   flowDiagnosticMode = "off",
+  imageOnly = false,
 }) {
   const baseTheme = FLOW_THEME[currentState] ?? FLOW_THEME.focus;
   const nextTheme =
@@ -46,55 +48,76 @@ export function AmbientBackground({
       radial-gradient(ellipse at 18% 28%, ${baseTheme.accent}22 0%, transparent 40%)`
     : `radial-gradient(circle at 72% 40%, ${nextTheme.glow} 0%, transparent 38%),
       linear-gradient(160deg, ${nextTheme.bgGradient.join(", ")})`;
-  const sceneOpacity = isStaticDiagnostic ? 0.42 : isPiStableProfile ? 0.74 : isStableProfile ? 0.82 : 0.9;
+  const sceneOpacity = imageOnly ? 1 : isStaticDiagnostic ? 0.42 : isPiStableProfile ? 0.74 : isStableProfile ? 0.82 : 0.9;
   const sceneFilter = isStaticDiagnostic
     ? "saturate(0.96) contrast(1.04)"
     : isPiStableProfile
       ? "saturate(1.02) contrast(1.06) brightness(1.04)"
       : "saturate(1.08) contrast(1.1) brightness(1.05)";
-  const sceneVignetteOpacity = isStaticDiagnostic ? 0.28 : isPiStableProfile ? 0.24 : isStableProfile ? 0.2 : 0.16;
+  const sceneVignetteOpacity = imageOnly ? 0.44 : isStaticDiagnostic ? 0.28 : isPiStableProfile ? 0.24 : isStableProfile ? 0.2 : 0.16;
+  const shouldRenderThemeLayers = !imageOnly || !scene?.artwork;
+  const isImageCrossfading = imageOnly && Boolean(previousScene?.artwork) && previousScene?.artwork !== scene?.artwork;
 
   return (
     <div className="ambient-bg" aria-hidden="true">
-      <div
-        className="ambient-bg__layer ambient-bg__layer--base"
-        style={{
-          opacity: baseOpacity,
-          background: `radial-gradient(circle at 20% 30%, ${baseTheme.bgGradient[2]} 0%, transparent 42%),
-            linear-gradient(120deg, ${baseTheme.bgGradient.join(", ")})`,
-        }}
-      />
-      <div
-        className="ambient-bg__layer ambient-bg__layer--next"
-        style={{
-          background: nextLayerBackground,
-          opacity: transitionState ? nextOpacity : nextOpacity * 0.82,
-          filter: nextBlur,
-          mixBlendMode: nextBlendMode,
-        }}
-      />
+      {shouldRenderThemeLayers ? (
+        <>
+          <div
+            className="ambient-bg__layer ambient-bg__layer--base"
+            style={{
+              opacity: baseOpacity,
+              background: `radial-gradient(circle at 20% 30%, ${baseTheme.bgGradient[2]} 0%, transparent 42%),
+                linear-gradient(120deg, ${baseTheme.bgGradient.join(", ")})`,
+            }}
+          />
+          <div
+            className="ambient-bg__layer ambient-bg__layer--next"
+            style={{
+              background: nextLayerBackground,
+              opacity: transitionState ? nextOpacity : nextOpacity * 0.82,
+              filter: nextBlur,
+              mixBlendMode: nextBlendMode,
+            }}
+          />
+        </>
+      ) : null}
       {scene?.artwork ? (
         <>
           <div
-            className="ambient-bg__layer ambient-bg__layer--scene-art"
+            className={`ambient-bg__layer ambient-bg__layer--scene-art ${
+              imageOnly ? "ambient-bg__layer--scene-art-direct" : ""
+            } ${
+              isImageCrossfading ? "ambient-bg__layer--scene-art-current" : ""
+            }`.trim()}
             style={{
               backgroundImage: `url("${scene.artwork}")`,
               opacity: sceneOpacity,
-              filter: sceneFilter,
+              filter: imageOnly ? "none" : sceneFilter,
             }}
           />
           <div
             className="ambient-bg__layer ambient-bg__layer--scene-vignette"
             style={{
               opacity: sceneVignetteOpacity,
-              background: `linear-gradient(180deg, rgba(5, 7, 14, 0.2) 0%, rgba(5, 7, 14, 0.12) 24%, rgba(5, 7, 14, 0.54) 72%, rgba(5, 7, 14, 0.72) 100%),
-                radial-gradient(circle at 76% 18%, ${nextTheme.glow}20 0%, transparent 24%),
-                radial-gradient(circle at 24% 84%, ${baseTheme.accent}18 0%, transparent 28%)`,
+              background: imageOnly
+                ? "linear-gradient(180deg, rgba(2, 3, 5, 0.08) 0%, rgba(2, 3, 5, 0.16) 42%, rgba(2, 3, 5, 0.6) 100%)"
+                : `linear-gradient(180deg, rgba(5, 7, 14, 0.2) 0%, rgba(5, 7, 14, 0.12) 24%, rgba(5, 7, 14, 0.54) 72%, rgba(5, 7, 14, 0.72) 100%),
+                  radial-gradient(circle at 76% 18%, ${nextTheme.glow}20 0%, transparent 24%),
+                  radial-gradient(circle at 24% 84%, ${baseTheme.accent}18 0%, transparent 28%)`,
             }}
           />
+          {isImageCrossfading ? (
+            <>
+              <div
+                className="ambient-bg__layer ambient-bg__layer--scene-art ambient-bg__layer--scene-art-direct ambient-bg__layer--scene-art-previous"
+                style={{ backgroundImage: `url("${previousScene.artwork}")` }}
+              />
+              <div className="ambient-bg__layer ambient-bg__layer--transition-shade" />
+            </>
+          ) : null}
         </>
       ) : null}
-      {!suppressDepthLayers ? (
+      {!imageOnly && !suppressDepthLayers ? (
         <div
           className="ambient-bg__layer ambient-bg__layer--depth"
           style={{
@@ -107,7 +130,7 @@ export function AmbientBackground({
           }}
         />
       ) : null}
-      {!suppressDepthLayers ? (
+      {!imageOnly && !suppressDepthLayers ? (
         <div
           className="ambient-bg__layer ambient-bg__layer--contour"
           style={{

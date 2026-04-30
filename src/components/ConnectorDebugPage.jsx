@@ -950,9 +950,16 @@ export function ConnectorDebugPage() {
           <div className="debug-card__header">
             <div>
               <span className="debug-kicker">Flow Render</span>
-              <h2>Wave layer diagnostics</h2>
+              <h2>Background renderer diagnostics</h2>
             </div>
-            <div className={`debug-status debug-status--${flowRenderDiagnostics.waveVisualMode === "multi-wave" ? "ok" : "checking"}`}>
+            <div
+              className={`debug-status debug-status--${
+                flowRenderDiagnostics.waveVisualMode === "multi-wave" ||
+                flowRenderDiagnostics.waveVisualMode === "background-image"
+                  ? "ok"
+                  : "checking"
+              }`}
+            >
               <strong>{flowRenderDiagnostics.waveVisualMode}</strong>
               <span>{flowRenderDiagnostics.primaryReason}</span>
             </div>
@@ -971,11 +978,11 @@ export function ConnectorDebugPage() {
               <strong>{flowRenderDiagnostics.renderProfile}</strong>
             </div>
             <div>
-              <span>Desired layers</span>
+              <span>Desired effects</span>
               <strong>{flowRenderDiagnostics.desiredLayerCount}</strong>
             </div>
             <div>
-              <span>Actual layers</span>
+              <span>Active effects</span>
               <strong>{flowRenderDiagnostics.actualLayerCount}</strong>
             </div>
             <div>

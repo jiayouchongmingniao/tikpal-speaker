@@ -14,8 +14,8 @@ const MODE_ORDER = ["listen", "flow", "screen"];
 const FLOW_ORDER = ["focus", "flow", "relax", "sleep"];
 const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
 const CREATIVE_CARE_MODES = ["focus", "flow", "unwind", "sleep"];
-const MODE_TRANSITION_MS = 280;
-const FLOW_TRANSITION_MS = 220;
+const MODE_TRANSITION_MS = 680;
+const FLOW_TRANSITION_MS = 520;
 const ROLE_ORDER = ["viewer", "controller", "operator", "admin"];
 const MAX_RUNTIME_LOG_ENTRIES = 200;
 const DEFAULT_SESSION_TTL_SEC = 24 * 60 * 60;
@@ -269,8 +269,8 @@ function createInitialPerformanceState() {
     interactionLatencyMs: null,
     memoryUsageMb: null,
     lastDegradeReason: null,
-    rendererType: "canvas",
-    requestedRenderer: "canvas",
+    rendererType: "image",
+    requestedRenderer: "image",
     chromiumExperiment: "baseline",
     rendererFallbackCount: 0,
     glInitErrorCount: 0,
@@ -1140,8 +1140,8 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       interactionLatencyMs: sample.interactionLatencyMs ?? null,
       memoryUsageMb: sample.memoryUsageMb ?? null,
       reason: sample.reason ?? null,
-      rendererType: sample.rendererType ?? "canvas",
-      requestedRenderer: sample.requestedRenderer ?? "canvas",
+      rendererType: sample.rendererType ?? "image",
+      requestedRenderer: sample.requestedRenderer ?? "image",
       chromiumExperiment: sample.chromiumExperiment ?? "baseline",
       rendererFallbackCount: sample.rendererFallbackCount ?? 0,
       glInitErrorCount: sample.glInitErrorCount ?? 0,
@@ -2342,8 +2342,8 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
                   interactionLatencyMs: payload.interactionLatencyMs ?? liveState.system.performance?.interactionLatencyMs ?? null,
                   memoryUsageMb: payload.memoryUsageMb ?? liveState.system.performance?.memoryUsageMb ?? null,
                   lastDegradeReason: payload.reason ?? liveState.system.performance?.lastDegradeReason ?? null,
-                  rendererType: payload.rendererType ?? liveState.system.performance?.rendererType ?? "canvas",
-                  requestedRenderer: payload.requestedRenderer ?? liveState.system.performance?.requestedRenderer ?? "canvas",
+                  rendererType: payload.rendererType ?? liveState.system.performance?.rendererType ?? "image",
+                  requestedRenderer: payload.requestedRenderer ?? liveState.system.performance?.requestedRenderer ?? "image",
                   chromiumExperiment: payload.chromiumExperiment ?? liveState.system.performance?.chromiumExperiment ?? "baseline",
                   rendererFallbackCount: payload.rendererFallbackCount ?? liveState.system.performance?.rendererFallbackCount ?? 0,
                   glInitErrorCount: payload.glInitErrorCount ?? liveState.system.performance?.glInitErrorCount ?? 0,
@@ -2665,8 +2665,8 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
         renderProfile: liveState.system?.renderProfile ?? "off",
         flowDiagnosticMode: liveState.system?.flowDiagnosticMode ?? "off",
         avgFps: liveState.system?.performance?.avgFps ?? null,
-        rendererType: liveState.system?.performance?.rendererType ?? "canvas",
-        requestedRenderer: liveState.system?.performance?.requestedRenderer ?? "canvas",
+        rendererType: liveState.system?.performance?.rendererType ?? "image",
+        requestedRenderer: liveState.system?.performance?.requestedRenderer ?? "image",
         chromiumExperiment: liveState.system?.performance?.chromiumExperiment ?? "baseline",
         rendererFallbackCount: liveState.system?.performance?.rendererFallbackCount ?? 0,
         glInitErrorCount: liveState.system?.performance?.glInitErrorCount ?? 0,
@@ -2692,8 +2692,8 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
       return {
         ...getRuntimeProfileConfig(liveState.system?.renderProfile ?? "off", liveState.system?.performanceTier ?? "normal"),
         flowDiagnosticMode: liveState.system?.flowDiagnosticMode ?? "off",
-        rendererType: liveState.system?.performance?.rendererType ?? "canvas",
-        requestedRenderer: liveState.system?.performance?.requestedRenderer ?? "canvas",
+        rendererType: liveState.system?.performance?.rendererType ?? "image",
+        requestedRenderer: liveState.system?.performance?.requestedRenderer ?? "image",
         chromiumExperiment: liveState.system?.performance?.chromiumExperiment ?? "baseline",
         rendererFallbackReason: liveState.system?.performance?.rendererFallbackReason ?? null,
       };

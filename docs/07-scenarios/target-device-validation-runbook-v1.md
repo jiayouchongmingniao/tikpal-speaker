@@ -212,9 +212,9 @@ export TIKPAL_PLAYER_API_BASE=http://localhost:9001/player
 - 默认运行档：`RPI_RENDER_PROFILE=balanced`
 - 高温或高负载兜底：`RPI_RENDER_PROFILE=stable`
 - 目标：在无可见频闪前提下，Pi4 Flow 真机采样 `p10Fps >= 30`
-- Flow renderer 实验入口：`flowRenderer=canvas|auto|webgl`
+- Flow renderer 实验入口：`flowRenderer=image|canvas|auto|webgl`
 - Chromium 预设实验入口：`TIKPAL_CHROMIUM_EXPERIMENT=baseline|pi4-gpu-balanced|pi4-gpu-conservative|pi4-low-memory`
-- 默认 kiosk 发布候选组合：`flowRenderer=webgl` + `TIKPAL_CHROMIUM_EXPERIMENT=pi4-gpu-balanced`
+- 默认 kiosk 发布候选组合：`flowRenderer=image` + `TIKPAL_CHROMIUM_EXPERIMENT=pi4-gpu-balanced`
 - 当前 Pi4 宽屏默认输出：`TIKPAL_KIOSK_XRANDR_MODE=2560x720`
 - 原生 GPU 对照：`python3 scripts/native-flow-gpu-poc.py --width 2560 --height 720 --duration 30 --out ./native-flow-gpu-poc.json`
 

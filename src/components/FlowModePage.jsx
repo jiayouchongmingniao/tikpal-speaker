@@ -1,6 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AmbientBackground } from "./AmbientBackground";
-import { FlowVisualRenderer } from "./FlowVisualRenderer";
 import { SideInfoPanel } from "./SideInfoPanel";
 import { StateTitle } from "./StateTitle";
 import { FLOW_THEME } from "../theme";
@@ -15,20 +14,7 @@ import {
   normalizeRenderProfile,
 } from "../viewmodels/performance";
 
-function createDerivedMetrics(playback, flow, creativeCare) {
-  const metrics = flow.audioMetrics ?? {};
-  const intensity = Number(creativeCare?.moodIntensity ?? 0.45);
-  const careMode = creativeCare?.currentCareMode ?? "flow";
-  const careLift = careMode === "sleep" ? -0.12 : careMode === "unwind" ? -0.05 : careMode === "focus" ? 0.04 : 0.08;
-  return {
-    volumeNormalized: playback.volume / 100,
-    lowEnergy: Math.max(0.08, Math.min(0.7, (metrics.lowEnergy ?? 0.28) + intensity * 0.08 + careLift)),
-    midEnergy: Math.max(0.06, Math.min(0.6, (metrics.midEnergy ?? 0.22) + intensity * 0.06 + careLift / 2)),
-    highEnergy: Math.max(0.04, Math.min(0.5, (metrics.highEnergy ?? 0.18) + intensity * 0.04)),
-    beatConfidence: metrics.beatConfidence ?? 0.12,
-    isPlaying: playback.state === "play",
-  };
-}
+const BACKGROUND_CROSSFADE_MS = 1200;
 
 export function FlowModePage({
   systemState,
@@ -46,13 +32,14 @@ export function FlowModePage({
   const careCopy = getFlowCareCopy(currentState);
   const scenes = getFlowScenesForState(currentState);
   const currentScene = scenes.find((scene) => scene.id === systemState.flow.sceneId) ?? scenes[0];
+  const previousSceneRef = useRef(currentScene);
+  const [previousScene, setPreviousScene] = useState(null);
   const appPhase = deriveFlowAppPhase({
     activeMode: systemState.activeMode,
     overlayVisible: systemState.overlay.visible,
     flowState: currentState,
     transitionStatus: transition.status,
   });
-  const audioMetrics = createDerivedMetrics(systemState.playback, systemState.flow, creativeCare);
   const playerState = {
     playbackState: systemState.playback.state,
     volume: systemState.playback.volume,
@@ -83,34 +70,84 @@ export function FlowModePage({
     return undefined;
   }, [currentScene.artwork, currentScene.index, renderProfile, scenes]);
 
+  useEffect(() => {
+    const lastScene = previousSceneRef.current;
+    previousSceneRef.current = currentScene;
+
+    if (!lastScene || lastScene.id === currentScene.id || !lastScene.artwork || !currentScene.artwork) {
+      return undefined;
+    }
+
+    setPreviousScene(lastScene);
+    const timeout = window.setTimeout(() => {
+      setPreviousScene((scene) => (scene?.id === lastScene.id ? null : scene));
+    }, BACKGROUND_CROSSFADE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [currentScene]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    function updateStaticBackgroundDebug() {
+      window.__TIKPAL_CANVAS_DEBUG__ = {
+        skippedRenderCount: 0,
+        resizeCommitCount: 0,
+        transitionFrameBudgetHits: appPhase === "transitioning" ? 1 : 0,
+        lastFrameIntervalMs: Number(renderBudget.frameIntervalMs ?? 0),
+        width: window.innerWidth,
+        height: window.innerHeight,
+        ratio: 1,
+        renderScale: 1,
+        effectiveRatio: 1,
+        desiredLayerCount: 0,
+        layerCount: 0,
+        flowDiagnosticMode,
+        staticSceneActive: true,
+        lowPowerBudget: true,
+        flowSceneMode: "static",
+        phase: previousScene ? "image_crossfade" : appPhase,
+        rendererType: "image",
+        requestedRenderer: "image",
+        rendererFallbackCount: 0,
+        glInitErrorCount: 0,
+        glContextLostCount: 0,
+        rendererFallbackReason: null,
+        chromiumExperiment: runtimeRendererConfig.chromiumExperiment,
+      };
+    }
+
+    updateStaticBackgroundDebug();
+    window.addEventListener("resize", updateStaticBackgroundDebug);
+    return () => {
+      window.removeEventListener("resize", updateStaticBackgroundDebug);
+    };
+  }, [appPhase, flowDiagnosticMode, previousScene, renderBudget.frameIntervalMs, runtimeRendererConfig.chromiumExperiment]);
+
   return (
     <main
       className={`flow-page phase-${appPhase} tone-${theme.uiTone} care-${creativeCare.currentCareMode} render-profile-${renderProfile} ${
         isStaticFlowBudget ? "flow-page--static-budget" : ""
       } ${
         isMinimalFlowBudget ? "flow-page--minimal-budget" : ""
-      } ${className}`.trim()}
+      } ${
+        previousScene ? "flow-page--image-crossfading" : ""
+      } flow-page--image-background ${className}`.trim()}
       role="application"
       aria-label="Flow mode"
     >
       <AmbientBackground
         currentState={currentState}
         scene={currentScene}
+        previousScene={previousScene}
         transitionState={transitionState}
         appPhase={appPhase}
         performanceTier={performanceTier}
         renderProfile={renderProfile}
         flowDiagnosticMode={flowDiagnosticMode}
-      />
-      <FlowVisualRenderer
-        currentState={currentState}
-        theme={theme}
-        audioMetrics={audioMetrics}
-        appPhase={appPhase}
-        renderBudget={renderBudget}
-        flowDiagnosticMode={flowDiagnosticMode}
-        rendererPreference={runtimeRendererConfig.flowRenderer}
-        chromiumExperiment={runtimeRendererConfig.chromiumExperiment}
+        imageOnly
       />
       <section className="flow-page__content">
         <div className="flow-care-stack">

@@ -12,8 +12,8 @@ import {
 const MODE_ORDER = ["listen", "flow", "screen"];
 const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
 const CREATIVE_CARE_MODES = ["focus", "flow", "unwind", "sleep"];
-const MODE_TRANSITION_MS = 280;
-const FLOW_TRANSITION_MS = 220;
+const MODE_TRANSITION_MS = 680;
+const FLOW_TRANSITION_MS = 520;
 
 function nowIso() {
   return new Date().toISOString();
@@ -558,8 +558,8 @@ function createFallbackState(initialMode = "overview", initialFlowState = "focus
         interactionLatencyMs: null,
         memoryUsageMb: null,
         lastDegradeReason: null,
-        rendererType: "canvas",
-        requestedRenderer: "canvas",
+        rendererType: "image",
+        requestedRenderer: "image",
         chromiumExperiment: "baseline",
         rendererFallbackCount: 0,
         glInitErrorCount: 0,

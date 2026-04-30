@@ -158,6 +158,7 @@ export function SystemShell({
   const stateRef = useRef(state);
   const transitionStatus = state.transition?.status ?? "idle";
   const transition = state.transition ?? { status: "idle", from: state.activeMode, to: state.activeMode };
+  const transitionKind = transition.from === transition.to ? "state" : "mode";
   const isFocusMode = state.activeMode !== "overview";
   const shouldRenderOverview =
     state.activeMode === "overview" || transition.from === "overview" || transition.to === "overview";
@@ -873,7 +874,7 @@ export function SystemShell({
 
   return (
     <div
-      className={`system-shell mode-${state.activeMode} transition-${transitionStatus} render-profile-${renderProfile}`}
+      className={`system-shell mode-${state.activeMode} transition-${transitionStatus} transition-kind-${transitionKind} render-profile-${renderProfile}`}
       onPointerDown={onShellPointerDown}
       onPointerMove={onShellPointerMove}
       onPointerUp={onShellPointerUp}

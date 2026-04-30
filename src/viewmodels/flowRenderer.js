@@ -1,11 +1,11 @@
-export const FLOW_RENDERER_OPTIONS = ["canvas", "auto", "webgl"];
+export const FLOW_RENDERER_OPTIONS = ["image", "canvas", "auto", "webgl"];
 
-export function normalizeFlowRenderer(value = "canvas") {
-  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "canvas";
+export function normalizeFlowRenderer(value = "image") {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "image";
   if (normalized === "gl") {
     return "webgl";
   }
-  return FLOW_RENDERER_OPTIONS.includes(normalized) ? normalized : "canvas";
+  return FLOW_RENDERER_OPTIONS.includes(normalized) ? normalized : "image";
 }
 
 export function normalizeChromiumExperiment(value = "baseline") {
@@ -24,7 +24,7 @@ export function normalizeChromiumExperiment(value = "baseline") {
 export function getFlowRendererRuntimeConfig(locationLike = globalThis?.window?.location) {
   const search = locationLike?.search ?? "";
   const params = new URLSearchParams(search);
-  const defaultRenderer = normalizeFlowRenderer(import.meta.env?.VITE_FLOW_RENDERER ?? "canvas");
+  const defaultRenderer = normalizeFlowRenderer(import.meta.env?.VITE_FLOW_RENDERER ?? "image");
   return {
     flowRenderer: normalizeFlowRenderer(params.get("flowRenderer") ?? defaultRenderer),
     chromiumExperiment: normalizeChromiumExperiment(params.get("chromiumExperiment") ?? "baseline"),

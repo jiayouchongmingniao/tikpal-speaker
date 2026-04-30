@@ -83,20 +83,37 @@ export function deriveFlowRenderDiagnostics({
   const flowState = systemState.flow?.state ?? "focus";
   const performanceTier = systemState.system?.performanceTier ?? runtimeProfile?.activeTier ?? "normal";
   const renderProfile = normalizeRenderProfile(systemState.system?.renderProfile ?? runtimeProfile?.renderProfile ?? "off");
+  const hasLayerDebug =
+    Boolean(canvasDebug) &&
+    (Object.prototype.hasOwnProperty.call(canvasDebug, "desiredLayerCount") ||
+      Object.prototype.hasOwnProperty.call(canvasDebug, "layerCount"));
+  const rendererType =
+    canvasDebug?.rendererType ??
+    runtimeProfile?.rendererType ??
+    systemState.system?.performance?.rendererType ??
+    (hasLayerDebug ? "canvas" : "image");
+  const requestedRenderer =
+    canvasDebug?.requestedRenderer ??
+    runtimeProfile?.requestedRenderer ??
+    systemState.system?.performance?.requestedRenderer ??
+    (hasLayerDebug ? "canvas" : "image");
+  const isImageRenderer = rendererType === "image" || requestedRenderer === "image";
   const appPhase = deriveFlowAppPhase({
     activeMode: systemState.activeMode ?? "overview",
     overlayVisible: Boolean(systemState.overlay?.visible),
     flowState,
     transitionStatus: transition.status ?? "idle",
   });
-  const desiredLayerCount =
-    canvasDebug?.desiredLayerCount ?? (appPhase === "transitioning" ? 1 : flowState === "flow" ? 3 : 2);
+  const desiredLayerCount = isImageRenderer
+    ? 0
+    : canvasDebug?.desiredLayerCount ?? (appPhase === "transitioning" ? 1 : flowState === "flow" ? 3 : 2);
   const renderBudget = runtimeProfile?.activeBudget ?? getPerformanceRenderBudget(performanceTier, renderProfile);
   const staticFlowBudget = isStaticFlowRenderBudget(renderBudget);
   const minimalFlowBudget = renderBudget?.flowSceneMode === "minimal";
-  const maxWaveLayers = Number(renderBudget.maxWaveLayers ?? desiredLayerCount);
-  const actualLayerCount =
-    canvasDebug?.layerCount ?? Math.min(Number(desiredLayerCount ?? 1), Number.isFinite(maxWaveLayers) ? maxWaveLayers : desiredLayerCount);
+  const maxWaveLayers = isImageRenderer ? 0 : Number(renderBudget.maxWaveLayers ?? desiredLayerCount);
+  const actualLayerCount = isImageRenderer
+    ? 0
+    : canvasDebug?.layerCount ?? Math.min(Number(desiredLayerCount ?? 1), Number.isFinite(maxWaveLayers) ? maxWaveLayers : desiredLayerCount);
   const transitionState = toFlowTransitionState(transition, flowState);
   const ambientDiagnostics = deriveAmbientBackgroundDiagnostics({
     transitionState,
@@ -105,11 +122,13 @@ export function deriveFlowRenderDiagnostics({
     performanceTier,
     flowDiagnosticMode: systemState.system?.flowDiagnosticMode ?? "off",
   });
-  const waveVisualMode = actualLayerCount <= 1 ? "single-wave" : "multi-wave";
+  const waveVisualMode = isImageRenderer ? "background-image" : actualLayerCount <= 1 ? "single-wave" : "multi-wave";
   const budgetLimited = actualLayerCount < desiredLayerCount;
 
-  let primaryReason = "full_flow_budget";
-  if (appPhase === "transitioning") {
+  let primaryReason = isImageRenderer ? "background_image" : "full_flow_budget";
+  if (isImageRenderer) {
+    primaryReason = "background_image";
+  } else if (appPhase === "transitioning") {
     primaryReason = "transition_phase";
   } else if (staticFlowBudget) {
     primaryReason = "static_budget";
@@ -121,7 +140,9 @@ export function deriveFlowRenderDiagnostics({
     primaryReason = "background_layering";
   }
 
-  let explanation = `Rendering ${actualLayerCount} wave layers with full Flow budget.`;
+  let explanation = isImageRenderer
+    ? "Flow is showing the scene artwork directly; wave and particle layers are disabled."
+    : `Rendering ${actualLayerCount} wave layers with full Flow budget.`;
   if (primaryReason === "transition_phase") {
     explanation = "Transition phase forces the canvas down to one wave layer until the mode settles.";
   } else if (primaryReason === "static_budget") {
@@ -138,6 +159,8 @@ export function deriveFlowRenderDiagnostics({
     appPhase,
     performanceTier,
     renderProfile,
+    rendererType,
+    requestedRenderer,
     desiredLayerCount,
     actualLayerCount,
     maxWaveLayers,
@@ -145,7 +168,7 @@ export function deriveFlowRenderDiagnostics({
     staticFlowBudget,
     minimalFlowBudget,
     primaryReason,
-    backgroundLayeringActive: ambientDiagnostics.backgroundLayeringActive,
+    backgroundLayeringActive: isImageRenderer ? false : ambientDiagnostics.backgroundLayeringActive,
     ambientDiagnostics,
     explanation,
   };

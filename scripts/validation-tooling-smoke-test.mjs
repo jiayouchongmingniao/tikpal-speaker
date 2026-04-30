@@ -258,9 +258,9 @@ await test("kiosk launcher check exposes renderer and Chromium experiment tuning
   });
   const code = await new Promise((resolve) => child.on("close", resolve));
   assert.equal(code, 0);
-  assert.match(stdout, /flow_renderer=webgl/);
+  assert.match(stdout, /flow_renderer=image/);
   assert.match(stdout, /chromium_experiment=pi4-gpu-balanced/);
-  assert.match(stdout, /flowRenderer=webgl/);
+  assert.match(stdout, /flowRenderer=image/);
   assert.match(stdout, /chromiumExperiment=pi4-gpu-balanced/);
 });
 

@@ -18,7 +18,7 @@ TIKPAL_CHROMIUM_POLICY_DIR="${TIKPAL_CHROMIUM_POLICY_DIR:-/etc/chromium/policies
 TIKPAL_CHROMIUM_POLICY_BASENAME="${TIKPAL_CHROMIUM_POLICY_BASENAME:-tikpal-kiosk-managed.json}"
 TIKPAL_KIOSK_LOG_DIR="${TIKPAL_KIOSK_LOG_DIR:-$APP_DIR/.tikpal/kiosk}"
 TIKPAL_KIOSK_ALLOW_REMOTE_DEBUG="${TIKPAL_KIOSK_ALLOW_REMOTE_DEBUG:-0}"
-TIKPAL_FLOW_RENDERER="${TIKPAL_FLOW_RENDERER:-webgl}"
+TIKPAL_FLOW_RENDERER="${TIKPAL_FLOW_RENDERER:-image}"
 TIKPAL_CHROMIUM_EXPERIMENT="${TIKPAL_CHROMIUM_EXPERIMENT:-pi4-gpu-balanced}"
 TIKPAL_KIOSK_APPEND_QUERY="${TIKPAL_KIOSK_APPEND_QUERY:-1}"
 
@@ -57,14 +57,14 @@ validate_window() {
 
 normalize_flow_renderer() {
   case "$1" in
-    canvas|auto|webgl)
+    image|canvas|auto|webgl)
       printf "%s" "$1"
       ;;
     gl)
       printf "%s" "webgl"
       ;;
     *)
-      fail "invalid TIKPAL_FLOW_RENDERER '$1' (expected canvas|auto|webgl|gl)"
+      fail "invalid TIKPAL_FLOW_RENDERER '$1' (expected image|canvas|auto|webgl|gl)"
       ;;
   esac
 }

@@ -140,7 +140,8 @@ test("debug view model combines runtime metrics with render budget", () => {
 test("flow renderer runtime config normalizes query params", () => {
   assert.equal(normalizeFlowRenderer("webgl"), "webgl");
   assert.equal(normalizeFlowRenderer("gl"), "webgl");
-  assert.equal(normalizeFlowRenderer("unknown"), "canvas");
+  assert.equal(normalizeFlowRenderer("image"), "image");
+  assert.equal(normalizeFlowRenderer("unknown"), "image");
   assert.equal(normalizeChromiumExperiment(" Pi4 GPU Balanced "), "pi4-gpu-balanced");
   assert.deepEqual(
     getFlowRendererRuntimeConfig({ search: "?flowRenderer=auto&chromiumExperiment=Pi4+GPU+Balanced" }),
@@ -218,6 +219,26 @@ test("flow render diagnostics explain full budget, budget-limited, and transitio
   assert.equal(transitionLimited.appPhase, "transitioning");
   assert.equal(transitionLimited.primaryReason, "transition_phase");
   assert.equal(transitionLimited.backgroundLayeringActive, true);
+
+  const imageBackground = deriveFlowRenderDiagnostics({
+    systemState: {
+      activeMode: "flow",
+      overlay: { visible: false },
+      transition: { status: "idle", from: "flow", to: "flow" },
+      flow: { state: "flow" },
+      system: { performanceTier: "normal", renderProfile: "balanced" },
+    },
+    canvasDebug: {
+      rendererType: "image",
+      requestedRenderer: "image",
+      desiredLayerCount: 0,
+      layerCount: 0,
+    },
+  });
+  assert.equal(imageBackground.waveVisualMode, "background-image");
+  assert.equal(imageBackground.primaryReason, "background_image");
+  assert.equal(imageBackground.actualLayerCount, 0);
+  assert.equal(imageBackground.backgroundLayeringActive, false);
 });
 
 test("performance trace summary recommends a device tier from real samples", () => {
