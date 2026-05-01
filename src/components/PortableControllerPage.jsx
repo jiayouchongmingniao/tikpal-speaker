@@ -392,7 +392,10 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
                 max="100"
                 value={playbackVolume}
                 disabled={!hasWriteAccess}
-                onChange={(event) => controller.sendAction("set_volume", { volume: Number(event.target.value) })}
+                onPointerDown={controller.beginVolumeAdjustment}
+                onPointerUp={controller.endVolumeAdjustment}
+                onPointerCancel={controller.endVolumeAdjustment}
+                onChange={(event) => controller.setVolume(Number(event.target.value))}
               />
             </label>
           </article>

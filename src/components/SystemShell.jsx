@@ -63,6 +63,10 @@ function getPageLayerClass(pageMode, activeMode, transition, transitionPrimed = 
       return "page-layer is-active page-layer--transition-hold";
     }
 
+    if (to === pageKey) {
+      return "page-layer is-entering page-layer--transition-hold";
+    }
+
     return "page-layer is-hidden";
   }
 
@@ -1092,6 +1096,8 @@ export function SystemShell({
           onPrevTrack={controller.prevTrack}
           onNextTrack={controller.nextTrack}
           onSetVolume={controller.setVolume}
+          onVolumeAdjustStart={controller.beginVolumeAdjustment}
+          onVolumeAdjustEnd={controller.endVolumeAdjustment}
         />
       ) : null}
 
@@ -1127,6 +1133,8 @@ export function SystemShell({
           onPrevTrack={controller.prevTrack}
           onNextTrack={controller.nextTrack}
           onSetVolume={controller.setVolume}
+          onVolumeAdjustStart={controller.beginVolumeAdjustment}
+          onVolumeAdjustEnd={controller.endVolumeAdjustment}
           onSetFlowState={controller.setFlowState}
           onNextFlowScene={controller.nextFlowScene}
           onSetFlowScene={controller.setFlowScene}

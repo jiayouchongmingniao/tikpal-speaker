@@ -60,7 +60,7 @@ export function getSingleTouchSwipeIntent({
   const absHorizontal = Math.abs(horizontalDelta);
   const absVertical = Math.abs(verticalDelta);
 
-  if (verticalDelta > -SINGLE_TOUCH_SWIPE_DELTA) {
+  if (absVertical < SINGLE_TOUCH_SWIPE_DELTA) {
     return null;
   }
 
@@ -68,7 +68,15 @@ export function getSingleTouchSwipeIntent({
     return null;
   }
 
-  return PREV_FLOW_SCENE;
+  if (verticalDelta <= -SINGLE_TOUCH_SWIPE_DELTA) {
+    return PREV_FLOW_SCENE;
+  }
+
+  if (verticalDelta >= SINGLE_TOUCH_SWIPE_DELTA) {
+    return NEXT_FLOW_SCENE;
+  }
+
+  return null;
 }
 
 export function getDoubleTouchFlowSwipeIntent({

@@ -15,8 +15,8 @@ import {
   normalizeRenderProfile,
 } from "../viewmodels/performance";
 
-const BACKGROUND_CROSSFADE_MS = 2200;
-const SCENE_PROMPT_VISIBLE_MS = 3000;
+const BACKGROUND_CROSSFADE_MS = 5000;
+const SCENE_PROMPT_VISIBLE_MS = 5000;
 const FLOW_AUDIO_METRICS = {
   focus: { lowEnergy: 0.28, midEnergy: 0.22, highEnergy: 0.14, beatConfidence: 0.16 },
   flow: { lowEnergy: 0.38, midEnergy: 0.32, highEnergy: 0.22, beatConfidence: 0.24 },

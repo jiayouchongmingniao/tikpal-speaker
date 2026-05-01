@@ -197,13 +197,13 @@ body.app-shell-locked [contenteditable=""] {
 
 .ambient-bg__layer--scene-art-current {
   z-index: 0;
-  animation: flow-scene-art-current-in 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-art-current-in 5000ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .ambient-bg__layer--scene-art-previous {
   z-index: 1;
   opacity: 0;
-  animation: flow-scene-art-previous-out 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-art-previous-out 5000ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .ambient-bg__layer--scene-art-hold {
@@ -218,7 +218,7 @@ body.app-shell-locked [contenteditable=""] {
   background:
     radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.08), transparent 38%),
     linear-gradient(180deg, rgba(2, 3, 5, 0.02), rgba(2, 3, 5, 0.42));
-  animation: flow-scene-transition-shade 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-transition-shade 5000ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes flow-scene-art-current-in {
@@ -272,9 +272,9 @@ body.app-shell-locked [contenteditable=""] {
   animation: none;
   transform: none;
   transition:
-    opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 420ms ease;
+    opacity 5000ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 5000ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 5000ms ease;
 }
 
 .flow-page.render-profile-balanced .ambient-bg__layer--next,
@@ -290,22 +290,22 @@ body.app-shell-locked [contenteditable=""] {
 .flow-page--image-background .ambient-bg__layer {
   animation: none;
   transform: none;
-  transition: opacity 2200ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 5000ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: auto;
 }
 
 .flow-page--image-crossfading .ambient-bg__layer--scene-art-current {
-  animation: flow-scene-art-current-in 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-art-current-in 5000ms cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: opacity;
 }
 
 .flow-page--image-crossfading .ambient-bg__layer--scene-art-previous {
-  animation: flow-scene-art-previous-out 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-art-previous-out 5000ms cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: opacity;
 }
 
 .flow-page--image-crossfading .ambient-bg__layer--transition-shade {
-  animation: flow-scene-transition-shade 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-transition-shade 5000ms cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: opacity;
 }
 
@@ -330,8 +330,8 @@ body.app-shell-locked [contenteditable=""] {
 
 .flow-page--static-budget .ambient-bg__layer {
   transition:
-    opacity 220ms ease,
-    filter 220ms ease;
+    opacity 5000ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 5000ms ease;
 }
 
 .flow-page--static-budget .ambient-bg__layer--next {
@@ -348,7 +348,7 @@ body.app-shell-locked [contenteditable=""] {
 .flow-page--static-budget .side-info,
 .flow-page--static-budget .phase-idle_preview .side-info,
 .flow-page--static-budget .phase-controls_visible .side-info {
-  transition-duration: 160ms;
+  transition-duration: 5000ms;
 }
 
 .flow-page--minimal-budget .ambient-bg__layer {
@@ -366,7 +366,7 @@ body.app-shell-locked [contenteditable=""] {
 }
 
 .flow-page--minimal-budget .flow-care-insight {
-  transition: opacity 480ms ease;
+  transition: opacity 5000ms ease;
 }
 
 .flow-page.phase-transitioning .ambient-bg__layer {
@@ -375,7 +375,7 @@ body.app-shell-locked [contenteditable=""] {
 }
 
 .flow-page.phase-transitioning .ambient-bg__layer--next {
-  transition-duration: 2200ms;
+  transition-duration: 5000ms;
 }
 
 .flow-page__content {
@@ -1687,17 +1687,21 @@ body.app-shell-locked [contenteditable=""] {
   transform: translate3d(0, 20px, 0) scale(0.984);
 }
 
+.page-layer--transition-hold {
+  transition: none !important;
+}
+
 .overview-page.page-layer {
   transition:
-    opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 5000ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 5000ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .mode-page.page-layer,
 .flow-page.page-layer {
   transition:
-    opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 5000ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 5000ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .overview-page.page-layer.is-exiting {
@@ -1722,63 +1726,64 @@ body.app-shell-locked [contenteditable=""] {
 }
 
 .page-layer--focus-enter.page-layer--slot-left {
-  transform: translate3d(-12%, 0, 0) scale(0.9);
+  transform: translate3d(-5%, 0, 0) scale(0.965);
 }
 
 .page-layer--focus-enter.page-layer--slot-center {
-  transform: translate3d(0, 0, 0) scale(0.88);
+  transform: translate3d(0, 0, 0) scale(0.962);
 }
 
 .page-layer--focus-enter.page-layer--slot-right {
-  transform: translate3d(12%, 0, 0) scale(0.9);
+  transform: translate3d(5%, 0, 0) scale(0.965);
 }
 
 .page-layer--focus-exit.page-layer--slot-left {
-  transform: translate3d(-12%, 0, 0) scale(0.9);
+  transform: translate3d(-5%, 0, 0) scale(0.965);
 }
 
 .page-layer--focus-exit.page-layer--slot-center {
-  transform: translate3d(0, 0, 0) scale(0.88);
+  transform: translate3d(0, 0, 0) scale(0.962);
 }
 
 .page-layer--focus-exit.page-layer--slot-right {
-  transform: translate3d(12%, 0, 0) scale(0.9);
+  transform: translate3d(5%, 0, 0) scale(0.965);
 }
 
 .page-layer--handoff-in {
-  transform: translate3d(4%, 0, 0) scale(0.994);
+  transform: translate3d(1.5%, 0, 0) scale(0.998);
 }
 
 .page-layer--handoff-out {
-  transform: translate3d(-4%, 0, 0) scale(1.006);
+  transform: translate3d(-1.5%, 0, 0) scale(1.002);
 }
 
 .system-shell.transition-animating .page-layer--focus-enter.page-layer--slot-left,
 .system-shell.transition-animating .page-layer--focus-exit.page-layer--slot-left {
-  transform: translate3d(-7%, 0, 0) scale(0.95);
+  transform: translate3d(-2.5%, 0, 0) scale(0.982);
 }
 
 .system-shell.transition-animating .page-layer--focus-enter.page-layer--slot-center,
 .system-shell.transition-animating .page-layer--focus-exit.page-layer--slot-center {
-  transform: translate3d(0, 0, 0) scale(0.95);
+  transform: translate3d(0, 0, 0) scale(0.98);
 }
 
 .system-shell.transition-animating .page-layer--focus-enter.page-layer--slot-right,
 .system-shell.transition-animating .page-layer--focus-exit.page-layer--slot-right {
-  transform: translate3d(7%, 0, 0) scale(0.95);
+  transform: translate3d(2.5%, 0, 0) scale(0.982);
 }
 
 .system-shell.transition-animating .page-layer--handoff-in {
-  transform: translate3d(2%, 0, 0) scale(0.996);
+  transform: translate3d(0.8%, 0, 0) scale(0.999);
 }
 
 .system-shell.transition-animating .page-layer--handoff-out {
-  transform: translate3d(-2%, 0, 0) scale(1.004);
+  transform: translate3d(-0.8%, 0, 0) scale(1.001);
 }
 
+.system-shell.transition-animating .overview-page.page-layer,
 .system-shell.transition-animating .mode-page.page-layer,
 .system-shell.transition-animating .flow-page.page-layer {
-  transition-duration: 620ms;
+  transition-duration: 5000ms;
 }
 
 .system-shell.transition-animating .flow-page.page-layer.is-exiting,

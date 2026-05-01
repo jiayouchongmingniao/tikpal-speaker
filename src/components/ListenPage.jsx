@@ -10,7 +10,16 @@ function formatProgress(progress) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSetVolume, className = "" }) {
+export function ListenPage({
+  state,
+  onTogglePlay,
+  onPrevTrack,
+  onNextTrack,
+  onSetVolume,
+  onVolumeAdjustStart,
+  onVolumeAdjustEnd,
+  className = "",
+}) {
   const progressPercent = Math.round(Math.max(0, Math.min(1, Number(state.playback.progress ?? 0))) * 100);
   const creativeCare = getCreativeCareViewModel(state);
   const queueLength = Math.max(1, Number(state.playback.queueLength ?? 1));
@@ -104,6 +113,9 @@ export function ListenPage({ state, onTogglePlay, onPrevTrack, onNextTrack, onSe
               min="0"
               max="100"
               value={state.playback.volume}
+              onPointerDown={onVolumeAdjustStart}
+              onPointerUp={onVolumeAdjustEnd}
+              onPointerCancel={onVolumeAdjustEnd}
               onChange={(event) => onSetVolume(Number(event.target.value))}
             />
           </label>

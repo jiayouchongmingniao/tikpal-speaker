@@ -102,13 +102,28 @@ test("single-touch upward swipe returns to the previous Flow scene", () => {
   );
 });
 
+test("single-touch downward swipe advances to the next Flow scene", () => {
+  assert.equal(
+    getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: 10, deltaY: 98 }),
+    NEXT_FLOW_SCENE,
+  );
+});
+
 test("single-touch swipe ignores horizontal, short, interactive, non-flow, and transition gestures", () => {
   assert.equal(
     getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: 8, deltaY: -54 }),
     null,
   );
   assert.equal(
+    getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: 8, deltaY: 54 }),
+    null,
+  );
+  assert.equal(
     getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: 96, deltaY: -84 }),
+    null,
+  );
+  assert.equal(
+    getSingleTouchSwipeIntent({ activeMode: "flow", transitionStatus: "idle", deltaX: 96, deltaY: 84 }),
     null,
   );
   assert.equal(

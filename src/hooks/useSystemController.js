@@ -12,8 +12,8 @@ import {
 const MODE_ORDER = ["listen", "flow", "screen"];
 const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
 const CREATIVE_CARE_MODES = ["focus", "flow", "unwind", "sleep"];
-const MODE_TRANSITION_MS = 680;
-const FLOW_TRANSITION_MS = 520;
+const MODE_TRANSITION_MS = 5000;
+const FLOW_TRANSITION_MS = 5000;
 const STARTUP_OVERVIEW_HOLD_MS = 1600;
 
 function nowIso() {
@@ -22,6 +22,24 @@ function nowIso() {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function applyVolumeToState(state, volume) {
+  const nextVolume = clamp(Number(volume ?? state?.playback?.volume ?? 58), 0, 100);
+  return {
+    ...state,
+    playback: {
+      ...state.playback,
+      volume: nextVolume,
+    },
+    flow: {
+      ...state.flow,
+      audioMetrics: {
+        ...(state.flow?.audioMetrics ?? {}),
+        volumeNormalized: nextVolume / 100,
+      },
+    },
+  };
 }
 
 function getAdjacentMode(currentMode, direction = 1) {
@@ -600,16 +618,110 @@ export function useSystemController({ initialMode = "overview", initialFlowState
   const [state, setState] = useState(() => createFallbackState(initialMode, initialFlowState));
   const [screenContext, setScreenContext] = useState(() => deriveScreenContext(createFallbackState(initialMode, initialFlowState)));
   const [capabilities, setCapabilities] = useState(null);
+  const [volumeDraft, setVolumeDraft] = useState(null);
+  const [isAdjustingVolume, setIsAdjustingVolume] = useState(false);
   const bootstrappedRef = useRef(false);
   const preferOverviewUntilActionRef = useRef(initialMode === "overview");
   const pendingInitialModeRef = useRef(initialMode !== "overview" ? initialMode : null);
   const lastSyncedStateRef = useRef(null);
   const startupFlowPlaybackPrimedRef = useRef(false);
   const stateRef = useRef(state);
+  const confirmedStateRef = useRef(createFallbackState(initialMode, initialFlowState));
+  const volumeDraftRef = useRef(null);
+  const isAdjustingVolumeRef = useRef(false);
+  const latestVolumeRequestIdRef = useRef(0);
+  const latestResolvedVolumeRequestIdRef = useRef(0);
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    volumeDraftRef.current = volumeDraft;
+  }, [volumeDraft]);
+
+  useEffect(() => {
+    isAdjustingVolumeRef.current = isAdjustingVolume;
+  }, [isAdjustingVolume]);
+
+  function hasPendingLatestVolumeRequest() {
+    return latestResolvedVolumeRequestIdRef.current < latestVolumeRequestIdRef.current;
+  }
+
+  function shouldPreserveVolumeDraft() {
+    return volumeDraftRef.current != null && (isAdjustingVolumeRef.current || hasPendingLatestVolumeRequest());
+  }
+
+  function decorateStateWithVolumeDraft(nextState) {
+    if (!nextState || !shouldPreserveVolumeDraft()) {
+      return nextState;
+    }
+
+    return applyVolumeToState(nextState, volumeDraftRef.current);
+  }
+
+  function reconcileSyncedState(nextState) {
+    const decoratedState = decorateStateWithVolumeDraft(nextState);
+
+    if (pendingInitialModeRef.current) {
+      if (decoratedState.activeMode === pendingInitialModeRef.current) {
+        pendingInitialModeRef.current = null;
+        return decoratedState;
+      }
+
+      return {
+        ...decoratedState,
+        activeMode: pendingInitialModeRef.current,
+        focusedPanel: pendingInitialModeRef.current,
+        transition: {
+          ...(decoratedState.transition ?? {}),
+          status: "idle",
+          from: pendingInitialModeRef.current,
+          to: pendingInitialModeRef.current,
+          lockedUntil: 0,
+        },
+      };
+    }
+
+    if (preferOverviewUntilActionRef.current) {
+      return {
+        ...decoratedState,
+        activeMode: "overview",
+        focusedPanel: null,
+      };
+    }
+
+    return decoratedState;
+  }
+
+  function applyConfirmedState(nextState, { syncScreenContext = true, preserveStartupView = false } = {}) {
+    if (!nextState) {
+      return nextState;
+    }
+
+    confirmedStateRef.current = nextState;
+    lastSyncedStateRef.current = nextState;
+    const resolvedState = preserveStartupView ? reconcileSyncedState(nextState) : decorateStateWithVolumeDraft(nextState);
+    setState(resolvedState);
+    if (syncScreenContext) {
+      setScreenContext(deriveScreenContext(nextState));
+    }
+    return resolvedState;
+  }
+
+  function clearVolumeDraft() {
+    volumeDraftRef.current = null;
+    setVolumeDraft(null);
+  }
+
+  function revertToConfirmedState() {
+    clearVolumeDraft();
+    setIsAdjustingVolume(false);
+    const nextState = confirmedStateRef.current;
+    setState(nextState);
+    setScreenContext(deriveScreenContext(confirmedStateRef.current));
+    return nextState;
+  }
 
   useEffect(() => {
     let alive = true;
@@ -626,38 +738,9 @@ export function useSystemController({ initialMode = "overview", initialFlowState
           return;
         }
 
+        confirmedStateRef.current = nextState;
         lastSyncedStateRef.current = nextState;
-        setState((current) => {
-          if (pendingInitialModeRef.current) {
-            if (nextState.activeMode === pendingInitialModeRef.current) {
-              pendingInitialModeRef.current = null;
-              return nextState;
-            }
-
-            return {
-              ...nextState,
-              activeMode: pendingInitialModeRef.current,
-              focusedPanel: pendingInitialModeRef.current,
-              transition: {
-                ...(nextState.transition ?? {}),
-                status: "idle",
-                from: pendingInitialModeRef.current,
-                to: pendingInitialModeRef.current,
-                lockedUntil: 0,
-              },
-            };
-          }
-
-          if (preferOverviewUntilActionRef.current) {
-            return {
-              ...nextState,
-              activeMode: "overview",
-              focusedPanel: null,
-            };
-          }
-
-          return nextState;
-        });
+        setState(reconcileSyncedState(nextState));
         setScreenContext(nextScreenContext);
         if (!capabilities) {
           setCapabilities(nextCapabilities);
@@ -724,8 +807,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
           .then((response) => {
             const nextState = response?.state ?? response;
             if (nextState?.activeMode) {
-              setState(nextState);
-              setScreenContext(deriveScreenContext(nextState));
+              applyConfirmedState(nextState);
             }
           })
           .catch(() => {
@@ -816,18 +898,46 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     setState(optimisticState);
     setScreenContext(deriveScreenContext(optimisticState));
 
+    const isVolumeAction = type === "set_volume";
+    const volumeRequestId = isVolumeAction ? latestVolumeRequestIdRef.current + 1 : 0;
+    if (isVolumeAction) {
+      latestVolumeRequestIdRef.current = volumeRequestId;
+    }
+
     try {
       const response = await systemApi.sendAction(type, payload, source);
       if (response?.state) {
-        setState(response.state);
-        setScreenContext(deriveScreenContext(response.state));
+        if (isVolumeAction) {
+          if (volumeRequestId < latestVolumeRequestIdRef.current) {
+            return optimisticState;
+          }
+
+          latestResolvedVolumeRequestIdRef.current = volumeRequestId;
+        }
+        applyConfirmedState(response.state);
+        if (isVolumeAction && !isAdjustingVolumeRef.current && !hasPendingLatestVolumeRequest()) {
+          clearVolumeDraft();
+        }
         return response.state;
       }
 
-      setState(response);
-      setScreenContext(deriveScreenContext(response));
+      if (isVolumeAction) {
+        if (volumeRequestId < latestVolumeRequestIdRef.current) {
+          return optimisticState;
+        }
+
+        latestResolvedVolumeRequestIdRef.current = volumeRequestId;
+      }
+      applyConfirmedState(response);
+      if (isVolumeAction && !isAdjustingVolumeRef.current && !hasPendingLatestVolumeRequest()) {
+        clearVolumeDraft();
+      }
       return response;
     } catch (error) {
+      if (isVolumeAction && volumeRequestId >= latestVolumeRequestIdRef.current) {
+        latestResolvedVolumeRequestIdRef.current = volumeRequestId;
+        revertToConfirmedState();
+      }
       if (rethrowOnError) {
         throw error;
       }
@@ -871,8 +981,25 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     async nextTrack() {
       return dispatch("next_track");
     },
+    beginVolumeAdjustment() {
+      setIsAdjustingVolume(true);
+      const nextDraft = volumeDraftRef.current == null ? stateRef.current.playback?.volume ?? 58 : volumeDraftRef.current;
+      volumeDraftRef.current = nextDraft;
+      setVolumeDraft(nextDraft);
+    },
+    endVolumeAdjustment() {
+      setIsAdjustingVolume(false);
+      if (!hasPendingLatestVolumeRequest()) {
+        clearVolumeDraft();
+        setState(confirmedStateRef.current);
+        setScreenContext(deriveScreenContext(confirmedStateRef.current));
+      }
+    },
     async setVolume(volume) {
-      return dispatch("set_volume", { volume });
+      const nextVolume = clamp(Number(volume), 0, 100);
+      volumeDraftRef.current = nextVolume;
+      setVolumeDraft(nextVolume);
+      return dispatch("set_volume", { volume: nextVolume });
     },
     async setFlowState(nextState) {
       return dispatch("set_flow_state", { state: nextState });

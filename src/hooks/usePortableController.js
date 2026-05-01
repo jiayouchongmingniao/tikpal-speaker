@@ -1,8 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createSystemServiceClient } from "../bridge/systemServiceClient";
 
 const DEFAULT_PORTABLE_CAPABILITIES = ["mode_switch", "playback", "flow_control", "screen_control", "creative_care"];
 const SESSION_ID_STORAGE_KEY = "tikpal-portable-session-id";
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function applyVolumeToState(state, volume) {
+  if (!state) {
+    return state;
+  }
+
+  const nextVolume = clamp(Number(volume ?? state?.playback?.volume ?? 58), 0, 100);
+  return {
+    ...state,
+    playback: {
+      ...state.playback,
+      volume: nextVolume,
+    },
+    flow: {
+      ...state.flow,
+      audioMetrics: {
+        ...(state.flow?.audioMetrics ?? {}),
+        volumeNormalized: nextVolume / 100,
+      },
+    },
+  };
+}
 
 function deriveScreenContext(nextState) {
   const screen = nextState?.screen ?? {};
@@ -67,6 +93,58 @@ export function usePortableController() {
   const [status, setStatus] = useState(client.sessionToken ? "connected" : "read-only");
   const [error, setError] = useState("");
   const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [volumeDraft, setVolumeDraft] = useState(null);
+  const [isAdjustingVolume, setIsAdjustingVolume] = useState(false);
+  const confirmedStateRef = useRef(null);
+  const volumeDraftRef = useRef(null);
+  const isAdjustingVolumeRef = useRef(false);
+  const latestVolumeRequestIdRef = useRef(0);
+  const latestResolvedVolumeRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    volumeDraftRef.current = volumeDraft;
+  }, [volumeDraft]);
+
+  useEffect(() => {
+    isAdjustingVolumeRef.current = isAdjustingVolume;
+  }, [isAdjustingVolume]);
+
+  function hasPendingLatestVolumeRequest() {
+    return latestResolvedVolumeRequestIdRef.current < latestVolumeRequestIdRef.current;
+  }
+
+  function shouldPreserveVolumeDraft() {
+    return volumeDraftRef.current != null && (isAdjustingVolumeRef.current || hasPendingLatestVolumeRequest());
+  }
+
+  function decorateStateWithVolumeDraft(nextState) {
+    if (!shouldPreserveVolumeDraft()) {
+      return nextState;
+    }
+
+    return applyVolumeToState(nextState, volumeDraftRef.current);
+  }
+
+  function applyConfirmedState(nextState, nextScreenContext = null) {
+    confirmedStateRef.current = nextState;
+    setState(decorateStateWithVolumeDraft(nextState));
+    setScreenContext(nextScreenContext ?? deriveScreenContext(nextState));
+    return nextState;
+  }
+
+  function clearVolumeDraft() {
+    volumeDraftRef.current = null;
+    setVolumeDraft(null);
+  }
+
+  function revertToConfirmedState() {
+    clearVolumeDraft();
+    setIsAdjustingVolume(false);
+    setState(confirmedStateRef.current);
+    if (confirmedStateRef.current) {
+      setScreenContext(deriveScreenContext(confirmedStateRef.current));
+    }
+  }
 
   useEffect(() => {
     if (!generatedPairing?.expiresAt) {
@@ -119,8 +197,7 @@ export function usePortableController() {
           return;
         }
 
-        setState(bootstrap.state);
-        setScreenContext(bootstrap.screenContext ?? deriveScreenContext(bootstrap.state));
+        applyConfirmedState(bootstrap.state, bootstrap.screenContext ?? deriveScreenContext(bootstrap.state));
         setCapabilities(bootstrap.capabilities);
         setSession(bootstrap.session);
         setStatus(bootstrap.session ? "connected" : "read-only");
@@ -240,17 +317,36 @@ export function usePortableController() {
   }, [client, session?.id]);
 
   async function sendAction(type, payload = {}) {
+    const isVolumeAction = type === "set_volume";
+    const volumeRequestId = isVolumeAction ? latestVolumeRequestIdRef.current + 1 : 0;
+    if (isVolumeAction) {
+      latestVolumeRequestIdRef.current = volumeRequestId;
+    }
+
     try {
       const response = await client.sendAction(type, payload, "portable_controller");
       if (response?.state) {
-        setState(response.state);
-        setScreenContext(deriveScreenContext(response.state));
+        if (isVolumeAction) {
+          if (volumeRequestId < latestVolumeRequestIdRef.current) {
+            return response;
+          }
+
+          latestResolvedVolumeRequestIdRef.current = volumeRequestId;
+        }
+        applyConfirmedState(response.state);
+        if (isVolumeAction && !isAdjustingVolumeRef.current && !hasPendingLatestVolumeRequest()) {
+          clearVolumeDraft();
+        }
       }
       setStatus("connected");
       setError("");
       setLastSyncAt(Date.now());
       return response;
     } catch (nextError) {
+      if (isVolumeAction && volumeRequestId >= latestVolumeRequestIdRef.current) {
+        latestResolvedVolumeRequestIdRef.current = volumeRequestId;
+        revertToConfirmedState();
+      }
       handleSessionFailure(nextError);
       throw nextError;
     }
@@ -312,7 +408,7 @@ export function usePortableController() {
     },
     async refresh() {
       const bootstrap = await client.getPortableBootstrap();
-      setState(bootstrap.state);
+      applyConfirmedState(bootstrap.state, bootstrap.screenContext ?? deriveScreenContext(bootstrap.state));
       setCapabilities(bootstrap.capabilities);
       setSession(bootstrap.session);
       setStatus(bootstrap.session ? "connected" : "read-only");
@@ -334,6 +430,29 @@ export function usePortableController() {
       setSession(null);
       setStatus("read-only");
       setError("");
+    },
+    beginVolumeAdjustment() {
+      setIsAdjustingVolume(true);
+      const nextDraft = volumeDraftRef.current == null ? state?.playback?.volume ?? 58 : volumeDraftRef.current;
+      volumeDraftRef.current = nextDraft;
+      setVolumeDraft(nextDraft);
+    },
+    endVolumeAdjustment() {
+      setIsAdjustingVolume(false);
+      if (!hasPendingLatestVolumeRequest()) {
+        clearVolumeDraft();
+        setState(confirmedStateRef.current);
+        if (confirmedStateRef.current) {
+          setScreenContext(deriveScreenContext(confirmedStateRef.current));
+        }
+      }
+    },
+    async setVolume(volume) {
+      const nextVolume = clamp(Number(volume), 0, 100);
+      volumeDraftRef.current = nextVolume;
+      setVolumeDraft(nextVolume);
+      setState((current) => applyVolumeToState(current, nextVolume));
+      return sendAction("set_volume", { volume: nextVolume });
     },
     sendAction,
   };

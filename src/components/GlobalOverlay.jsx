@@ -193,6 +193,8 @@ export function GlobalOverlay({
   onPrevTrack,
   onNextTrack,
   onSetVolume,
+  onVolumeAdjustStart,
+  onVolumeAdjustEnd,
   onSetFlowState,
   onNextFlowScene,
   onSetFlowScene,
@@ -274,6 +276,9 @@ export function GlobalOverlay({
                 min="0"
                 max="100"
                 value={state.playback.volume}
+                onPointerDown={onVolumeAdjustStart}
+                onPointerUp={onVolumeAdjustEnd}
+                onPointerCancel={onVolumeAdjustEnd}
                 onChange={(event) => onSetVolume(Number(event.target.value))}
               />
             </label>
