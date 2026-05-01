@@ -12,8 +12,8 @@ import {
 const MODE_ORDER = ["listen", "flow", "screen"];
 const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
 const CREATIVE_CARE_MODES = ["focus", "flow", "unwind", "sleep"];
-const MODE_TRANSITION_MS = 5000;
-const FLOW_TRANSITION_MS = 5000;
+const MODE_TRANSITION_MS = 1300;
+const FLOW_TRANSITION_MS = 2200;
 const STARTUP_OVERVIEW_HOLD_MS = 1600;
 
 function nowIso() {
@@ -306,6 +306,13 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
       ...nextState,
       activeMode: "flow",
       focusedPanel: "flow",
+      transition: {
+        status: "animating",
+        from: "flow",
+        to: "flow",
+        startedAt: nowIso(),
+        lockedUntil: Date.now() + FLOW_TRANSITION_MS,
+      },
       lastSource: source,
       lastUpdatedAt: nowIso(),
     };
@@ -324,6 +331,13 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
       ...nextState,
       activeMode: "flow",
       focusedPanel: "flow",
+      transition: {
+        status: "animating",
+        from: "flow",
+        to: "flow",
+        startedAt: nowIso(),
+        lockedUntil: Date.now() + FLOW_TRANSITION_MS,
+      },
       lastSource: source,
       lastUpdatedAt: nowIso(),
     };
@@ -343,6 +357,13 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
       ...nextState,
       activeMode: "flow",
       focusedPanel: "flow",
+      transition: {
+        status: "animating",
+        from: "flow",
+        to: "flow",
+        startedAt: nowIso(),
+        lockedUntil: Date.now() + FLOW_TRANSITION_MS,
+      },
       lastSource: source,
       lastUpdatedAt: nowIso(),
     };

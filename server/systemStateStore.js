@@ -14,8 +14,8 @@ const MODE_ORDER = ["listen", "flow", "screen"];
 const FLOW_ORDER = ["focus", "flow", "relax", "sleep"];
 const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
 const CREATIVE_CARE_MODES = ["focus", "flow", "unwind", "sleep"];
-const MODE_TRANSITION_MS = 680;
-const FLOW_TRANSITION_MS = 520;
+const MODE_TRANSITION_MS = 5000;
+const FLOW_TRANSITION_MS = 5000;
 const ROLE_ORDER = ["viewer", "controller", "operator", "admin"];
 const MAX_RUNTIME_LOG_ENTRIES = 200;
 const DEFAULT_SESSION_TTL_SEC = 24 * 60 * 60;
@@ -1720,7 +1720,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
 
       if (
         liveState.transition.status !== "idle" &&
-        ["set_mode", "return_overview", "set_flow_state", "next_flow_scene", "prev_flow_scene", "set_flow_scene", "next_mode", "prev_mode"].includes(type)
+        ["set_mode", "return_overview", "next_mode", "prev_mode"].includes(type)
       ) {
         return finalize(liveState);
       }
@@ -1951,6 +1951,13 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
               ...liveState,
               activeMode: "flow",
               focusedPanel: "flow",
+              transition: {
+                status: "animating",
+                from: "flow",
+                to: "flow",
+                startedAt: nowIso(),
+                lockedUntil: Date.now() + FLOW_TRANSITION_MS,
+              },
               flow: {
                 ...liveState.flow,
                 state: nextFlowState,
@@ -1984,6 +1991,13 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
               ...liveState,
               activeMode: "flow",
               focusedPanel: "flow",
+              transition: {
+                status: "animating",
+                from: "flow",
+                to: "flow",
+                startedAt: nowIso(),
+                lockedUntil: Date.now() + FLOW_TRANSITION_MS,
+              },
               flow: {
                 ...liveState.flow,
                 state: nextFlowState,
@@ -2022,6 +2036,13 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
               ...liveState,
               activeMode: "flow",
               focusedPanel: "flow",
+              transition: {
+                status: "animating",
+                from: "flow",
+                to: "flow",
+                startedAt: nowIso(),
+                lockedUntil: Date.now() + FLOW_TRANSITION_MS,
+              },
               flow: {
                 ...liveState.flow,
                 state: nextFlowState,

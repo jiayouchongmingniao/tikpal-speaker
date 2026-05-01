@@ -15,7 +15,7 @@ import {
   normalizeRenderProfile,
 } from "../viewmodels/performance";
 
-const BACKGROUND_CROSSFADE_MS = 5000;
+const BACKGROUND_CROSSFADE_MS = 3500;
 const SCENE_PROMPT_VISIBLE_MS = 5000;
 const FLOW_AUDIO_METRICS = {
   focus: { lowEnergy: 0.28, midEnergy: 0.22, highEnergy: 0.14, beatConfidence: 0.16 },
@@ -109,7 +109,7 @@ export function FlowModePage({
   };
   const isStaticFlowBudget = isStaticFlowRenderBudget(renderBudget);
   const isMinimalFlowBudget = isMinimalFlowRenderBudget(renderBudget);
-  const isCurrentSceneArtworkLoaded = !currentScene.artwork || loadedFlowSceneArtwork.has(currentScene.artwork);
+  const isSceneCrossfadeActive = Boolean(previousScene);
 
   useEffect(() => {
     scenes.forEach((scene) => {
@@ -133,7 +133,7 @@ export function FlowModePage({
   }, [currentScene]);
 
   useEffect(() => {
-    if (!previousScene || !isCurrentSceneArtworkLoaded) {
+    if (!previousScene) {
       return undefined;
     }
 
@@ -142,7 +142,7 @@ export function FlowModePage({
     }, BACKGROUND_CROSSFADE_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [isCurrentSceneArtworkLoaded, previousScene]);
+  }, [previousScene]);
 
   useEffect(() => {
     if (lastPromptSceneIdRef.current === currentScene.id) {
@@ -192,7 +192,7 @@ export function FlowModePage({
         staticSceneActive: true,
         lowPowerBudget: true,
         flowSceneMode: "static",
-        phase: previousScene ? "image_crossfade" : appPhase,
+        phase: isSceneCrossfadeActive ? "image_crossfade" : appPhase,
         rendererType: "image",
         requestedRenderer: "image",
         rendererFallbackCount: 0,
@@ -211,7 +211,7 @@ export function FlowModePage({
         delete window.__TIKPAL_CANVAS_DEBUG__;
       }
     };
-  }, [appPhase, chromiumExperiment, flowDiagnosticMode, isImageRenderer, previousScene, renderBudget.frameIntervalMs]);
+  }, [appPhase, chromiumExperiment, flowDiagnosticMode, isImageRenderer, isSceneCrossfadeActive, renderBudget.frameIntervalMs]);
 
   return (
     <main
@@ -220,11 +220,7 @@ export function FlowModePage({
       } ${
         isMinimalFlowBudget ? "flow-page--minimal-budget" : ""
       } ${
-        previousScene
-          ? isCurrentSceneArtworkLoaded
-            ? "flow-page--image-crossfading"
-            : "flow-page--image-holding"
-          : ""
+        isSceneCrossfadeActive ? "flow-page--image-crossfading" : ""
       } ${
         isImageRenderer ? "flow-page--image-background" : `flow-page--visual-renderer flow-page--${flowRenderer}-renderer`
       } ${className}`.trim()}
@@ -236,7 +232,6 @@ export function FlowModePage({
           currentState={currentState}
           scene={currentScene}
           previousScene={previousScene}
-          sceneCrossfadeReady={isCurrentSceneArtworkLoaded}
           transitionState={transitionState}
           appPhase={appPhase}
           performanceTier={performanceTier}

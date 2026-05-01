@@ -257,6 +257,33 @@ try {
     assert.equal(playerActions.some((action) => action.type === "play_media"), true);
   });
 
+  await test("consecutive Flow scene actions stay applied during an active transition", async () => {
+    const authHeaders = { "X-Tikpal-Key": API_KEY };
+
+    const firstResponse = await postAction(
+      baseUrl,
+      {
+        type: "next_flow_scene",
+        source: "portable_controller",
+      },
+      authHeaders,
+    );
+    assert.equal(firstResponse.status, 200);
+    assert.equal(firstResponse.json.result, "applied");
+
+    const secondResponse = await postAction(
+      baseUrl,
+      {
+        type: "next_flow_scene",
+        source: "portable_controller",
+      },
+      authHeaders,
+    );
+    assert.equal(secondResponse.status, 200);
+    assert.equal(secondResponse.json.result, "applied");
+    assert.notEqual(secondResponse.json.state.flow.sceneId, firstResponse.json.state.flow.sceneId);
+  });
+
   await test("switching into flow mode and changing flow state both trigger flow media playback", async () => {
     const authHeaders = { "X-Tikpal-Key": API_KEY };
     playerActions.length = 0;

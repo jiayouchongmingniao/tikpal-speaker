@@ -10,7 +10,6 @@ export function AmbientBackground({
   renderProfile = "off",
   flowDiagnosticMode = "off",
   imageOnly = false,
-  sceneCrossfadeReady = true,
 }) {
   const baseTheme = FLOW_THEME[currentState] ?? FLOW_THEME.focus;
   const nextTheme =
@@ -55,11 +54,34 @@ export function AmbientBackground({
     : isPiStableProfile
       ? "saturate(1.02) contrast(1.06) brightness(1.04)"
       : "saturate(1.08) contrast(1.1) brightness(1.05)";
-  const sceneVignetteOpacity = imageOnly ? 0.44 : isStaticDiagnostic ? 0.28 : isPiStableProfile ? 0.24 : isStableProfile ? 0.2 : 0.16;
+  const sceneVignetteOpacity = imageOnly ? 0.24 : isStaticDiagnostic ? 0.28 : isPiStableProfile ? 0.24 : isStableProfile ? 0.2 : 0.16;
   const shouldRenderThemeLayers = !imageOnly || !scene?.artwork;
   const hasPreviousSceneArtwork = imageOnly && Boolean(previousScene?.artwork) && previousScene?.artwork !== scene?.artwork;
-  const isImageCrossfading = sceneCrossfadeReady && hasPreviousSceneArtwork;
-  const isImageHolding = hasPreviousSceneArtwork && !sceneCrossfadeReady;
+  const isSceneCrossfadeActive = hasPreviousSceneArtwork;
+  const currentSceneArtClassName = [
+    "ambient-bg__layer",
+    "ambient-bg__layer--scene-art",
+    imageOnly ? "ambient-bg__layer--scene-art-direct" : "",
+    isSceneCrossfadeActive ? "ambient-bg__layer--scene-art-current" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const currentSceneArtStyle = {
+    backgroundImage: `url("${scene?.artwork}")`,
+    filter: imageOnly ? "none" : sceneFilter,
+  };
+
+  if (!isSceneCrossfadeActive) {
+    currentSceneArtStyle.opacity = sceneOpacity;
+  }
+  const previousSceneArtClassName = [
+    "ambient-bg__layer",
+    "ambient-bg__layer--scene-art",
+    "ambient-bg__layer--scene-art-direct",
+    "ambient-bg__layer--scene-art-previous",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className="ambient-bg" aria-hidden="true">
@@ -86,17 +108,15 @@ export function AmbientBackground({
       ) : null}
       {scene?.artwork ? (
         <>
+          {hasPreviousSceneArtwork ? (
+            <div
+              className={previousSceneArtClassName}
+              style={{ backgroundImage: `url("${previousScene.artwork}")` }}
+            />
+          ) : null}
           <div
-            className={`ambient-bg__layer ambient-bg__layer--scene-art ${
-              imageOnly ? "ambient-bg__layer--scene-art-direct" : ""
-            } ${
-              isImageCrossfading ? "ambient-bg__layer--scene-art-current" : ""
-            }`.trim()}
-            style={{
-              backgroundImage: `url("${scene.artwork}")`,
-              opacity: sceneOpacity,
-              filter: imageOnly ? "none" : sceneFilter,
-            }}
+            className={currentSceneArtClassName}
+            style={currentSceneArtStyle}
           />
           <div
             className="ambient-bg__layer ambient-bg__layer--scene-vignette"
@@ -109,17 +129,6 @@ export function AmbientBackground({
                   radial-gradient(circle at 24% 84%, ${baseTheme.accent}18 0%, transparent 28%)`,
             }}
           />
-          {hasPreviousSceneArtwork ? (
-            <>
-              <div
-                className={`ambient-bg__layer ambient-bg__layer--scene-art ambient-bg__layer--scene-art-direct ambient-bg__layer--scene-art-previous ${
-                  isImageHolding ? "ambient-bg__layer--scene-art-hold" : ""
-                }`.trim()}
-                style={{ backgroundImage: `url("${previousScene.artwork}")` }}
-              />
-              {isImageCrossfading ? <div className="ambient-bg__layer ambient-bg__layer--transition-shade" /> : null}
-            </>
-          ) : null}
         </>
       ) : null}
       {!imageOnly && !suppressDepthLayers ? (

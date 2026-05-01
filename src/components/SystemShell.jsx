@@ -58,6 +58,10 @@ function getPageLayerClass(pageMode, activeMode, transition, transitionPrimed = 
     return activeKey === pageKey ? "page-layer is-active" : "page-layer is-hidden";
   }
 
+  if (from === to) {
+    return activeKey === pageKey ? "page-layer is-active" : "page-layer is-hidden";
+  }
+
   if (!transitionPrimed) {
     if (from === pageKey) {
       return "page-layer is-active page-layer--transition-hold";

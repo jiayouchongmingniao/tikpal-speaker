@@ -148,6 +148,16 @@ test("flow scenes cycle within the current mode and remember per-mode selection"
   assert.equal(backToFocus.flow.sceneIndex, 1);
 });
 
+test("flow scene actions still apply while the flow transition is animating", () => {
+  const store = createStore();
+  const first = store.runAction("next_flow_scene", {}, "touch");
+  const second = store.runAction("next_flow_scene", {}, "touch");
+
+  assert.equal(first.transition.status, "animating");
+  assert.equal(second.flow.sceneIndex, 2);
+  assert.notEqual(second.flow.sceneId, first.flow.sceneId);
+});
+
 test("set_flow_scene accepts explicit scene ids and aligns the top-level Flow state", () => {
   const store = createStore();
   const state = store.runAction("set_flow_scene", { sceneId: "sleep-between-meetings" }, "portable_controller");
