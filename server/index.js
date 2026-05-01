@@ -435,12 +435,39 @@ function resolveFlowSceneActionMedia(type, payload = {}, snapshot, libraryRoot =
     return null;
   }
 
-  if (type === "next_flow_scene") {
+  if (type === "set_mode" && payload.mode === "flow") {
+    const selection = resolveFlowSceneSelection({
+      flowState: snapshot.flow.state,
+      sceneId: snapshot.flow.sceneId,
+      sceneIndex: snapshot.flow.sceneIndex,
+      scenesByState: snapshot.flow.scenesByState,
+    });
+    return {
+      scene: selection.scene,
+      mediaPath: getFlowSceneAudioLibraryPath(selection.scene, libraryRoot),
+    };
+  }
+
+  if (type === "set_flow_state") {
+    const nextFlowState = normalizeFlowState(payload.state ?? snapshot.flow.state);
+    const selection = resolveFlowSceneSelection({
+      flowState: nextFlowState,
+      sceneId: snapshot.flow.state === nextFlowState ? snapshot.flow.sceneId : null,
+      scenesByState: snapshot.flow.scenesByState,
+    });
+    return {
+      scene: selection.scene,
+      mediaPath: getFlowSceneAudioLibraryPath(selection.scene, libraryRoot),
+    };
+  }
+
+  if (type === "next_flow_scene" || type === "prev_flow_scene") {
     const nextFlowState = normalizeFlowState(payload.state ?? snapshot.flow.state);
     const selection = getNextFlowSceneSelection({
       flowState: nextFlowState,
       sceneId: snapshot.flow.sceneId,
       scenesByState: snapshot.flow.scenesByState,
+      step: type === "prev_flow_scene" ? -1 : 1,
     });
     return {
       scene: selection.scene,
@@ -496,7 +523,7 @@ export function createAppServer({
       };
     }
 
-    if (playerAdapter.mode === "mpc" && ["next_flow_scene", "set_flow_scene"].includes(type)) {
+    if (playerAdapter.mode === "mpc" && ["set_mode", "set_flow_state", "next_flow_scene", "prev_flow_scene", "set_flow_scene"].includes(type)) {
       const flowSceneMedia = resolveFlowSceneActionMedia(type, payload, snapshot);
       if (flowSceneMedia?.mediaPath) {
         const playerState = await playerAdapter.runAction("play_media", { mediaPath: flowSceneMedia.mediaPath }, snapshot.playback);

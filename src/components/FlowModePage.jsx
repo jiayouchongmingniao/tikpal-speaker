@@ -15,7 +15,7 @@ import {
   normalizeRenderProfile,
 } from "../viewmodels/performance";
 
-const BACKGROUND_CROSSFADE_MS = 1500;
+const BACKGROUND_CROSSFADE_MS = 2200;
 const SCENE_PROMPT_VISIBLE_MS = 3000;
 const FLOW_AUDIO_METRICS = {
   focus: { lowEnergy: 0.28, midEnergy: 0.22, highEnergy: 0.14, beatConfidence: 0.16 },
@@ -23,6 +23,38 @@ const FLOW_AUDIO_METRICS = {
   relax: { lowEnergy: 0.24, midEnergy: 0.18, highEnergy: 0.12, beatConfidence: 0.1 },
   sleep: { lowEnergy: 0.12, midEnergy: 0.08, highEnergy: 0.04, beatConfidence: 0.04 },
 };
+const loadedFlowSceneArtwork = new Set();
+const loadingFlowSceneArtwork = new Map();
+
+function preloadFlowSceneArtwork(src, onSettled) {
+  if (!src || loadedFlowSceneArtwork.has(src)) {
+    return;
+  }
+
+  const existingLoad = loadingFlowSceneArtwork.get(src);
+  if (existingLoad) {
+    existingLoad.then(onSettled);
+    return;
+  }
+
+  const image = new Image();
+  image.decoding = "async";
+  const loadPromise = new Promise((resolve) => {
+    image.onload = resolve;
+    image.onerror = resolve;
+    image.src = src;
+
+    if (image.complete) {
+      resolve();
+    }
+  }).then(() => {
+    loadedFlowSceneArtwork.add(src);
+    loadingFlowSceneArtwork.delete(src);
+    onSettled?.();
+  });
+
+  loadingFlowSceneArtwork.set(src, loadPromise);
+}
 
 export function FlowModePage({
   systemState,
@@ -44,6 +76,7 @@ export function FlowModePage({
   const scenePromptTimerRef = useRef(null);
   const lastPromptSceneIdRef = useRef(currentScene.id);
   const [previousScene, setPreviousScene] = useState(null);
+  const [, setArtworkLoadVersion] = useState(0);
   const [scenePromptVisible, setScenePromptVisible] = useState(false);
   const appPhase = deriveFlowAppPhase({
     activeMode: systemState.activeMode,
@@ -76,19 +109,16 @@ export function FlowModePage({
   };
   const isStaticFlowBudget = isStaticFlowRenderBudget(renderBudget);
   const isMinimalFlowBudget = isMinimalFlowRenderBudget(renderBudget);
+  const isCurrentSceneArtworkLoaded = !currentScene.artwork || loadedFlowSceneArtwork.has(currentScene.artwork);
 
   useEffect(() => {
-    if (renderProfile === "stable") {
-      return undefined;
-    }
-
-    const nextScene = scenes[(currentScene.index + 1) % scenes.length];
-    [currentScene.artwork, nextScene.artwork].forEach((src) => {
-      const image = new Image();
-      image.src = src;
+    scenes.forEach((scene) => {
+      preloadFlowSceneArtwork(scene.artwork, () => {
+        setArtworkLoadVersion((version) => version + 1);
+      });
     });
     return undefined;
-  }, [currentScene.artwork, currentScene.index, renderProfile, scenes]);
+  }, [scenes]);
 
   useLayoutEffect(() => {
     const lastScene = previousSceneRef.current;
@@ -99,12 +129,20 @@ export function FlowModePage({
     }
 
     setPreviousScene(lastScene);
+    return undefined;
+  }, [currentScene]);
+
+  useEffect(() => {
+    if (!previousScene || !isCurrentSceneArtworkLoaded) {
+      return undefined;
+    }
+
     const timeout = window.setTimeout(() => {
-      setPreviousScene((scene) => (scene?.id === lastScene.id ? null : scene));
+      setPreviousScene((scene) => (scene?.id === previousScene.id ? null : scene));
     }, BACKGROUND_CROSSFADE_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [currentScene]);
+  }, [isCurrentSceneArtworkLoaded, previousScene]);
 
   useEffect(() => {
     if (lastPromptSceneIdRef.current === currentScene.id) {
@@ -182,7 +220,11 @@ export function FlowModePage({
       } ${
         isMinimalFlowBudget ? "flow-page--minimal-budget" : ""
       } ${
-        previousScene ? "flow-page--image-crossfading" : ""
+        previousScene
+          ? isCurrentSceneArtworkLoaded
+            ? "flow-page--image-crossfading"
+            : "flow-page--image-holding"
+          : ""
       } ${
         isImageRenderer ? "flow-page--image-background" : `flow-page--visual-renderer flow-page--${flowRenderer}-renderer`
       } ${className}`.trim()}
@@ -194,6 +236,7 @@ export function FlowModePage({
           currentState={currentState}
           scene={currentScene}
           previousScene={previousScene}
+          sceneCrossfadeReady={isCurrentSceneArtworkLoaded}
           transitionState={transitionState}
           appPhase={appPhase}
           performanceTier={performanceTier}

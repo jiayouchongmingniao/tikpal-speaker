@@ -59,6 +59,62 @@ body {
   touch-action: manipulation;
 }
 
+.startup-splash {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(255, 255, 255, 0.08), transparent 24%),
+    radial-gradient(circle at 50% 62%, rgba(74, 115, 173, 0.14), transparent 32%),
+    linear-gradient(180deg, #020305 0%, #05080d 100%);
+  overflow: hidden;
+}
+
+.startup-splash__content {
+  display: grid;
+  gap: 14px;
+  width: min(900px, 100%);
+  text-align: center;
+  animation: startupSplashReveal 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.startup-splash__eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 0.58;
+}
+
+.startup-splash h1 {
+  margin: 0;
+  font-size: clamp(46px, 7vw, 100px);
+  font-weight: 600;
+  line-height: 0.94;
+  text-wrap: balance;
+}
+
+.startup-splash p {
+  margin: 0;
+  font-size: clamp(17px, 1.8vw, 26px);
+  line-height: 1.35;
+  opacity: 0.74;
+  text-wrap: balance;
+}
+
+@keyframes startupSplashReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 body.app-shell-locked {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -141,31 +197,37 @@ body.app-shell-locked [contenteditable=""] {
 
 .ambient-bg__layer--scene-art-current {
   z-index: 0;
-  animation: flow-scene-art-current-in 1500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-art-current-in 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .ambient-bg__layer--scene-art-previous {
   z-index: 1;
   opacity: 0;
-  animation: flow-scene-art-previous-out 1500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-art-previous-out 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ambient-bg__layer--scene-art-hold {
+  opacity: 1;
+  animation: none;
+  transition: none;
 }
 
 .ambient-bg__layer--transition-shade {
   z-index: 2;
   opacity: 0;
   background:
-    radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.1), transparent 34%),
-    linear-gradient(180deg, rgba(2, 3, 5, 0.04), rgba(2, 3, 5, 0.5));
-  animation: flow-scene-transition-shade 1500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(2, 3, 5, 0.02), rgba(2, 3, 5, 0.42));
+  animation: flow-scene-transition-shade 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes flow-scene-art-current-in {
   0% {
-    opacity: 0.68;
+    opacity: 0.28;
   }
 
-  56% {
-    opacity: 0.9;
+  42% {
+    opacity: 0.72;
   }
 
   100% {
@@ -175,11 +237,11 @@ body.app-shell-locked [contenteditable=""] {
 
 @keyframes flow-scene-art-previous-out {
   0% {
-    opacity: 1;
+    opacity: 0.88;
   }
 
-  42% {
-    opacity: 0.48;
+  56% {
+    opacity: 0.3;
   }
 
   100% {
@@ -192,12 +254,12 @@ body.app-shell-locked [contenteditable=""] {
     opacity: 0;
   }
 
-  34% {
-    opacity: 0.3;
+  26% {
+    opacity: 0.18;
   }
 
-  62% {
-    opacity: 0.14;
+  58% {
+    opacity: 0.08;
   }
 
   100% {
@@ -228,22 +290,22 @@ body.app-shell-locked [contenteditable=""] {
 .flow-page--image-background .ambient-bg__layer {
   animation: none;
   transform: none;
-  transition: opacity 1500ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 2200ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: auto;
 }
 
 .flow-page--image-crossfading .ambient-bg__layer--scene-art-current {
-  animation: flow-scene-art-current-in 1500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-art-current-in 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: opacity;
 }
 
 .flow-page--image-crossfading .ambient-bg__layer--scene-art-previous {
-  animation: flow-scene-art-previous-out 1500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-art-previous-out 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: opacity;
 }
 
 .flow-page--image-crossfading .ambient-bg__layer--transition-shade {
-  animation: flow-scene-transition-shade 1500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: flow-scene-transition-shade 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: opacity;
 }
 
@@ -313,7 +375,7 @@ body.app-shell-locked [contenteditable=""] {
 }
 
 .flow-page.phase-transitioning .ambient-bg__layer--next {
-  transition-duration: 1500ms;
+  transition-duration: 2200ms;
 }
 
 .flow-page__content {
@@ -1719,11 +1781,6 @@ body.app-shell-locked [contenteditable=""] {
   transition-duration: 620ms;
 }
 
-.system-shell.transition-animating .flow-page.page-layer {
-  opacity: 1;
-  transition-property: transform;
-}
-
 .system-shell.transition-animating .flow-page.page-layer.is-exiting,
 .system-shell.transition-animating .flow-page.page-layer.is-hidden {
   transform: translate3d(0, 0, 0) scale(1);
@@ -2766,6 +2823,10 @@ body.app-shell-locked [contenteditable=""] {
   font-size: 13px;
 }
 
+.global-overlay__button-label-compact {
+  display: none;
+}
+
 .global-overlay__button--ghost {
   background: rgba(255, 255, 255, 0.06);
 }
@@ -2846,6 +2907,7 @@ body.app-shell-locked [contenteditable=""] {
 .global-overlay__hint--scene {
   flex: 1;
   margin: 0 0 0 12px;
+  min-width: 0;
 }
 
 .global-overlay__status-grid {
@@ -3289,12 +3351,39 @@ body.app-shell-locked [contenteditable=""] {
     padding: 9px 12px;
   }
 
+  .global-overlay__row--scene {
+    justify-content: stretch;
+  }
+
+  .global-overlay__row--scene .global-overlay__button {
+    flex: 0 0 auto;
+  }
+
   .global-overlay__chip {
     padding: 8px 11px;
   }
 
   .global-overlay__hint {
     display: none;
+  }
+
+  .global-overlay__hint--scene {
+    display: block;
+    flex: 1 1 120px;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .global-overlay__button-label {
+    display: none;
+  }
+
+  .global-overlay__button-label-compact {
+    display: inline;
   }
 }
 

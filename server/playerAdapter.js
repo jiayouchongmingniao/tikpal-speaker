@@ -4,6 +4,11 @@ import { execFile as execFileCallback } from "node:child_process";
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_MPD_HOST = "127.0.0.1";
 const DEFAULT_MPD_PORT = 6600;
+const DEFAULT_MPD_SCENE_CROSSFADE_SEC = 4;
+const MPC_FADE_OUT_STEP_MS = 90;
+const MPC_FADE_IN_STEP_MS = 160;
+const MPC_FADE_OUT_STEPS = [0.55, 0.22, 0];
+const MPC_FADE_IN_STEPS = [0.18, 0.42, 0.68, 1];
 const execFile = promisify(execFileCallback);
 
 function createPlayerError(code, message) {
@@ -96,6 +101,10 @@ function parseClockToSeconds(value = "") {
   }
 
   return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseMpcStatusOutput(statusOutput = "", playlistOutput = "", fallback = {}) {
@@ -251,10 +260,12 @@ export function createMpcPlayerAdapter({
   host = process.env.TIKPAL_MPD_HOST ?? DEFAULT_MPD_HOST,
   port = process.env.TIKPAL_MPD_PORT ?? DEFAULT_MPD_PORT,
   timeoutMs = process.env.TIKPAL_PLAYER_TIMEOUT_MS,
+  sceneCrossfadeSec = process.env.TIKPAL_MPD_SCENE_CROSSFADE_SEC,
   execFileImpl = execFile,
 } = {}) {
   const normalizedPort = Number(port ?? DEFAULT_MPD_PORT);
   const normalizedTimeoutMs = Number(timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const normalizedSceneCrossfadeSec = Math.max(0, Number(sceneCrossfadeSec ?? DEFAULT_MPD_SCENE_CROSSFADE_SEC) || 0);
 
   async function getStatus(fallback = {}) {
     const [statusOutput, playlistOutput] = await Promise.all([
@@ -273,6 +284,25 @@ export function createMpcPlayerAdapter({
     ]);
 
     return parseMpcStatusOutput(statusOutput, playlistOutput, fallback);
+  }
+
+  async function setMpcVolume(volume) {
+    await execMpcCommand(["volume", String(clamp(Math.round(volume), 0, 100))], {
+      host,
+      port: normalizedPort,
+      timeoutMs: normalizedTimeoutMs,
+      execFileImpl,
+    });
+  }
+
+  async function fadeMpcVolume(targetVolume, ratios, stepDelayMs) {
+    const safeTargetVolume = clamp(Number(targetVolume ?? 58), 0, 100);
+    for (let index = 0; index < ratios.length; index += 1) {
+      await setMpcVolume(safeTargetVolume * ratios[index]);
+      if (index < ratios.length - 1) {
+        await sleep(stepDelayMs);
+      }
+    }
   }
 
   return {
@@ -304,24 +334,57 @@ export function createMpcPlayerAdapter({
           throw createPlayerError("PLAYER_MEDIA_PATH_MISSING", "mediaPath is required for play_media");
         }
 
-        await execMpcCommand(["clear"], {
-          host,
-          port: normalizedPort,
-          timeoutMs: normalizedTimeoutMs,
-          execFileImpl,
-        });
-        await execMpcCommand(["add", mediaPath], {
-          host,
-          port: normalizedPort,
-          timeoutMs: normalizedTimeoutMs,
-          execFileImpl,
-        });
-        await execMpcCommand(["play"], {
-          host,
-          port: normalizedPort,
-          timeoutMs: normalizedTimeoutMs,
-          execFileImpl,
-        });
+        const targetVolume = clamp(Number(payload.targetVolume ?? fallback.volume ?? 58), 0, 100);
+
+        await fadeMpcVolume(targetVolume, MPC_FADE_OUT_STEPS, MPC_FADE_OUT_STEP_MS);
+        try {
+          await execMpcCommand(["repeat", "on"], {
+            host,
+            port: normalizedPort,
+            timeoutMs: normalizedTimeoutMs,
+            execFileImpl,
+          });
+          await execMpcCommand(["single", "on"], {
+            host,
+            port: normalizedPort,
+            timeoutMs: normalizedTimeoutMs,
+            execFileImpl,
+          });
+          await execMpcCommand(["consume", "off"], {
+            host,
+            port: normalizedPort,
+            timeoutMs: normalizedTimeoutMs,
+            execFileImpl,
+          });
+          await execMpcCommand(["crossfade", String(normalizedSceneCrossfadeSec)], {
+            host,
+            port: normalizedPort,
+            timeoutMs: normalizedTimeoutMs,
+            execFileImpl,
+          });
+          await execMpcCommand(["clear"], {
+            host,
+            port: normalizedPort,
+            timeoutMs: normalizedTimeoutMs,
+            execFileImpl,
+          });
+          await execMpcCommand(["add", mediaPath], {
+            host,
+            port: normalizedPort,
+            timeoutMs: normalizedTimeoutMs,
+            execFileImpl,
+          });
+          await execMpcCommand(["play"], {
+            host,
+            port: normalizedPort,
+            timeoutMs: normalizedTimeoutMs,
+            execFileImpl,
+          });
+          await fadeMpcVolume(targetVolume, MPC_FADE_IN_STEPS, MPC_FADE_IN_STEP_MS);
+        } catch (error) {
+          await setMpcVolume(targetVolume);
+          throw error;
+        }
       } else {
         throw createPlayerError("PLAYER_UNSUPPORTED_ACTION", `Unsupported player action: ${type}`);
       }

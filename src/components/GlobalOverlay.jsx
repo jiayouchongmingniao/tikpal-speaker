@@ -157,7 +157,8 @@ function FlowControls({ state, onSetFlowState, onNextFlowScene, onSetFlowScene }
           data-overlay-action="flow-scene-next"
           onClick={onNextFlowScene}
         >
-          Next scene
+          <span className="global-overlay__button-label">Next scene</span>
+          <span className="global-overlay__button-label-compact">Next</span>
         </button>
         <span className="global-overlay__hint global-overlay__hint--scene">
           {currentScene.label} · {currentScene.subtitle}

@@ -42,6 +42,7 @@ const ACTION_ROLE_REQUIREMENTS = {
   set_volume: "controller",
   set_flow_state: "controller",
   next_flow_scene: "controller",
+  prev_flow_scene: "controller",
   set_flow_scene: "controller",
   screen_start_pomodoro: "controller",
   screen_resume_pomodoro: "controller",
@@ -1719,7 +1720,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
 
       if (
         liveState.transition.status !== "idle" &&
-        ["set_mode", "return_overview", "set_flow_state", "next_flow_scene", "set_flow_scene", "next_mode", "prev_mode"].includes(type)
+        ["set_mode", "return_overview", "set_flow_state", "next_flow_scene", "prev_flow_scene", "set_flow_scene", "next_mode", "prev_mode"].includes(type)
       ) {
         return finalize(liveState);
       }
@@ -1939,6 +1940,40 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
           flowState: nextFlowState,
           sceneId: liveState.flow.sceneId,
           scenesByState: liveState.flow.scenesByState,
+          step: 1,
+        });
+        const nextPlayback = payload.playerState
+          ? mergePlayerState(applyFlowSceneToPlayback(liveState.playback, sceneSelection), payload.playerState)
+          : applyFlowSceneToPlayback(liveState.playback, sceneSelection);
+        return finalize(
+          updateState(
+            {
+              ...liveState,
+              activeMode: "flow",
+              focusedPanel: "flow",
+              flow: {
+                ...liveState.flow,
+                state: nextFlowState,
+                subtitle: deriveFlowSubtitle(nextFlowState),
+                sceneId: sceneSelection.sceneId,
+                sceneIndex: sceneSelection.sceneIndex,
+                scenesByState: sceneSelection.scenesByState,
+              },
+              playback: nextPlayback,
+            },
+            source,
+            type,
+          ),
+        );
+      }
+
+      if (type === "prev_flow_scene") {
+        const nextFlowState = normalizeFlowState(payload.state ?? liveState.flow.state);
+        const sceneSelection = getNextFlowSceneSelection({
+          flowState: nextFlowState,
+          sceneId: liveState.flow.sceneId,
+          scenesByState: liveState.flow.scenesByState,
+          step: -1,
         });
         const nextPlayback = payload.playerState
           ? mergePlayerState(applyFlowSceneToPlayback(liveState.playback, sceneSelection), payload.playerState)

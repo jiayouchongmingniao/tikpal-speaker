@@ -10,6 +10,7 @@ export function AmbientBackground({
   renderProfile = "off",
   flowDiagnosticMode = "off",
   imageOnly = false,
+  sceneCrossfadeReady = true,
 }) {
   const baseTheme = FLOW_THEME[currentState] ?? FLOW_THEME.focus;
   const nextTheme =
@@ -56,7 +57,9 @@ export function AmbientBackground({
       : "saturate(1.08) contrast(1.1) brightness(1.05)";
   const sceneVignetteOpacity = imageOnly ? 0.44 : isStaticDiagnostic ? 0.28 : isPiStableProfile ? 0.24 : isStableProfile ? 0.2 : 0.16;
   const shouldRenderThemeLayers = !imageOnly || !scene?.artwork;
-  const isImageCrossfading = imageOnly && Boolean(previousScene?.artwork) && previousScene?.artwork !== scene?.artwork;
+  const hasPreviousSceneArtwork = imageOnly && Boolean(previousScene?.artwork) && previousScene?.artwork !== scene?.artwork;
+  const isImageCrossfading = sceneCrossfadeReady && hasPreviousSceneArtwork;
+  const isImageHolding = hasPreviousSceneArtwork && !sceneCrossfadeReady;
 
   return (
     <div className="ambient-bg" aria-hidden="true">
@@ -106,13 +109,15 @@ export function AmbientBackground({
                   radial-gradient(circle at 24% 84%, ${baseTheme.accent}18 0%, transparent 28%)`,
             }}
           />
-          {isImageCrossfading ? (
+          {hasPreviousSceneArtwork ? (
             <>
               <div
-                className="ambient-bg__layer ambient-bg__layer--scene-art ambient-bg__layer--scene-art-direct ambient-bg__layer--scene-art-previous"
+                className={`ambient-bg__layer ambient-bg__layer--scene-art ambient-bg__layer--scene-art-direct ambient-bg__layer--scene-art-previous ${
+                  isImageHolding ? "ambient-bg__layer--scene-art-hold" : ""
+                }`.trim()}
                 style={{ backgroundImage: `url("${previousScene.artwork}")` }}
               />
-              <div className="ambient-bg__layer ambient-bg__layer--transition-shade" />
+              {isImageCrossfading ? <div className="ambient-bg__layer ambient-bg__layer--transition-shade" /> : null}
             </>
           ) : null}
         </>

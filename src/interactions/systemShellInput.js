@@ -3,6 +3,7 @@ export const BLANK_TAP_HIDE_OVERLAY = "hide-overlay";
 export const RETURN_OVERVIEW = "return-overview";
 export const NEXT_FLOW_STATE = "next-flow-state";
 export const NEXT_FLOW_SCENE = "next-flow-scene";
+export const PREV_FLOW_SCENE = "prev-flow-scene";
 
 const SAFARI_PINCH_RETURN_SCALE = 0.97;
 const CHROME_PINCH_RETURN_DELTA = 60;
@@ -59,7 +60,7 @@ export function getSingleTouchSwipeIntent({
   const absHorizontal = Math.abs(horizontalDelta);
   const absVertical = Math.abs(verticalDelta);
 
-  if (verticalDelta < SINGLE_TOUCH_SWIPE_DELTA) {
+  if (verticalDelta > -SINGLE_TOUCH_SWIPE_DELTA) {
     return null;
   }
 
@@ -67,7 +68,7 @@ export function getSingleTouchSwipeIntent({
     return null;
   }
 
-  return NEXT_FLOW_SCENE;
+  return PREV_FLOW_SCENE;
 }
 
 export function getDoubleTouchFlowSwipeIntent({

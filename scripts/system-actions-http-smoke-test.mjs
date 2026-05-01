@@ -257,6 +257,38 @@ try {
     assert.equal(playerActions.some((action) => action.type === "play_media"), true);
   });
 
+  await test("switching into flow mode and changing flow state both trigger flow media playback", async () => {
+    const authHeaders = { "X-Tikpal-Key": API_KEY };
+    playerActions.length = 0;
+
+    const setModeResponse = await postAction(
+      baseUrl,
+      {
+        type: "set_mode",
+        payload: { mode: "flow" },
+        source: "portable_controller",
+      },
+      authHeaders,
+    );
+    assert.equal(setModeResponse.status, 200);
+    assert.equal(setModeResponse.json.state.activeMode, "flow");
+    assert.equal(playerActions.some((action) => action.type === "play_media"), true);
+
+    playerActions.length = 0;
+    const setFlowStateResponse = await postAction(
+      baseUrl,
+      {
+        type: "set_flow_state",
+        payload: { state: "sleep" },
+        source: "portable_controller",
+      },
+      authHeaders,
+    );
+    assert.equal(setFlowStateResponse.status, 200);
+    assert.equal(setFlowStateResponse.json.state.flow.state, "sleep");
+    assert.equal(playerActions.some((action) => action.type === "play_media"), true);
+  });
+
   await test("runtime performance actions update summary and logs", async () => {
     const authHeaders = { "X-Tikpal-Key": API_KEY };
 

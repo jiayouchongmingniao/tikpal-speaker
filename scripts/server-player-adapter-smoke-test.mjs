@@ -209,6 +209,14 @@ await test("native mpc adapter can replace the queue with a specific media item"
     timeoutMs: 100,
     execFileImpl: async (_command, args) => {
       commands.push(args);
+      if (args[args.length - 2] === "volume") {
+        return { stdout: "" };
+      }
+
+      if (["repeat", "single", "consume", "crossfade"].includes(args[args.length - 2])) {
+        return { stdout: "" };
+      }
+
       if (args.at(-1) === "clear" || args.at(-1) === "play") {
         return { stdout: "" };
       }
@@ -243,6 +251,11 @@ await test("native mpc adapter can replace the queue with a specific media item"
   assert.equal(commands.some((args) => args.at(-1) === "clear"), true);
   assert.equal(commands.some((args) => args.includes("Codex/flow-scenes-audio/sleep-eyes-closed.mp3")), true);
   assert.equal(commands.some((args) => args.at(-1) === "play"), true);
+  assert.equal(commands.some((args) => args[args.length - 2] === "volume"), true);
+  assert.equal(commands.some((args) => args[args.length - 2] === "repeat" && args.at(-1) === "on"), true);
+  assert.equal(commands.some((args) => args[args.length - 2] === "single" && args.at(-1) === "on"), true);
+  assert.equal(commands.some((args) => args[args.length - 2] === "consume" && args.at(-1) === "off"), true);
+  assert.equal(commands.some((args) => args[args.length - 2] === "crossfade" && args.at(-1) === "4"), true);
 });
 
 await test("native mpc adapter does not treat volume-only output as a fake track title", async () => {

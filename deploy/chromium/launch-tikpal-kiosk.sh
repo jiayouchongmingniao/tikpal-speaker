@@ -21,6 +21,7 @@ TIKPAL_KIOSK_ALLOW_REMOTE_DEBUG="${TIKPAL_KIOSK_ALLOW_REMOTE_DEBUG:-0}"
 TIKPAL_FLOW_RENDERER="${TIKPAL_FLOW_RENDERER:-image}"
 TIKPAL_CHROMIUM_EXPERIMENT="${TIKPAL_CHROMIUM_EXPERIMENT:-pi4-gpu-balanced}"
 TIKPAL_KIOSK_APPEND_QUERY="${TIKPAL_KIOSK_APPEND_QUERY:-1}"
+TIKPAL_CHROMIUM_COLOR_SCHEME="${TIKPAL_CHROMIUM_COLOR_SCHEME:-dark}"
 
 POLICY_FILE="$TIKPAL_CHROMIUM_POLICY_DIR/$TIKPAL_CHROMIUM_POLICY_BASENAME"
 PID_FILE="$TIKPAL_KIOSK_LOG_DIR/chromium.pid"
@@ -76,6 +77,17 @@ normalize_chromium_experiment() {
     value="baseline"
   fi
   printf "%s" "$value"
+}
+
+normalize_color_scheme() {
+  case "${1:-auto}" in
+    auto|light|dark)
+      printf "%s" "${1:-auto}"
+      ;;
+    *)
+      fail "invalid TIKPAL_CHROMIUM_COLOR_SCHEME '$1' (expected auto|light|dark)"
+      ;;
+  esac
 }
 
 build_kiosk_url() {
@@ -191,7 +203,7 @@ PY
 }
 
 build_args() {
-  local line stripped final_url
+  local line stripped final_url color_scheme
   CHROMIUM_ARGS=()
 
   while IFS= read -r line || [[ -n "$line" ]]; do
@@ -213,6 +225,13 @@ build_args() {
   done < "$TIKPAL_CHROMIUM_FLAGS_FILE"
 
   append_experiment_args
+  color_scheme="$(normalize_color_scheme "$TIKPAL_CHROMIUM_COLOR_SCHEME")"
+  if [[ "$color_scheme" == "dark" ]]; then
+    CHROMIUM_ARGS+=(
+      "--force-dark-mode"
+      "--enable-features=WebUIDarkMode"
+    )
+  fi
   final_url="$(build_kiosk_url)"
 
   CHROMIUM_ARGS+=(

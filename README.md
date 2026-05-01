@@ -151,6 +151,16 @@ The Chromium launcher validates its dependencies without opening a browser:
 APP_DIR=/home/moode/code/tikpal-speaker bash deploy/chromium/launch-tikpal-kiosk.sh --check
 ```
 
+To keep the physical kiosk screen clean during boot, disable the default tty1 login prompt. This only affects the local virtual console; SSH and the Tikpal services continue to work normally:
+
+```bash
+sudo systemctl disable --now getty@tty1.service
+systemctl is-enabled getty@tty1.service || true
+systemctl is-active getty@tty1.service || true
+```
+
+Expected state after a reboot is `disabled` and `inactive`. Restore the tty1 console with `sudo systemctl enable --now getty@tty1.service` if local keyboard login is needed for maintenance.
+
 Pi4 tuning stays outside the Chromium source tree. The default kiosk profile targets a measured `p10Fps >= 30` on Raspberry Pi 4 while preserving the physical `2560x720` output:
 
 - `TIKPAL_KIOSK_XRANDR_MODE=2560x720` keeps the real panel output at full width. Lower internal render cost with `renderScale`, not by shrinking the physical display mode.

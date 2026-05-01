@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FlowModePage } from "./FlowModePage";
 import { GlobalOverlay } from "./GlobalOverlay";
 import { ListenPage } from "./ListenPage";
@@ -15,6 +15,7 @@ import {
   getChromeTrackpadPinchIntent,
   getSafariGesturePinchIntent,
   NEXT_FLOW_SCENE,
+  PREV_FLOW_SCENE,
   NEXT_FLOW_STATE,
   RETURN_OVERVIEW,
   shouldHandleSingleTouchTap,
@@ -24,7 +25,14 @@ import { FONT_PRESETS } from "../typography";
 import { getOtaStatusHint } from "../viewmodels/screenContextConsumers";
 
 const OVERVIEW_MODES = ["listen", "flow", "screen"];
+const PAGE_MODES = ["overview", "listen", "flow", "screen"];
 const OVERLAY_HIDE_MS = 10000;
+
+function isPageModeTransition(transition) {
+  const from = transition?.from;
+  const to = transition?.to;
+  return transition?.status !== "idle" && from !== to && PAGE_MODES.includes(from) && PAGE_MODES.includes(to);
+}
 
 function getModeSlotClass(mode) {
   if (mode === "listen") {
@@ -38,7 +46,7 @@ function getModeSlotClass(mode) {
   return "page-layer--slot-center";
 }
 
-function getPageLayerClass(pageMode, activeMode, transition) {
+function getPageLayerClass(pageMode, activeMode, transition, transitionPrimed = true) {
   const from = transition?.from ?? activeMode;
   const to = transition?.to ?? activeMode;
   const status = transition?.status ?? "idle";
@@ -48,6 +56,14 @@ function getPageLayerClass(pageMode, activeMode, transition) {
 
   if (status === "idle") {
     return activeKey === pageKey ? "page-layer is-active" : "page-layer is-hidden";
+  }
+
+  if (!transitionPrimed) {
+    if (from === pageKey) {
+      return "page-layer is-active page-layer--transition-hold";
+    }
+
+    return "page-layer is-hidden";
   }
 
   if (from === pageKey) {
@@ -155,10 +171,12 @@ export function SystemShell({
   const [powerNotice, setPowerNotice] = useState("");
   const [powerError, setPowerError] = useState("");
   const [powerBusy, setPowerBusy] = useState(false);
+  const [transitionPrimed, setTransitionPrimed] = useState(true);
   const stateRef = useRef(state);
   const transitionStatus = state.transition?.status ?? "idle";
   const transition = state.transition ?? { status: "idle", from: state.activeMode, to: state.activeMode };
-  const transitionKind = transition.from === transition.to ? "state" : "mode";
+  const shouldPrimePageTransition = isPageModeTransition(transition);
+  const transitionKind = shouldPrimePageTransition ? "mode" : "state";
   const isFocusMode = state.activeMode !== "overview";
   const shouldRenderOverview =
     state.activeMode === "overview" || transition.from === "overview" || transition.to === "overview";
@@ -187,6 +205,20 @@ export function SystemShell({
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useLayoutEffect(() => {
+    if (!shouldPrimePageTransition) {
+      setTransitionPrimed(true);
+      return undefined;
+    }
+
+    setTransitionPrimed(false);
+    const frame = window.requestAnimationFrame(() => {
+      setTransitionPrimed(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [shouldPrimePageTransition, transition.startedAt, transitionStatus]);
 
   function clearOverlayTimer() {
     if (overlayTimerRef.current) {
@@ -838,7 +870,7 @@ export function SystemShell({
 
     singleTouchTapRef.current.swipeIntent = swipeIntent;
     singleTouchTapRef.current.moved = true;
-    reportInputDebug("touch swipe next-flow-scene");
+    reportInputDebug(swipeIntent === PREV_FLOW_SCENE ? "touch swipe prev-flow-scene" : "touch swipe next-flow-scene");
     event.preventDefault();
   }
 
@@ -859,6 +891,11 @@ export function SystemShell({
     singleTouchTapRef.current.swipeIntent = null;
     if (shouldHandleSingleTouchTap({ didTap, isInteractiveStart: isInteractiveTap })) {
       handleBlankTap();
+      return;
+    }
+
+    if (swipeIntent === PREV_FLOW_SCENE) {
+      controller.prevFlowScene();
       return;
     }
 
@@ -1029,7 +1066,7 @@ export function SystemShell({
 
       {shouldRenderOverview ? (
         <OverviewPage
-          className={getPageLayerClass("overview", state.activeMode, transition)}
+          className={getPageLayerClass("overview", state.activeMode, transition, transitionPrimed)}
           state={state}
           screenContext={screenContext}
           focusTarget={overviewFocusTarget}
@@ -1049,7 +1086,7 @@ export function SystemShell({
 
       {shouldRenderListen ? (
         <ListenPage
-          className={getPageLayerClass("listen", state.activeMode, transition)}
+          className={getPageLayerClass("listen", state.activeMode, transition, transitionPrimed)}
           state={state}
           onTogglePlay={controller.togglePlay}
           onPrevTrack={controller.prevTrack}
@@ -1059,12 +1096,12 @@ export function SystemShell({
       ) : null}
 
       {shouldRenderFlow ? (
-        <FlowModePage className={getPageLayerClass("flow", state.activeMode, transition)} systemState={state} />
+        <FlowModePage className={getPageLayerClass("flow", state.activeMode, transition, transitionPrimed)} systemState={state} />
       ) : null}
 
       {shouldRenderScreen ? (
         <ScreenPage
-          className={getPageLayerClass("screen", state.activeMode, transition)}
+          className={getPageLayerClass("screen", state.activeMode, transition, transitionPrimed)}
           state={state}
           screenContext={screenContext}
           onOpenMode={controller.setMode}

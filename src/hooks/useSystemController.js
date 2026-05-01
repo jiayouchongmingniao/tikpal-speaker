@@ -14,6 +14,7 @@ const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "en
 const CREATIVE_CARE_MODES = ["focus", "flow", "unwind", "sleep"];
 const MODE_TRANSITION_MS = 680;
 const FLOW_TRANSITION_MS = 520;
+const STARTUP_OVERVIEW_HOLD_MS = 1600;
 
 function nowIso() {
   return new Date().toISOString();
@@ -281,6 +282,24 @@ function applyLocalAction(currentState, type, payload = {}, source = "speaker-ui
       sceneId: liveState.flow?.sceneId,
       scenesByState: liveState.flow?.scenesByState,
       step: 1,
+    });
+    const nextState = applyFlowSceneSelectionToState(liveState, nextFlowState, selection);
+    return {
+      ...nextState,
+      activeMode: "flow",
+      focusedPanel: "flow",
+      lastSource: source,
+      lastUpdatedAt: nowIso(),
+    };
+  }
+
+  if (type === "prev_flow_scene") {
+    const nextFlowState = normalizeFlowState(payload.state ?? liveState.flow?.state ?? "focus");
+    const selection = getNextFlowSceneSelection({
+      flowState: nextFlowState,
+      sceneId: liveState.flow?.sceneId,
+      scenesByState: liveState.flow?.scenesByState,
+      step: -1,
     });
     const nextState = applyFlowSceneSelectionToState(liveState, nextFlowState, selection);
     return {
@@ -584,6 +603,8 @@ export function useSystemController({ initialMode = "overview", initialFlowState
   const bootstrappedRef = useRef(false);
   const preferOverviewUntilActionRef = useRef(initialMode === "overview");
   const pendingInitialModeRef = useRef(initialMode !== "overview" ? initialMode : null);
+  const lastSyncedStateRef = useRef(null);
+  const startupFlowPlaybackPrimedRef = useRef(false);
   const stateRef = useRef(state);
 
   useEffect(() => {
@@ -605,6 +626,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
           return;
         }
 
+        lastSyncedStateRef.current = nextState;
         setState((current) => {
           if (pendingInitialModeRef.current) {
             if (nextState.activeMode === pendingInitialModeRef.current) {
@@ -653,6 +675,67 @@ export function useSystemController({ initialMode = "overview", initialFlowState
       window.clearInterval(intervalId);
     };
   }, [capabilities, systemApi]);
+
+  useEffect(() => {
+    if (initialMode !== "overview") {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (!preferOverviewUntilActionRef.current) {
+        return;
+      }
+
+      preferOverviewUntilActionRef.current = false;
+      const syncedState = lastSyncedStateRef.current;
+      if (!syncedState || syncedState.activeMode === "overview") {
+        return;
+      }
+
+      setState((current) => ({
+        ...syncedState,
+        transition: {
+          ...(syncedState.transition ?? {}),
+          status: "animating",
+          from: current.activeMode ?? "overview",
+          to: syncedState.activeMode,
+          startedAt: nowIso(),
+          lockedUntil: Date.now() + MODE_TRANSITION_MS,
+        },
+      }));
+      setScreenContext(deriveScreenContext(syncedState));
+
+      if (
+        !startupFlowPlaybackPrimedRef.current &&
+        syncedState.activeMode === "flow" &&
+        syncedState.flow?.sceneId &&
+        syncedState.playback?.state !== "play"
+      ) {
+        startupFlowPlaybackPrimedRef.current = true;
+        systemApi
+          .sendAction(
+            "set_flow_scene",
+            {
+              sceneId: syncedState.flow.sceneId,
+              sceneIndex: syncedState.flow.sceneIndex ?? null,
+            },
+            "speaker-ui-startup-flow-prime",
+          )
+          .then((response) => {
+            const nextState = response?.state ?? response;
+            if (nextState?.activeMode) {
+              setState(nextState);
+              setScreenContext(deriveScreenContext(nextState));
+            }
+          })
+          .catch(() => {
+            startupFlowPlaybackPrimedRef.current = false;
+          });
+      }
+    }, STARTUP_OVERVIEW_HOLD_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [initialMode]);
 
   useEffect(() => {
     if (bootstrappedRef.current) {
@@ -796,6 +879,9 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     },
     async nextFlowScene() {
       return dispatch("next_flow_scene");
+    },
+    async prevFlowScene() {
+      return dispatch("prev_flow_scene");
     },
     async setFlowScene(sceneId, sceneIndex = null) {
       return dispatch("set_flow_scene", { sceneId, sceneIndex });
