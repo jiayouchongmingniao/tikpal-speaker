@@ -4,6 +4,7 @@ import {
   derivePerformanceTierFromFps,
   getPerformanceDebugViewModel,
   getPerformanceRenderBudget,
+  getWebglPerformanceRenderBudget,
   isStaticFlowRenderBudget,
   PI4_TARGET_FRAME_INTERVAL_MS,
   summarizeFrameWindow,
@@ -58,6 +59,7 @@ test("rpi render profiles tighten budgets while desktop defaults stay unchanged"
   assert.equal(balanced.maxWaveLayers >= stable.maxWaveLayers, true);
   assert.equal(balanced.particleMultiplier > stable.particleMultiplier, true);
   assert.equal(stableSafe.renderScale, 0.2);
+  assert.equal(stableSafe.webglRenderScale, 0.16);
   assert.equal(isStaticFlowRenderBudget(stableSafe), false);
   assert.equal(stableSafe.flowSceneMode, "minimal");
 
@@ -71,6 +73,18 @@ test("rpi render profiles tighten budgets while desktop defaults stay unchanged"
       );
     }
   }
+});
+
+test("webgl render budget uses the Pi shader-specific scale", () => {
+  const balancedNormal = getWebglPerformanceRenderBudget(getPerformanceRenderBudget("normal", "balanced"));
+  const balancedSafe = getWebglPerformanceRenderBudget(getPerformanceRenderBudget("safe", "balanced"));
+  const stableSafe = getWebglPerformanceRenderBudget(getPerformanceRenderBudget("safe", "stable"));
+
+  assert.equal(balancedNormal.renderScale, 0.4);
+  assert.equal(balancedSafe.renderScale, 0.18);
+  assert.equal(stableSafe.renderScale, 0.16);
+  assert.equal(balancedSafe.maxWaveLayers, 1);
+  assert.equal(balancedSafe.particleMultiplier, 0);
 });
 
 test("frame window summary reports fps, latency, and optional memory", () => {

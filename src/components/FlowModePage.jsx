@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AmbientBackground } from "./AmbientBackground";
+import { FlowVisualRenderer } from "./FlowVisualRenderer";
 import { SideInfoPanel } from "./SideInfoPanel";
 import { StateTitle } from "./StateTitle";
 import { FLOW_THEME } from "../theme";
@@ -15,6 +16,12 @@ import {
 } from "../viewmodels/performance";
 
 const BACKGROUND_CROSSFADE_MS = 1200;
+const FLOW_AUDIO_METRICS = {
+  focus: { lowEnergy: 0.28, midEnergy: 0.22, highEnergy: 0.14, beatConfidence: 0.16 },
+  flow: { lowEnergy: 0.38, midEnergy: 0.32, highEnergy: 0.22, beatConfidence: 0.24 },
+  relax: { lowEnergy: 0.24, midEnergy: 0.18, highEnergy: 0.12, beatConfidence: 0.1 },
+  sleep: { lowEnergy: 0.12, midEnergy: 0.08, highEnergy: 0.04, beatConfidence: 0.04 },
+};
 
 export function FlowModePage({
   systemState,
@@ -54,6 +61,15 @@ export function FlowModePage({
   const flowDiagnosticMode = systemState.system?.flowDiagnosticMode === "static" ? "static" : "off";
   const renderBudget = getPerformanceRenderBudget(performanceTier, renderProfile);
   const runtimeRendererConfig = getFlowRendererRuntimeConfig(window.location);
+  const flowRenderer = runtimeRendererConfig.flowRenderer;
+  const chromiumExperiment = runtimeRendererConfig.chromiumExperiment;
+  const isImageRenderer = flowRenderer === "image";
+  const audioMetricsBase = FLOW_AUDIO_METRICS[currentState] ?? FLOW_AUDIO_METRICS.focus;
+  const audioMetrics = {
+    volumeNormalized: Math.max(0, Math.min(1, Number(playerState.volume ?? 0) / 100)),
+    ...audioMetricsBase,
+    isPlaying: playerState.playbackState === "play",
+  };
   const isStaticFlowBudget = isStaticFlowRenderBudget(renderBudget);
   const isMinimalFlowBudget = isMinimalFlowRenderBudget(renderBudget);
 
@@ -91,6 +107,10 @@ export function FlowModePage({
       return undefined;
     }
 
+    if (!isImageRenderer) {
+      return undefined;
+    }
+
     function updateStaticBackgroundDebug() {
       window.__TIKPAL_CANVAS_DEBUG__ = {
         skippedRenderCount: 0,
@@ -115,7 +135,7 @@ export function FlowModePage({
         glInitErrorCount: 0,
         glContextLostCount: 0,
         rendererFallbackReason: null,
-        chromiumExperiment: runtimeRendererConfig.chromiumExperiment,
+        chromiumExperiment,
       };
     }
 
@@ -123,8 +143,11 @@ export function FlowModePage({
     window.addEventListener("resize", updateStaticBackgroundDebug);
     return () => {
       window.removeEventListener("resize", updateStaticBackgroundDebug);
+      if (window.__TIKPAL_CANVAS_DEBUG__?.rendererType === "image") {
+        delete window.__TIKPAL_CANVAS_DEBUG__;
+      }
     };
-  }, [appPhase, flowDiagnosticMode, previousScene, renderBudget.frameIntervalMs, runtimeRendererConfig.chromiumExperiment]);
+  }, [appPhase, chromiumExperiment, flowDiagnosticMode, isImageRenderer, previousScene, renderBudget.frameIntervalMs]);
 
   return (
     <main
@@ -134,21 +157,36 @@ export function FlowModePage({
         isMinimalFlowBudget ? "flow-page--minimal-budget" : ""
       } ${
         previousScene ? "flow-page--image-crossfading" : ""
-      } flow-page--image-background ${className}`.trim()}
+      } ${
+        isImageRenderer ? "flow-page--image-background" : `flow-page--visual-renderer flow-page--${flowRenderer}-renderer`
+      } ${className}`.trim()}
       role="application"
       aria-label="Flow mode"
     >
-      <AmbientBackground
-        currentState={currentState}
-        scene={currentScene}
-        previousScene={previousScene}
-        transitionState={transitionState}
-        appPhase={appPhase}
-        performanceTier={performanceTier}
-        renderProfile={renderProfile}
-        flowDiagnosticMode={flowDiagnosticMode}
-        imageOnly
-      />
+      {isImageRenderer ? (
+        <AmbientBackground
+          currentState={currentState}
+          scene={currentScene}
+          previousScene={previousScene}
+          transitionState={transitionState}
+          appPhase={appPhase}
+          performanceTier={performanceTier}
+          renderProfile={renderProfile}
+          flowDiagnosticMode={flowDiagnosticMode}
+          imageOnly
+        />
+      ) : (
+        <FlowVisualRenderer
+          currentState={currentState}
+          theme={theme}
+          audioMetrics={audioMetrics}
+          appPhase={appPhase}
+          renderBudget={renderBudget}
+          flowDiagnosticMode={flowDiagnosticMode}
+          rendererPreference={flowRenderer}
+          chromiumExperiment={chromiumExperiment}
+        />
+      )}
       <section className="flow-page__content">
         <div className="flow-care-stack">
           <div className="flow-scene-card">

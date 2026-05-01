@@ -148,6 +148,7 @@ const RPI_RENDER_PROFILE_BUDGET_OVERRIDES = {
     normal: {
       pixelRatioCap: 1.2,
       renderScale: 0.82,
+      webglRenderScale: 0.4,
       waveStep: 26,
       maxWaveLayers: 3,
       particleMultiplier: 0.42,
@@ -157,6 +158,7 @@ const RPI_RENDER_PROFILE_BUDGET_OVERRIDES = {
     reduced: {
       pixelRatioCap: 0.9,
       renderScale: 0.5,
+      webglRenderScale: 0.28,
       waveStep: 46,
       maxWaveLayers: 2,
       particleMultiplier: 0.12,
@@ -166,6 +168,7 @@ const RPI_RENDER_PROFILE_BUDGET_OVERRIDES = {
     safe: {
       pixelRatioCap: 0.56,
       renderScale: 0.28,
+      webglRenderScale: 0.18,
       waveStep: 96,
       maxWaveLayers: 1,
       particleMultiplier: 0,
@@ -177,6 +180,7 @@ const RPI_RENDER_PROFILE_BUDGET_OVERRIDES = {
     normal: {
       pixelRatioCap: 0.82,
       renderScale: 0.5,
+      webglRenderScale: 0.32,
       waveStep: 40,
       maxWaveLayers: 2,
       particleMultiplier: 0.16,
@@ -186,6 +190,7 @@ const RPI_RENDER_PROFILE_BUDGET_OVERRIDES = {
     reduced: {
       pixelRatioCap: 0.62,
       renderScale: 0.36,
+      webglRenderScale: 0.22,
       waveStep: 80,
       maxWaveLayers: 1,
       particleMultiplier: 0.04,
@@ -195,6 +200,7 @@ const RPI_RENDER_PROFILE_BUDGET_OVERRIDES = {
     safe: {
       pixelRatioCap: 0.45,
       renderScale: 0.2,
+      webglRenderScale: 0.16,
       waveStep: 132,
       maxWaveLayers: 1,
       particleMultiplier: 0,

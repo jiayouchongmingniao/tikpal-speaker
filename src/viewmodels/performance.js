@@ -35,6 +35,7 @@ export const RPI_RENDER_PROFILE_OVERRIDES = {
     normal: {
       pixelRatioCap: 1.2,
       renderScale: 0.82,
+      webglRenderScale: 0.4,
       waveStep: 26,
       maxWaveLayers: 3,
       particleMultiplier: 0.42,
@@ -44,6 +45,7 @@ export const RPI_RENDER_PROFILE_OVERRIDES = {
     reduced: {
       pixelRatioCap: 0.9,
       renderScale: 0.5,
+      webglRenderScale: 0.28,
       waveStep: 46,
       maxWaveLayers: 2,
       particleMultiplier: 0.12,
@@ -53,6 +55,7 @@ export const RPI_RENDER_PROFILE_OVERRIDES = {
     safe: {
       pixelRatioCap: 0.56,
       renderScale: 0.28,
+      webglRenderScale: 0.18,
       waveStep: 96,
       maxWaveLayers: 1,
       particleMultiplier: 0,
@@ -64,6 +67,7 @@ export const RPI_RENDER_PROFILE_OVERRIDES = {
     normal: {
       pixelRatioCap: 0.82,
       renderScale: 0.5,
+      webglRenderScale: 0.32,
       waveStep: 40,
       maxWaveLayers: 2,
       particleMultiplier: 0.16,
@@ -73,6 +77,7 @@ export const RPI_RENDER_PROFILE_OVERRIDES = {
     reduced: {
       pixelRatioCap: 0.62,
       renderScale: 0.36,
+      webglRenderScale: 0.22,
       waveStep: 80,
       maxWaveLayers: 1,
       particleMultiplier: 0.04,
@@ -82,6 +87,7 @@ export const RPI_RENDER_PROFILE_OVERRIDES = {
     safe: {
       pixelRatioCap: 0.45,
       renderScale: 0.2,
+      webglRenderScale: 0.16,
       waveStep: 132,
       maxWaveLayers: 1,
       particleMultiplier: 0,
@@ -105,6 +111,18 @@ export function getPerformanceRenderBudget(tier = "normal", profile = "off") {
   return {
     ...base,
     ...(RPI_RENDER_PROFILE_OVERRIDES[normalizedProfile]?.[normalizedTier] ?? {}),
+  };
+}
+
+export function getWebglPerformanceRenderBudget(budget = {}) {
+  const nextScale = Number(budget.webglRenderScale ?? budget.renderScale ?? 1);
+  const renderScale = Math.max(0.12, Math.min(1, Number.isFinite(nextScale) ? nextScale : 1));
+  return {
+    ...budget,
+    renderScale,
+    webglRenderScale: renderScale,
+    maxWaveLayers: Math.min(1, Math.max(1, Number(budget.maxWaveLayers ?? 1))),
+    particleMultiplier: 0,
   };
 }
 
