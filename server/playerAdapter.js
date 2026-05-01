@@ -7,6 +7,7 @@ const DEFAULT_MPD_PORT = 6600;
 const DEFAULT_MPD_SCENE_CROSSFADE_SEC = 4;
 const MPC_FADE_OUT_STEP_MS = 90;
 const MPC_FADE_IN_STEP_MS = 160;
+const MPC_PLAYBACK_RESUME_RETRY_DELAY_MS = 180;
 const MPC_FADE_OUT_STEPS = [0.55, 0.22, 0];
 const MPC_FADE_IN_STEPS = [0.18, 0.42, 0.68, 1];
 const execFile = promisify(execFileCallback);
@@ -305,6 +306,42 @@ export function createMpcPlayerAdapter({
     }
   }
 
+  async function ensureMpcPlaybackStarted(fallback = {}) {
+    let status = await getStatus(fallback);
+    if (status.state === "play") {
+      return status;
+    }
+
+    await sleep(MPC_PLAYBACK_RESUME_RETRY_DELAY_MS);
+    await execMpcCommand(["pause", "off"], {
+      host,
+      port: normalizedPort,
+      timeoutMs: normalizedTimeoutMs,
+      execFileImpl,
+    });
+    status = await getStatus(status);
+    if (status.state === "play") {
+      return status;
+    }
+
+    await sleep(MPC_PLAYBACK_RESUME_RETRY_DELAY_MS);
+    await execMpcCommand(["play", "1"], {
+      host,
+      port: normalizedPort,
+      timeoutMs: normalizedTimeoutMs,
+      execFileImpl,
+    });
+    status = await getStatus(status);
+    if (status.state === "play") {
+      return status;
+    }
+
+    throw createPlayerError(
+      "PLAYER_PLAYBACK_DID_NOT_RESUME",
+      `mpc switched media but did not resume playback (state: ${status.state})`,
+    );
+  }
+
   return {
     mode: "mpc",
     host,
@@ -374,13 +411,15 @@ export function createMpcPlayerAdapter({
             timeoutMs: normalizedTimeoutMs,
             execFileImpl,
           });
-          await execMpcCommand(["play"], {
+          await execMpcCommand(["play", "1"], {
             host,
             port: normalizedPort,
             timeoutMs: normalizedTimeoutMs,
             execFileImpl,
           });
+          const nextStatus = await ensureMpcPlaybackStarted(fallback);
           await fadeMpcVolume(targetVolume, MPC_FADE_IN_STEPS, MPC_FADE_IN_STEP_MS);
+          return getStatus(nextStatus);
         } catch (error) {
           await setMpcVolume(targetVolume);
           throw error;

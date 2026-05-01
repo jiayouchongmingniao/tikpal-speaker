@@ -8,6 +8,7 @@ import {
   normalizeFlowState,
   resolveFlowSceneSelection,
 } from "../viewmodels/flowScenes";
+import { createPendingVisualAction, reconcilePendingVisualState } from "../viewmodels/pendingVisualSync";
 
 const MODE_ORDER = ["listen", "flow", "screen"];
 const CREATIVE_CARE_MOODS = ["clear", "scattered", "stuck", "tired", "calm", "energized"];
@@ -644,6 +645,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
   const bootstrappedRef = useRef(false);
   const preferOverviewUntilActionRef = useRef(initialMode === "overview");
   const pendingInitialModeRef = useRef(initialMode !== "overview" ? initialMode : null);
+  const pendingVisualActionRef = useRef(null);
   const lastSyncedStateRef = useRef(null);
   const startupFlowPlaybackPrimedRef = useRef(false);
   const stateRef = useRef(state);
@@ -712,20 +714,27 @@ export function useSystemController({ initialMode = "overview", initialFlowState
       };
     }
 
-    return decoratedState;
+    const pendingVisualResult = reconcilePendingVisualState(
+      decoratedState,
+      pendingVisualActionRef.current,
+      stateRef.current,
+    );
+    pendingVisualActionRef.current = pendingVisualResult.pending;
+    return pendingVisualResult.state;
   }
 
-  function applyConfirmedState(nextState, { syncScreenContext = true, preserveStartupView = false } = {}) {
+  function applyConfirmedState(nextState, { syncScreenContext = true } = {}) {
     if (!nextState) {
       return nextState;
     }
 
     confirmedStateRef.current = nextState;
     lastSyncedStateRef.current = nextState;
-    const resolvedState = preserveStartupView ? reconcileSyncedState(nextState) : decorateStateWithVolumeDraft(nextState);
+    const resolvedState = reconcileSyncedState(nextState);
+    stateRef.current = resolvedState;
     setState(resolvedState);
     if (syncScreenContext) {
-      setScreenContext(deriveScreenContext(nextState));
+      setScreenContext(deriveScreenContext(resolvedState));
     }
     return resolvedState;
   }
@@ -736,9 +745,11 @@ export function useSystemController({ initialMode = "overview", initialFlowState
   }
 
   function revertToConfirmedState() {
+    pendingVisualActionRef.current = null;
     clearVolumeDraft();
     setIsAdjustingVolume(false);
     const nextState = confirmedStateRef.current;
+    stateRef.current = nextState;
     setState(nextState);
     setScreenContext(deriveScreenContext(confirmedStateRef.current));
     return nextState;
@@ -759,10 +770,8 @@ export function useSystemController({ initialMode = "overview", initialFlowState
           return;
         }
 
-        confirmedStateRef.current = nextState;
-        lastSyncedStateRef.current = nextState;
-        setState(reconcileSyncedState(nextState));
-        setScreenContext(nextScreenContext);
+        const resolvedState = applyConfirmedState(nextState, { syncScreenContext: false });
+        setScreenContext(pendingVisualActionRef.current ? deriveScreenContext(resolvedState) : nextScreenContext);
         if (!capabilities) {
           setCapabilities(nextCapabilities);
         }
@@ -854,8 +863,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
           pendingInitialModeRef.current = null;
           const nextState = response?.state ?? response;
           if (nextState?.activeMode) {
-            setState(nextState);
-            setScreenContext(deriveScreenContext(nextState));
+            applyConfirmedState(nextState);
           }
         })
         .catch(() => {});
@@ -916,6 +924,11 @@ export function useSystemController({ initialMode = "overview", initialFlowState
     pendingInitialModeRef.current = null;
     preferOverviewUntilActionRef.current = false;
     const optimisticState = applyLocalAction(stateRef.current, type, payload, source);
+    const pendingVisualAction = createPendingVisualAction(type, optimisticState);
+    if (pendingVisualAction) {
+      pendingVisualActionRef.current = pendingVisualAction;
+    }
+    stateRef.current = optimisticState;
     setState(optimisticState);
     setScreenContext(deriveScreenContext(optimisticState));
 
@@ -955,6 +968,10 @@ export function useSystemController({ initialMode = "overview", initialFlowState
       }
       return response;
     } catch (error) {
+      if (pendingVisualAction && pendingVisualActionRef.current === pendingVisualAction) {
+        pendingVisualActionRef.current = null;
+        revertToConfirmedState();
+      }
       if (isVolumeAction && volumeRequestId >= latestVolumeRequestIdRef.current) {
         latestResolvedVolumeRequestIdRef.current = volumeRequestId;
         revertToConfirmedState();
@@ -1074,8 +1091,7 @@ export function useSystemController({ initialMode = "overview", initialFlowState
       try {
         const response = await systemApi.sendAction("runtime_report_performance", payload, "speaker-ui-performance");
         if (response?.state) {
-          setState(response.state);
-          return response.state;
+          return applyConfirmedState(response.state);
         }
         return response;
       } catch {

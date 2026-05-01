@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createScreenContext } from "../server/screenContextService.js";
 import { createSystemStateStore } from "../server/systemStateStore.js";
+import { createPendingVisualAction, reconcilePendingVisualState } from "../src/viewmodels/pendingVisualSync.js";
+import { getInitialModeFromLocation } from "../src/routing.js";
 import { getCreativeCareViewModel, getFlowCareCopy } from "../src/viewmodels/creativeCare.js";
 import { getFlowSceneById } from "../src/viewmodels/flowScenes.js";
 
@@ -24,6 +26,75 @@ function settleTransition(store) {
   snapshot.transition.status = "idle";
   return snapshot;
 }
+
+test("route parsing uses the last mode-like path segment", () => {
+  assert.equal(getInitialModeFromLocation({ pathname: "/flow/listen/", search: "" }), "listen");
+  assert.equal(getInitialModeFromLocation({ pathname: "/overview/flow/screen/", search: "" }), "screen");
+  assert.equal(getInitialModeFromLocation({ pathname: "/debug", search: "?mode=flow" }), "flow");
+});
+
+test("pending visual mode sync keeps stale polling snapshots from replacing optimistic UI", () => {
+  const staleState = createStore().getSnapshot();
+  const optimisticState = {
+    ...staleState,
+    activeMode: "screen",
+    focusedPanel: "screen",
+    transition: {
+      status: "animating",
+      from: "overview",
+      to: "screen",
+      startedAt: "2026-05-01T00:00:00.000Z",
+      lockedUntil: 10000,
+    },
+  };
+  const pending = createPendingVisualAction("set_mode", optimisticState, 1000);
+  const staleResult = reconcilePendingVisualState(staleState, pending, optimisticState, 2000);
+
+  assert.equal(staleResult.pendingActive, true);
+  assert.equal(staleResult.state.activeMode, "screen");
+  assert.equal(staleResult.state.focusedPanel, "screen");
+
+  const confirmedResult = reconcilePendingVisualState(
+    {
+      ...staleState,
+      activeMode: "screen",
+      focusedPanel: "screen",
+    },
+    pending,
+    optimisticState,
+    2500,
+  );
+  assert.equal(confirmedResult.pending, null);
+  assert.equal(confirmedResult.state.activeMode, "screen");
+});
+
+test("pending visual scene sync keeps stale polling snapshots from replacing optimistic artwork", () => {
+  const staleState = createStore().getSnapshot();
+  const scene = getFlowSceneById("sleep-eyes-closed");
+  const optimisticState = {
+    ...staleState,
+    activeMode: "flow",
+    focusedPanel: "flow",
+    flow: {
+      ...staleState.flow,
+      state: "sleep",
+      sceneId: scene.id,
+      sceneIndex: scene.index,
+    },
+    playback: {
+      ...staleState.playback,
+      trackTitle: scene.audioLabel,
+    },
+  };
+  const pending = createPendingVisualAction("set_flow_scene", optimisticState, 1000);
+  const result = reconcilePendingVisualState(staleState, pending, optimisticState, 2000);
+
+  assert.equal(result.pendingActive, true);
+  assert.equal(result.state.activeMode, "flow");
+  assert.equal(result.state.flow.state, "sleep");
+  assert.equal(result.state.flow.sceneId, "sleep-eyes-closed");
+  assert.equal(result.state.playback.trackTitle, scene.audioLabel);
+});
 
 test("focus_panel updates overview focus without leaving overview", () => {
   const store = createStore();
@@ -56,6 +127,17 @@ test("next_mode and prev_mode traverse focus modes", () => {
 
   const prevState = store.runAction("prev_mode", {}, "remote");
   assert.equal(prevState.activeMode, "listen");
+});
+
+test("mode actions can retarget while a previous transition is still animating", () => {
+  const store = createStore();
+  const listenState = store.runAction("set_mode", { mode: "listen" }, "remote");
+  const screenState = store.runAction("set_mode", { mode: "screen" }, "remote");
+
+  assert.equal(listenState.transition.status, "animating");
+  assert.equal(screenState.activeMode, "screen");
+  assert.equal(screenState.transition.from, "listen");
+  assert.equal(screenState.transition.to, "screen");
 });
 
 test("show_controls is idempotent and can be hidden again", () => {

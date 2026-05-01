@@ -4,7 +4,7 @@ import { ConnectorDebugPage } from "./components/ConnectorDebugPage";
 import { PortableControllerPage } from "./components/PortableControllerPage";
 import { SystemShell } from "./components/SystemShell";
 import { useAppInteractionGuard } from "./hooks/useAppInteractionGuard";
-import { getSurfaceFromLocation } from "./routing";
+import { getInitialModeFromLocation, getSurfaceFromLocation } from "./routing";
 import { persistAndApplyFontPreset, readStoredFontPreset } from "./typography";
 
 function ensureDevelopmentApiKey() {
@@ -39,6 +39,7 @@ export function App() {
   ensureDevelopmentApiKey();
   const params = new URLSearchParams(window.location.search);
   const initialState = params.get("state") ?? "focus";
+  const initialMode = getInitialModeFromLocation(window.location);
   const surface = getSurfaceFromLocation(window.location);
   const debug = import.meta.env.DEV;
   const [fontPresetId, setFontPresetId] = useState(() => readStoredFontPreset());
@@ -72,7 +73,7 @@ export function App() {
       ) : (
         <SystemShell
           initialFlowState={initialState}
-          initialMode="overview"
+          initialMode={initialMode}
           debug={debug}
           fontPresetId={fontPresetId}
           onFontPresetChange={handleFontPresetChange}

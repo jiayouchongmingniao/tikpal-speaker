@@ -26,6 +26,10 @@ const FLOW_AUDIO_METRICS = {
 const loadedFlowSceneArtwork = new Set();
 const loadingFlowSceneArtwork = new Map();
 
+function isFlowSceneArtworkLoaded(src) {
+  return !src || loadedFlowSceneArtwork.has(src);
+}
+
 function preloadFlowSceneArtwork(src, onSettled) {
   if (!src || loadedFlowSceneArtwork.has(src)) {
     return;
@@ -71,7 +75,9 @@ export function FlowModePage({
   const creativeCare = getCreativeCareViewModel(systemState);
   const careCopy = getFlowCareCopy(currentState);
   const scenes = getFlowScenesForState(currentState);
-  const currentScene = scenes.find((scene) => scene.id === systemState.flow.sceneId) ?? scenes[0];
+  const requestedScene = scenes.find((scene) => scene.id === systemState.flow.sceneId) ?? scenes[0];
+  const [displayScene, setDisplayScene] = useState(requestedScene);
+  const currentScene = displayScene ?? requestedScene;
   const previousSceneRef = useRef(currentScene);
   const scenePromptTimerRef = useRef(null);
   const lastPromptSceneIdRef = useRef(currentScene.id);
@@ -119,6 +125,29 @@ export function FlowModePage({
     });
     return undefined;
   }, [scenes]);
+
+  useLayoutEffect(() => {
+    if (!requestedScene || currentScene?.id === requestedScene.id) {
+      return undefined;
+    }
+
+    let canceled = false;
+    const commitRequestedScene = () => {
+      if (!canceled) {
+        setDisplayScene(requestedScene);
+      }
+    };
+
+    if (isFlowSceneArtworkLoaded(requestedScene.artwork)) {
+      commitRequestedScene();
+      return undefined;
+    }
+
+    preloadFlowSceneArtwork(requestedScene.artwork, commitRequestedScene);
+    return () => {
+      canceled = true;
+    };
+  }, [currentScene?.id, requestedScene]);
 
   useLayoutEffect(() => {
     const lastScene = previousSceneRef.current;

@@ -1293,7 +1293,7 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
     }
 
     const activeMode = mode === "overview" ? "overview" : mode;
-    if (liveState.activeMode === activeMode && liveState.transition.status === "idle") {
+    if (liveState.activeMode === activeMode) {
       return liveState;
     }
 
@@ -1716,13 +1716,6 @@ export function createSystemStateStore({ persistence = null, secretStore = null,
         const error = new Error("OTA is in progress");
         error.code = "OTA_IN_PROGRESS";
         throw error;
-      }
-
-      if (
-        liveState.transition.status !== "idle" &&
-        ["set_mode", "return_overview", "next_mode", "prev_mode"].includes(type)
-      ) {
-        return finalize(liveState);
       }
 
       if (type === "set_mode") {

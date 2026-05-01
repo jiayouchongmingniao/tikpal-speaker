@@ -11,7 +11,8 @@ export function getInitialModeFromLocation(locationLike = window.location) {
     .toLowerCase()
     .split("/")
     .filter(Boolean)
-    .find((segment) => MODES.includes(segment));
+    .filter((segment) => MODES.includes(segment))
+    .at(-1);
 
   return pathMode ?? "overview";
 }

@@ -217,7 +217,7 @@ await test("native mpc adapter can replace the queue with a specific media item"
         return { stdout: "" };
       }
 
-      if (args.at(-1) === "clear" || args.at(-1) === "play") {
+      if (args.at(-1) === "clear" || (args[args.length - 2] === "play" && args.at(-1) === "1")) {
         return { stdout: "" };
       }
 
@@ -250,12 +250,66 @@ await test("native mpc adapter can replace the queue with a specific media item"
   assert.equal(nextState.trackTitle, "Sleep Eyes Closed");
   assert.equal(commands.some((args) => args.at(-1) === "clear"), true);
   assert.equal(commands.some((args) => args.includes("Codex/flow-scenes-audio/sleep-eyes-closed.mp3")), true);
-  assert.equal(commands.some((args) => args.at(-1) === "play"), true);
+  assert.equal(commands.some((args) => args[args.length - 2] === "play" && args.at(-1) === "1"), true);
   assert.equal(commands.some((args) => args[args.length - 2] === "volume"), true);
   assert.equal(commands.some((args) => args[args.length - 2] === "repeat" && args.at(-1) === "on"), true);
   assert.equal(commands.some((args) => args[args.length - 2] === "single" && args.at(-1) === "on"), true);
   assert.equal(commands.some((args) => args[args.length - 2] === "consume" && args.at(-1) === "off"), true);
   assert.equal(commands.some((args) => args[args.length - 2] === "crossfade" && args.at(-1) === "4"), true);
+});
+
+await test("native mpc adapter retries when switched media remains paused", async () => {
+  const commands = [];
+  let statusReads = 0;
+  const adapter = createMpcPlayerAdapter({
+    timeoutMs: 100,
+    execFileImpl: async (_command, args) => {
+      commands.push(args);
+      if (args[args.length - 2] === "volume") {
+        return { stdout: "" };
+      }
+
+      if (["repeat", "single", "consume", "crossfade"].includes(args[args.length - 2])) {
+        return { stdout: "" };
+      }
+
+      if (
+        args.at(-1) === "clear" ||
+        (args[args.length - 2] === "play" && args.at(-1) === "1") ||
+        (args[args.length - 2] === "pause" && args.at(-1) === "off")
+      ) {
+        return { stdout: "" };
+      }
+
+      if (args[args.length - 2] === "add") {
+        return { stdout: "" };
+      }
+
+      if (args.at(-1) === "status") {
+        statusReads += 1;
+        return {
+          stdout: [
+            "Sleep Eyes Closed\tAmbient Artist\tSleep Drift Pack",
+            `${statusReads === 1 ? "[paused]" : "[playing]"} #1/1   0:03/5:26 (0%)`,
+            "volume: 25%   repeat: off   random: off   single: off   consume: off",
+          ].join("\n"),
+        };
+      }
+
+      if (args.at(-1) === "playlist") {
+        return {
+          stdout: ["Sleep Eyes Closed"].join("\n"),
+        };
+      }
+
+      throw new Error(`Unexpected args: ${args.join(" ")}`);
+    },
+  });
+
+  const nextState = await adapter.runAction("play_media", { mediaPath: "Codex/flow-scenes-audio/sleep-eyes-closed.mp3" }, {});
+  assert.equal(nextState.state, "play");
+  assert.equal(commands.some((args) => args[args.length - 2] === "pause" && args.at(-1) === "off"), true);
+  assert.equal(statusReads >= 2, true);
 });
 
 await test("native mpc adapter does not treat volume-only output as a fake track title", async () => {

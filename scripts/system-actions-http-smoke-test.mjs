@@ -53,6 +53,32 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitFor(predicate, { timeoutMs = 1000, intervalMs = 20 } = {}) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (predicate()) {
+      return;
+    }
+
+    await sleep(intervalMs);
+  }
+
+  assert.equal(predicate(), true);
+}
+
+function closeServer(serverInstance) {
+  return new Promise((resolve, reject) => {
+    serverInstance.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
 const store = createSystemStateStore();
 const playerActions = [];
 const playerStatusReads = [];
@@ -223,6 +249,76 @@ try {
     assert.equal(focusPanelTransition.to.focusedPanel, "screen");
   });
 
+  await test("Flow scene action commits SystemState before delayed playback finishes", async () => {
+    const delayedStore = createSystemStateStore();
+    let releasePlayback;
+    let playbackStarted = false;
+    let playbackFinished = false;
+    const delayedServer = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      store: delayedStore,
+      apiKey: API_KEY,
+      playerSyncIntervalMs: 0,
+      playerAdapter: {
+        mode: "mpc",
+        async getStatus() {
+          return delayedStore.getSnapshot().playback;
+        },
+        async runAction(type) {
+          if (type === "play_media") {
+            playbackStarted = true;
+            await new Promise((resolve) => {
+              releasePlayback = resolve;
+            });
+            playbackFinished = true;
+            return {
+              state: "play",
+              volume: 58,
+              trackTitle: "Delayed Flow Track",
+              artist: "moOde Artist",
+              source: "moOde",
+              progress: 0,
+            };
+          }
+
+          return delayedStore.getSnapshot().playback;
+        },
+      },
+    });
+
+    try {
+      const delayedAddress = delayedServer.address();
+      const delayedBaseUrl = `http://127.0.0.1:${delayedAddress.port}`;
+      const response = await postAction(
+        delayedBaseUrl,
+        {
+          type: "set_flow_scene",
+          payload: { sceneId: "sleep-eyes-closed" },
+          source: "portable_controller",
+        },
+        { "X-Tikpal-Key": API_KEY },
+      );
+
+      assert.equal(response.status, 200);
+      assert.equal(response.json.state.activeMode, "flow");
+      assert.equal(response.json.state.flow.sceneId, "sleep-eyes-closed");
+      await waitFor(() => playbackStarted);
+      assert.equal(playbackFinished, false);
+
+      const stateResponse = await requestJson(`${delayedBaseUrl}/api/v1/system/state`, {
+        headers: { "X-Tikpal-Key": API_KEY },
+      });
+      assert.equal(stateResponse.status, 200);
+      assert.equal(stateResponse.json.flow.sceneId, "sleep-eyes-closed");
+
+      releasePlayback();
+      await waitFor(() => playbackFinished);
+    } finally {
+      await closeServer(delayedServer);
+    }
+  });
+
   await test("Flow scene actions update scene state and playback identity through HTTP", async () => {
     const authHeaders = { "X-Tikpal-Key": API_KEY };
 
@@ -250,11 +346,13 @@ try {
     assert.equal(setSceneResponse.status, 200);
     assert.equal(setSceneResponse.json.state.flow.state, "sleep");
     assert.equal(setSceneResponse.json.state.flow.sceneId, "sleep-eyes-closed");
-    assert.equal(
-      setSceneResponse.json.state.playback.trackTitle,
-      getFlowSceneById("sleep-eyes-closed")?.audioLabel,
+    await waitFor(() =>
+      playerActions.some(
+        (action) =>
+          action.type === "play_media" &&
+          action.payload?.mediaPath?.endsWith("sleep-eyes-closed.mp3"),
+      ),
     );
-    assert.equal(playerActions.some((action) => action.type === "play_media"), true);
   });
 
   await test("consecutive Flow scene actions stay applied during an active transition", async () => {
@@ -299,7 +397,7 @@ try {
     );
     assert.equal(setModeResponse.status, 200);
     assert.equal(setModeResponse.json.state.activeMode, "flow");
-    assert.equal(playerActions.some((action) => action.type === "play_media"), true);
+    await waitFor(() => playerActions.some((action) => action.type === "play_media"));
 
     playerActions.length = 0;
     const setFlowStateResponse = await postAction(
@@ -313,7 +411,7 @@ try {
     );
     assert.equal(setFlowStateResponse.status, 200);
     assert.equal(setFlowStateResponse.json.state.flow.state, "sleep");
-    assert.equal(playerActions.some((action) => action.type === "play_media"), true);
+    await waitFor(() => playerActions.some((action) => action.type === "play_media"));
   });
 
   await test("runtime performance actions update summary and logs", async () => {

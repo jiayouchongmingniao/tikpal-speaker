@@ -13,9 +13,6 @@ import { createScreenContext } from "./screenContextService.js";
 import { createSystemStateStore } from "./systemStateStore.js";
 import {
   getFlowSceneAudioLibraryPath,
-  getFlowSceneById,
-  getNextFlowSceneSelection,
-  normalizeFlowState,
   resolveFlowSceneSelection,
 } from "../src/viewmodels/flowScenes.js";
 
@@ -430,67 +427,29 @@ function createSystemPowerAdapter() {
   return createDefaultPowerAdapter();
 }
 
-function resolveFlowSceneActionMedia(type, payload = {}, snapshot, libraryRoot = process.env.TIKPAL_FLOW_SCENE_AUDIO_ROOT ?? "Codex/flow-scenes-audio") {
-  if (!snapshot?.flow) {
+const FLOW_SCENE_PLAYBACK_ACTION_TYPES = new Set([
+  "set_mode",
+  "set_flow_state",
+  "next_flow_scene",
+  "prev_flow_scene",
+  "set_flow_scene",
+]);
+
+function resolveCurrentFlowSceneMedia(snapshot, libraryRoot = process.env.TIKPAL_FLOW_SCENE_AUDIO_ROOT ?? "Codex/flow-scenes-audio") {
+  if (!snapshot?.flow || snapshot.activeMode !== "flow") {
     return null;
   }
 
-  if (type === "set_mode" && payload.mode === "flow") {
-    const selection = resolveFlowSceneSelection({
-      flowState: snapshot.flow.state,
-      sceneId: snapshot.flow.sceneId,
-      sceneIndex: snapshot.flow.sceneIndex,
-      scenesByState: snapshot.flow.scenesByState,
-    });
-    return {
-      scene: selection.scene,
-      mediaPath: getFlowSceneAudioLibraryPath(selection.scene, libraryRoot),
-    };
-  }
-
-  if (type === "set_flow_state") {
-    const nextFlowState = normalizeFlowState(payload.state ?? snapshot.flow.state);
-    const selection = resolveFlowSceneSelection({
-      flowState: nextFlowState,
-      sceneId: snapshot.flow.state === nextFlowState ? snapshot.flow.sceneId : null,
-      scenesByState: snapshot.flow.scenesByState,
-    });
-    return {
-      scene: selection.scene,
-      mediaPath: getFlowSceneAudioLibraryPath(selection.scene, libraryRoot),
-    };
-  }
-
-  if (type === "next_flow_scene" || type === "prev_flow_scene") {
-    const nextFlowState = normalizeFlowState(payload.state ?? snapshot.flow.state);
-    const selection = getNextFlowSceneSelection({
-      flowState: nextFlowState,
-      sceneId: snapshot.flow.sceneId,
-      scenesByState: snapshot.flow.scenesByState,
-      step: type === "prev_flow_scene" ? -1 : 1,
-    });
-    return {
-      scene: selection.scene,
-      mediaPath: getFlowSceneAudioLibraryPath(selection.scene, libraryRoot),
-    };
-  }
-
-  if (type === "set_flow_scene") {
-    const explicitScene = payload.sceneId ? getFlowSceneById(payload.sceneId) : null;
-    const nextFlowState = normalizeFlowState(explicitScene?.state ?? payload.state ?? snapshot.flow.state);
-    const selection = resolveFlowSceneSelection({
-      flowState: nextFlowState,
-      sceneId: explicitScene?.id ?? payload.sceneId ?? null,
-      sceneIndex: payload.sceneIndex,
-      scenesByState: snapshot.flow.scenesByState,
-    });
-    return {
-      scene: selection.scene,
-      mediaPath: getFlowSceneAudioLibraryPath(selection.scene, libraryRoot),
-    };
-  }
-
-  return null;
+  const selection = resolveFlowSceneSelection({
+    flowState: snapshot.flow.state,
+    sceneId: snapshot.flow.sceneId,
+    sceneIndex: snapshot.flow.sceneIndex,
+    scenesByState: snapshot.flow.scenesByState,
+  });
+  return {
+    scene: selection.scene,
+    mediaPath: getFlowSceneAudioLibraryPath(selection.scene, libraryRoot),
+  };
 }
 
 export function createAppServer({
@@ -523,20 +482,31 @@ export function createAppServer({
       };
     }
 
-    if (playerAdapter.mode === "mpc" && ["set_mode", "set_flow_state", "next_flow_scene", "prev_flow_scene", "set_flow_scene"].includes(type)) {
-      const flowSceneMedia = resolveFlowSceneActionMedia(type, payload, snapshot);
-      if (flowSceneMedia?.mediaPath) {
-        const playerState = await playerAdapter.runAction("play_media", { mediaPath: flowSceneMedia.mediaPath }, snapshot.playback);
-        return {
-          ...payload,
-          playerState,
-        };
-      }
-    }
-
     return {
       ...payload,
     };
+  }
+
+  function shouldRunFlowScenePlaybackAfterState(type, payload = {}) {
+    return (
+      playerAdapter?.mode === "mpc" &&
+      FLOW_SCENE_PLAYBACK_ACTION_TYPES.has(type) &&
+      !(type === "set_mode" && payload.mode !== "flow")
+    );
+  }
+
+  async function syncFlowScenePlaybackAfterState(snapshot) {
+    if (!playerAdapter) {
+      return;
+    }
+
+    const flowSceneMedia = resolveCurrentFlowSceneMedia(snapshot);
+    if (!flowSceneMedia?.mediaPath) {
+      return;
+    }
+
+    const playerState = await playerAdapter.runAction("play_media", { mediaPath: flowSceneMedia.mediaPath }, snapshot.playback);
+    store.patchPlaybackState(playerState, "flow_scene_playback");
   }
   const appServer = http.createServer(async (request, response) => {
     setCorsHeaders(request, response, allowedOrigins);
@@ -977,6 +947,16 @@ export function createAppServer({
           return;
         }
         const previousState = structuredClone(store.getSnapshot());
+        const actionSource = body.source ?? "remote-client";
+        if (shouldRunFlowScenePlaybackAfterState(body.type, body.payload ?? {})) {
+          const snapshot = store.runAction(body.type, body.payload ?? {}, actionSource);
+          sendActionResult(response, previousState, snapshot, body);
+          void syncFlowScenePlaybackAfterState(snapshot).catch(() => {
+            // Playback will be retried by the next explicit Flow scene action or passive player sync.
+          });
+          return;
+        }
+
         let enrichedPayload = body.payload ?? {};
         try {
           enrichedPayload = await enrichPlaybackAction(body.type, body.payload ?? {});
@@ -1012,7 +992,7 @@ export function createAppServer({
             return;
           }
         }
-        const snapshot = store.runAction(body.type, enrichedPayload, body.source ?? "remote-client");
+        const snapshot = store.runAction(body.type, enrichedPayload, actionSource);
         sendActionResult(response, previousState, snapshot, body);
         return;
       }
