@@ -6,13 +6,12 @@ import { getPortableScreenCardViewModel } from "../viewmodels/screenContextConsu
 
 const FLOW_STATES = ["focus", "flow", "relax", "sleep"];
 const MODES = ["overview", "listen", "flow", "screen"];
-
-function formatPomodoro(remainingSec) {
-  const totalSeconds = Math.max(0, Number(remainingSec ?? 0));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
+const MODE_LABELS = {
+  overview: "Overview",
+  listen: "Listen",
+  flow: "Flow",
+  screen: "Screen",
+};
 
 function statusLabel(status) {
   if (status === "connected") {
@@ -43,6 +42,54 @@ function formatCountdown(expiresAt) {
   const minutes = Math.floor(remainingSec / 60);
   const seconds = remainingSec % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getPortableSurfaceSummary(activeMode, state, currentFlowScene, screenCard) {
+  if (activeMode === "listen") {
+    return {
+      title: state?.playback?.trackTitle ?? "No track",
+      detail: state?.playback?.artist ?? "Playback ready",
+    };
+  }
+
+  if (activeMode === "flow") {
+    return {
+      title: getFlowCareCopy(state?.flow?.state ?? "focus").label,
+      detail: `${currentFlowScene.label} · Scene ${currentFlowScene.index + 1}/5`,
+    };
+  }
+
+  if (activeMode === "screen") {
+    return {
+      title: screenCard.title,
+      detail: screenCard.timerLabel,
+    };
+  }
+
+  return {
+    title: MODE_LABELS[state?.focusedPanel] ?? "Overview",
+    detail: "Mode hub and quick handoff",
+  };
+}
+
+function getPortableStatusHint(status, session, state, screenCard) {
+  if (status === "connected" && session?.expiresAt) {
+    return `Linked until ${new Date(session.expiresAt).toLocaleString()}`;
+  }
+
+  if (status === "expired") {
+    return "Session expired. Re-pair or reconnect to resume control.";
+  }
+
+  if (status === "offline" || status === "error") {
+    return "Controller cannot reach speaker right now.";
+  }
+
+  if (state?.activeMode === "screen") {
+    return `${screenCard.title} · ${screenCard.timerLabel}`;
+  }
+
+  return "Portable can switch modes and Flow scenes through the system API.";
 }
 
 function PortablePairingView({
@@ -187,6 +234,8 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
   const creativeCare = getCreativeCareViewModel(state);
   const screenCard = getPortableScreenCardViewModel(state, screenContext);
   const pomodoroState = screenCard.pomodoroState;
+  const surfaceSummary = getPortableSurfaceSummary(activeMode, state, currentFlowScene, screenCard);
+  const statusHint = getPortableStatusHint(status, session, state, screenCard);
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [voiceMood, setVoiceMood] = useState(creativeCare.moodLabel);
   const [voiceIntensity, setVoiceIntensity] = useState(creativeCare.moodIntensity);
@@ -286,10 +335,14 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
           {lastSyncAt ? <p className="portable-session-meta">Last sync {new Date(lastSyncAt).toLocaleString()}</p> : null}
         </section>
 
-        <section className="portable-grid">
-          <article className="portable-card">
-            <span className="portable-card__label">System</span>
-            <div className="portable-mode-row">
+        <section className="portable-dashboard">
+          <article className="portable-card portable-card--dashboard">
+            <span className="portable-card__label">Mode</span>
+            <div className="portable-card__headline">
+              <h2>{MODE_LABELS[activeMode] ?? "Overview"}</h2>
+              <p>{surfaceSummary.detail}</p>
+            </div>
+            <div className="portable-chip-grid portable-chip-grid--modes">
               {MODES.map((mode) => (
                 <button
                   key={mode}
@@ -298,7 +351,7 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
                   disabled={!hasWriteAccess}
                   onClick={() => controller.sendAction(mode === "overview" ? "return_overview" : "set_mode", mode === "overview" ? {} : { mode })}
                 >
-                  {mode}
+                  {MODE_LABELS[mode]}
                 </button>
               ))}
             </div>
@@ -311,21 +364,15 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
                 <span>Last source</span>
                 <strong>{state?.lastSource ?? "unknown"}</strong>
               </div>
-              <div>
-                <span>Performance</span>
-                <strong>{state?.system?.performanceTier ?? capabilities?.performance?.tier ?? "normal"}</strong>
-              </div>
-              <div>
-                <span>Controllers</span>
-                <strong>{state?.controller?.activeSessionCount ?? 0}</strong>
-              </div>
             </div>
           </article>
 
-          <article className="portable-card">
-            <span className="portable-card__label">Playback</span>
-            <h2>{state?.playback?.trackTitle ?? "No track"}</h2>
-            <p>{state?.playback?.artist ?? "Unknown artist"}</p>
+          <article className="portable-card portable-card--dashboard">
+            <span className="portable-card__label">Volume</span>
+            <div className="portable-card__headline">
+              <h2>{playbackState === "play" ? "Playing" : "Paused"}</h2>
+              <p>{state?.playback?.trackTitle ?? "No active track"}</p>
+            </div>
             <div className="portable-control-row">
               <button type="button" className="portable-button portable-button--ghost" disabled={!hasWriteAccess} onClick={() => controller.sendAction("prev_track")}>
                 Prev
@@ -350,11 +397,13 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
             </label>
           </article>
 
-          <article className="portable-card">
+          <article className="portable-card portable-card--dashboard">
             <span className="portable-card__label">Flow</span>
-            <h2>{getFlowCareCopy(flowState).label}</h2>
-            <p>{currentFlowScene.label} · {currentFlowScene.subtitle}</p>
-            <div className="portable-mode-row">
+            <div className="portable-card__headline">
+              <h2>{getFlowCareCopy(flowState).label}</h2>
+              <p>{currentFlowScene.label} · {currentFlowScene.subtitle}</p>
+            </div>
+            <div className="portable-chip-grid portable-chip-grid--states">
               {FLOW_STATES.map((item) => (
                 <button
                   key={item}
@@ -367,18 +416,18 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
                 </button>
               ))}
             </div>
-            <div className="portable-control-row">
+            <div className="portable-card__subhead">
+              <strong>{state?.flow?.sceneIndex != null ? `Scene ${Number(state.flow.sceneIndex) + 1}/5` : "Scene 1/5"}</strong>
               <button
                 type="button"
-                className="portable-button"
+                className="portable-button portable-button--ghost"
                 disabled={!hasWriteAccess}
                 onClick={() => controller.sendAction("next_flow_scene")}
               >
                 Next scene
               </button>
-              <strong>{state?.flow?.sceneIndex != null ? `Scene ${Number(state.flow.sceneIndex) + 1}/5` : "Scene 1/5"}</strong>
             </div>
-            <div className="portable-mode-row">
+            <div className="portable-chip-grid portable-chip-grid--scenes">
               {flowScenes.map((scene) => (
                 <button
                   key={scene.id}
@@ -391,9 +440,36 @@ function PortableControlView({ controller, state, screenContext, capabilities, s
                 </button>
               ))}
             </div>
-            {currentFlowScene.ritualLabelZh ? <p>{currentFlowScene.ritualLabelZh}</p> : <p>{creativeCare.insightSentence}</p>}
           </article>
 
+          <article className="portable-card portable-card--dashboard">
+            <span className="portable-card__label">Status</span>
+            <div className="portable-card__headline">
+              <h2>{surfaceSummary.title}</h2>
+              <p>{statusHint}</p>
+            </div>
+            <div className="portable-stat-grid">
+              <div>
+                <span>Session</span>
+                <strong>{statusLabel(status)}</strong>
+              </div>
+              <div>
+                <span>Performance</span>
+                <strong>{state?.system?.performanceTier ?? capabilities?.performance?.tier ?? "normal"}</strong>
+              </div>
+              <div>
+                <span>Controllers</span>
+                <strong>{state?.controller?.activeSessionCount ?? 0}</strong>
+              </div>
+              <div>
+                <span>Focus timer</span>
+                <strong>{screenCard.timerLabel}</strong>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section className="portable-grid portable-grid--secondary">
           <article className="portable-card portable-card--voice">
             <span className="portable-card__label">Voice Capture</span>
             <h2>{creativeCare.moodText} · {creativeCare.careText}</h2>

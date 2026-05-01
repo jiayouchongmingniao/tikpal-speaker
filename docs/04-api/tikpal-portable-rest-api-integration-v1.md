@@ -321,6 +321,7 @@ portable 首屏通常只需要：
 - `creativeCare.suggestedFlowState`
 - `capabilities.modes`
 - `capabilities.flowStates`
+- `capabilities.flowScenes`
 - `capabilities.creativeCare`
 
 ---
@@ -404,7 +405,42 @@ curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
   }'
 ```
 
-### 8.6 提交 Voice Capture
+### 8.6 切换下一张 Flow 场景
+
+这个动作适合 portable 上的单键“下一场景”按钮。服务端会自动把 `activeMode` 切到 `flow`，并同步更新 `flow.sceneId`、`flow.sceneIndex` 与播放信息。
+
+```bash
+curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <controller-session-token>' \
+  -d '{
+    "type": "next_flow_scene",
+    "payload": {},
+    "source": "portable_controller"
+  }'
+```
+
+### 8.7 指定 Flow 场景
+
+portable 可以直接根据 `GET /api/v1/system/capabilities` 返回的 `flowScenes[].items[]` 渲染场景按钮，并通过 `sceneId` 或 `sceneIndex` 进行跳转。
+
+```bash
+curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <controller-session-token>' \
+  -d '{
+    "type": "set_flow_scene",
+    "payload": {
+      "sceneId": "focus-glacier",
+      "sceneIndex": 0
+    },
+    "source": "portable_controller"
+  }'
+```
+
+如果 `sceneId` 属于别的 Flow state，服务端会一并切到对应的 `flow.state`。
+
+### 8.8 提交 Voice Capture
 
 portable 可以把用户主动说出或手动输入的一段 creative context 写入 `SystemState.creativeCare`。这是个 wellness / creative intention 输入，不是医疗或生物传感器输入。
 
@@ -433,7 +469,7 @@ curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
 
 `latestTranscript` 只保存在 `SystemState.creativeCare` 中；runtime action log 只记录 transcript 长度，不记录原文。
 
-### 8.7 设置 mood / care mode
+### 8.9 设置 mood / care mode
 
 ```bash
 curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
@@ -462,7 +498,7 @@ curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
   }'
 ```
 
-### 8.8 开始番茄钟
+### 8.10 开始番茄钟
 
 ```bash
 curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
@@ -477,7 +513,7 @@ curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
   }'
 ```
 
-### 8.9 完成当前任务
+### 8.11 完成当前任务
 
 ```bash
 curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
@@ -512,6 +548,11 @@ curl -X POST http://<speaker-host>:8787/api/v1/system/actions \
 - `applied`：状态已变化
 - `ignored`：请求合法，但当前状态无需变化
 - `rejected`：请求被拒绝
+
+推荐 portable 至少把下面两组动作作为一等入口：
+
+- 模式切换：`set_mode`、`return_overview`
+- Flow 场景切换：`next_flow_scene`、`set_flow_scene`
 
 ---
 

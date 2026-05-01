@@ -2,11 +2,49 @@ import { getCreativeCareViewModel, getFlowCareCopy } from "../viewmodels/creativ
 import { getFlowScenesForState } from "../viewmodels/flowScenes";
 import { getOverlayScreenViewModel, getOverlayStatusHint } from "../viewmodels/screenContextConsumers";
 
+const MODE_LABELS = {
+  overview: "Overview",
+  listen: "Listen",
+  flow: "Flow",
+  screen: "Screen",
+};
+
 function formatPomodoro(remainingSec) {
   const totalSeconds = Math.max(0, Number(remainingSec ?? 0));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getOverlayModeSummary(state, screenContext) {
+  if (state.activeMode === "listen") {
+    return {
+      title: state.playback.trackTitle ?? "No track",
+      detail: state.playback.artist ?? "Playback ready",
+    };
+  }
+
+  if (state.activeMode === "flow") {
+    const scenes = getFlowScenesForState(state.flow.state);
+    const currentScene = scenes.find((scene) => scene.id === state.flow.sceneId) ?? scenes[0];
+    return {
+      title: getFlowCareCopy(state.flow.state).label,
+      detail: `${currentScene.label} · Scene ${currentScene.index + 1}/5`,
+    };
+  }
+
+  if (state.activeMode === "screen") {
+    const screenView = getOverlayScreenViewModel(state, screenContext);
+    return {
+      title: screenView.hint,
+      detail: "Session control on screen",
+    };
+  }
+
+  return {
+    title: MODE_LABELS[state.focusedPanel] ?? "Overview",
+    detail: "Select a surface to enter",
+  };
 }
 
 function ScreenControls({ state, screenContext, onStartPomodoro, onResumePomodoro, onPausePomodoro, onResetPomodoro, onCompleteTask }) {
@@ -17,7 +55,7 @@ function ScreenControls({ state, screenContext, onStartPomodoro, onResumePomodor
   return (
     <div className="global-overlay__section global-overlay__section--mode" role="group" aria-label="Screen controls">
       <span className="global-overlay__label">Screen</span>
-      <div className="global-overlay__row">
+      <div className="global-overlay__row global-overlay__row--flow-grid">
         <button
           type="button"
           className="global-overlay__button"
@@ -97,9 +135,9 @@ function FlowControls({ state, onSetFlowState, onNextFlowScene, onSetFlowScene }
   const scenes = getFlowScenesForState(state.flow.state);
   const currentScene = scenes.find((scene) => scene.id === state.flow.sceneId) ?? scenes[0];
   return (
-    <div className="global-overlay__section global-overlay__section--mode" role="group" aria-label="Flow controls">
+    <div className="global-overlay__section global-overlay__section--mode global-overlay__section--flow" role="group" aria-label="Flow controls">
       <span className="global-overlay__label">Flow</span>
-      <div className="global-overlay__row">
+      <div className="global-overlay__row global-overlay__row--flow-grid">
         {["focus", "flow", "relax", "sleep"].map((item) => (
           <button
             key={item}
@@ -125,7 +163,7 @@ function FlowControls({ state, onSetFlowState, onNextFlowScene, onSetFlowScene }
           {currentScene.label} · {currentScene.subtitle}
         </span>
       </div>
-      <div className="global-overlay__row">
+      <div className="global-overlay__row global-overlay__row--scene-index">
         {scenes.map((scene) => (
           <button
             key={scene.id}
@@ -166,6 +204,7 @@ export function GlobalOverlay({
   onKeepOpen,
 }) {
   const statusHint = getOverlayStatusHint(state, screenContext);
+  const modeSummary = getOverlayModeSummary(state, screenContext);
 
   return (
     <section
@@ -178,9 +217,13 @@ export function GlobalOverlay({
       onPointerLeave={onInteract}
     >
       <div className="global-overlay__panel">
-        <div className="global-overlay__section">
+        <div className="global-overlay__section global-overlay__section--mode global-overlay__section--mode-switch">
           <span className="global-overlay__label">Mode</span>
-          <div className="global-overlay__row">
+          <div className="global-overlay__headline">
+            <strong>{MODE_LABELS[state.activeMode] ?? "Overview"}</strong>
+            <span>{modeSummary.detail}</span>
+          </div>
+          <div className="global-overlay__row global-overlay__row--mode-grid">
             <button
               type="button"
               className="global-overlay__button global-overlay__button--ghost"
@@ -207,6 +250,10 @@ export function GlobalOverlay({
 
         <div className="global-overlay__section">
           <span className="global-overlay__label">Volume</span>
+          <div className="global-overlay__headline">
+            <strong>{state.playback.state === "play" ? "Playing" : "Paused"}</strong>
+            <span>{state.playback.trackTitle ?? "No active track"}</span>
+          </div>
           <div className="global-overlay__row global-overlay__row--volume">
             <button
               type="button"
@@ -258,7 +305,20 @@ export function GlobalOverlay({
         {statusHint ? (
           <div className="global-overlay__section global-overlay__section--status">
             <span className="global-overlay__label">Status</span>
-            <p className="global-overlay__hint">{statusHint}</p>
+            <div className="global-overlay__headline">
+              <strong>{MODE_LABELS[state.activeMode] ?? "Overview"}</strong>
+              <span>{statusHint}</span>
+            </div>
+            <div className="global-overlay__status-grid">
+              <div>
+                <span>Source</span>
+                <strong>{state.lastSource ?? "unknown"}</strong>
+              </div>
+              <div>
+                <span>Controllers</span>
+                <strong>{state.controller?.activeSessionCount ?? 0}</strong>
+              </div>
+            </div>
           </div>
         ) : null}
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AmbientBackground } from "./AmbientBackground";
 import { FlowVisualRenderer } from "./FlowVisualRenderer";
 import { SideInfoPanel } from "./SideInfoPanel";
@@ -15,7 +15,8 @@ import {
   normalizeRenderProfile,
 } from "../viewmodels/performance";
 
-const BACKGROUND_CROSSFADE_MS = 1200;
+const BACKGROUND_CROSSFADE_MS = 1500;
+const SCENE_PROMPT_VISIBLE_MS = 3000;
 const FLOW_AUDIO_METRICS = {
   focus: { lowEnergy: 0.28, midEnergy: 0.22, highEnergy: 0.14, beatConfidence: 0.16 },
   flow: { lowEnergy: 0.38, midEnergy: 0.32, highEnergy: 0.22, beatConfidence: 0.24 },
@@ -40,7 +41,10 @@ export function FlowModePage({
   const scenes = getFlowScenesForState(currentState);
   const currentScene = scenes.find((scene) => scene.id === systemState.flow.sceneId) ?? scenes[0];
   const previousSceneRef = useRef(currentScene);
+  const scenePromptTimerRef = useRef(null);
+  const lastPromptSceneIdRef = useRef(currentScene.id);
   const [previousScene, setPreviousScene] = useState(null);
+  const [scenePromptVisible, setScenePromptVisible] = useState(false);
   const appPhase = deriveFlowAppPhase({
     activeMode: systemState.activeMode,
     overlayVisible: systemState.overlay.visible,
@@ -86,7 +90,7 @@ export function FlowModePage({
     return undefined;
   }, [currentScene.artwork, currentScene.index, renderProfile, scenes]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const lastScene = previousSceneRef.current;
     previousSceneRef.current = currentScene;
 
@@ -101,6 +105,28 @@ export function FlowModePage({
 
     return () => window.clearTimeout(timeout);
   }, [currentScene]);
+
+  useEffect(() => {
+    if (lastPromptSceneIdRef.current === currentScene.id) {
+      return undefined;
+    }
+
+    lastPromptSceneIdRef.current = currentScene.id;
+    setScenePromptVisible(true);
+    window.clearTimeout(scenePromptTimerRef.current);
+    scenePromptTimerRef.current = window.setTimeout(() => {
+      setScenePromptVisible(false);
+    }, SCENE_PROMPT_VISIBLE_MS);
+
+    return () => window.clearTimeout(scenePromptTimerRef.current);
+  }, [currentScene.id]);
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(scenePromptTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -189,20 +215,25 @@ export function FlowModePage({
       )}
       <section className="flow-page__content">
         <div className="flow-care-stack">
-          <div className="flow-scene-card">
+          <StateTitle title={careCopy.label} subtitle={careCopy.subtitle} appPhase={appPhase} />
+          <p className="flow-care-insight">{creativeCare.insightSentence}</p>
+        </div>
+        <div className="flow-page__aside">
+          <aside
+            className={`flow-scene-card flow-scene-card--prompt ${scenePromptVisible ? "is-visible" : ""}`}
+            aria-hidden={scenePromptVisible ? "false" : "true"}
+          >
             <span className="flow-scene-card__kicker">{careCopy.label} Scene {currentScene.index + 1}/5</span>
             <strong>{currentScene.label}</strong>
             <p>{currentScene.subtitle}</p>
             {currentScene.ritualLabelZh ? <span className="flow-scene-card__meta">{currentScene.ritualLabelZh}</span> : null}
-          </div>
-          <StateTitle title={careCopy.label} subtitle={careCopy.subtitle} appPhase={appPhase} />
-          <p className="flow-care-insight">{creativeCare.insightSentence}</p>
+          </aside>
+          <SideInfoPanel
+            playerState={playerState}
+            volume={playerState.volume}
+            visible={systemState.overlay.visible || appPhase === "idle_preview"}
+          />
         </div>
-        <SideInfoPanel
-          playerState={playerState}
-          volume={playerState.volume}
-          visible={systemState.overlay.visible || appPhase === "idle_preview"}
-        />
       </section>
     </main>
   );
